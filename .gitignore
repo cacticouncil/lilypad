@@ -1,0 +1,5 @@
+/target
+/grammars/*
+!/grammars/*.g4
+/src/antlr
+*.jar
