@@ -7,26 +7,15 @@ use std::{
 };
 
 mod antlr {
-    pub mod csvlexer;
-    pub mod csvlistener;
-    pub mod csvparser;
-    pub mod csvvisitor;
-
     pub mod javalexer;
     pub mod javalistener;
     pub mod javaparser;
 }
-mod csv_test;
 mod java_test;
 
-use csv_test::parse_csv;
 use java_test::parse_java;
 
 fn main() {
-    println!("CSV Test:");
-    let csv_input = get_test_string("test.csv");
-    parse_csv(&csv_input);
-    println!("----------");
     println!("Java Test:");
     let java_input = get_test_string("test.java");
     parse_java(&java_input);

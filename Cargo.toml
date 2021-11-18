@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 antlr-rust = { git = "https://github.com/liamrosenfeld/antlr4rust" }
+
+[build-dependencies]
+regex = "1.5.4"
