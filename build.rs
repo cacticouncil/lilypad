@@ -8,7 +8,7 @@ use std::process::Command;
 fn main() {
     let antlr_path = "../antlr4-4.8-2-SNAPSHOT-complete.jar";
 
-    let _ = gen_for_grammar("Java", antlr_path);
+    let _ = gen_for_grammar("JavaLexer.g4 JavaParser.g4", antlr_path);
 
     // fix the java parser
     fix_java_parser();
