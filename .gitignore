@@ -1,7 +1,8 @@
 ### Antlr ###
 /grammars/*
 !/grammars/*.g4
-/src/antlr
+/src/antlr/*
+!/src/antlr/mod.rs
 *.jar
 
 ### CLion ###

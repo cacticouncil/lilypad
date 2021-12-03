@@ -1,16 +1,9 @@
-#![feature(try_blocks)]
-#![feature(coerce_unsized)]
-
 use std::{
     fs::File,
     io::{BufReader, Read},
 };
 
-mod antlr {
-    pub mod javalexer;
-    pub mod javalistener;
-    pub mod javaparser;
-}
+mod antlr;
 mod java_test;
 
 use java_test::parse_java;

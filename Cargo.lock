@@ -13,8 +13,8 @@ dependencies = [
 
 [[package]]
 name = "antlr-rust"
-version = "0.2.0"
-source = "git+https://github.com/liamrosenfeld/antlr4rust#8fa589ee0d4a42fe22cdac2d09fb383800eded37"
+version = "0.3.0"
+source = "git+https://github.com/rrevenantt/antlr4rust?branch=v0.3#eaf511d5ec66fabb2a4f90c4fbbee6f44f5cac66"
 dependencies = [
  "better_any",
  "bit-set",
@@ -37,23 +37,9 @@ dependencies = [
 
 [[package]]
 name = "better_any"
-version = "0.1.1"
+version = "0.2.0-dev.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b359aebd937c17c725e19efcb661200883f04c49c53e7132224dac26da39d4a0"
-dependencies = [
- "better_typeid_derive",
-]
-
-[[package]]
-name = "better_typeid_derive"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3deeecb812ca5300b7d3f66f730cc2ebd3511c3d36c691dd79c165d5b19a26e3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
+checksum = "cad0e12c5910bf40715b2204434ac301b4456bbf7327229fa89efbe6da0e1971"
 
 [[package]]
 name = "bit-set"
@@ -165,24 +151,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro2"
-version = "1.0.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba508cc11742c0dc5c1659771673afbab7a0efab23aa17e854cbab0837ed0b43"
-dependencies = [
- "unicode-xid",
-]
-
-[[package]]
-name = "quote"
-version = "1.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38bc8cc6a5f2e3655e0899c1b848643b2562f853f114bfec7be120678e3ace05"
-dependencies = [
- "proc-macro2",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -221,27 +189,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ecab6c735a6bb4139c0caafd0cc3635748bbb3acf4550e8138122099251f309"
 
 [[package]]
-name = "syn"
-version = "1.0.81"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2afee18b8beb5a596ecb4a2dce128c719b4ba399d34126b9e4396e3f9860966"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-xid",
-]
-
-[[package]]
 name = "typed-arena"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0685c84d5d54d1c26f7d3eb96cd41550adb97baed141a761cf335d3d33bcd0ae"
-
-[[package]]
-name = "unicode-xid"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
 
 [[package]]
 name = "uuid"

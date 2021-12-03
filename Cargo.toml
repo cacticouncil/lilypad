@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-antlr-rust = { git = "https://github.com/liamrosenfeld/antlr4rust" }
+antlr-rust = { git = "https://github.com/rrevenantt/antlr4rust", branch = "v0.3"}
 
 [build-dependencies]
 regex = "1.5.4"

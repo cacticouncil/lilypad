@@ -6,34 +6,47 @@ use std::io::{Read, Write};
 use std::process::Command;
 
 fn main() {
-    let antlr_path = "../antlr4-4.8-2-SNAPSHOT-complete.jar";
-
-    let _ = gen_for_grammar("JavaLexer.g4 JavaParser.g4", antlr_path);
-
-    // fix the java parser
+    let _ = gen_for_grammar("JavaLexer.g4", "JavaParser.g4");
     fix_java_parser();
-
     println!("cargo:rerun-if-changed=build.rs");
 }
 
-fn gen_for_grammar(grammar_file_name: &str, antlr_path: &str) -> Result<(), Box<dyn Error>> {
-    let input = env::current_dir().unwrap().join("grammars");
-    let file_name = grammar_file_name.to_owned() + ".g4";
+fn gen_for_grammar(lexer: &str, parser: &str) -> Result<(), Box<dyn Error>> {
+    // antlr path
+    let antlr_name = "antlr4-4.9.4-rust-0.3.jar";
+    let antlr_dir = env::current_dir()
+        .unwrap()
+        .join(antlr_name);
+    let antlr_path = antlr_dir 
+        .as_os_str()
+        .to_str()
+        .unwrap();
+    
+    // grammars path
+    let grammars_dir = env::current_dir().unwrap().join("grammars");
 
-    let _c = Command::new("java")
-        .current_dir(input)
+    // run command
+    let _o = Command::new("java")
+        .current_dir(grammars_dir)
         .arg("-cp")
         .arg(antlr_path)
         .arg("org.antlr.v4.Tool")
         .arg("-Dlanguage=Rust")
         .arg("-o")
         .arg("../src/antlr")
-        .arg(&file_name)
+        .arg("-listener")
+        .arg("-visitor")
+        // .arg("-lib")
+        .arg(lexer)
+        .arg(parser)
         .spawn()
         .expect("antlr tool failed to start")
         .wait_with_output()?;
 
-    println!("cargo:rerun-if-changed=grammars/{}", file_name);
+    // if grammar files change, regenerate
+    println!("cargo:rerun-if-changed=grammars/{}", lexer);
+    println!("cargo:rerun-if-changed=grammars/{}", parser);
+
     Ok(())
 }
 
