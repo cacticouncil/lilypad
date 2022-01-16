@@ -1,4 +1,3 @@
-use regex::Regex;
 use std::env;
 use std::error::Error;
 use std::fs::File;
@@ -63,12 +62,6 @@ fn fix_java_parser() {
     data = data
         .replace(" type(", " r#type(")
         .replace(".type(", ".r#type(");
-
-    // remove brackets on one-liners
-    data = Regex::new("([if|while]) \\{ (.*) \\} \\{")
-        .unwrap()
-        .replace_all(&data, "$1 $2 {")
-        .to_string();
 
     // Recreate the file and dump the processed contents to it
     let mut dst = File::create(&file_path).expect("could recreate java parser");
