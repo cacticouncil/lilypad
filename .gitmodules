@@ -1,0 +1,3 @@
+[submodule "sitter-test/tree-sitter-java"]
+	path = sitter-test/tree-sitter-java
+	url = https://github.com/tree-sitter/tree-sitter-java
