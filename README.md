@@ -19,3 +19,9 @@ mvn -DskipTests install
 ## Sitter Test
 
 The Java grammar is stored as a submodule so to clone you need to run `git clone --recurse-submodules`
+
+## Sitter + Iced
+
+Displays the result of Tree Sitter using Iced
+
+The Python grammar is stored as a submodule so to clone you need to run `git clone --recurse-submodules`
