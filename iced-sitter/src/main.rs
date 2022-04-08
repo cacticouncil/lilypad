@@ -2,7 +2,7 @@ mod block_view;
 mod parse;
 
 use block_view::BlockView;
-use iced::{Canvas, Element, Length, Sandbox, Settings};
+use iced::{Canvas, Element, Length, Sandbox, Settings, Scrollable, Color};
 use std::{
     fs::File,
     io::{BufReader, Read},
