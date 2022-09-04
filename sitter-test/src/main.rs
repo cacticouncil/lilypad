@@ -1,21 +1,23 @@
-use tree_sitter::{Parser, Language, Tree, TreeCursor};
 use std::{
     fs::File,
     io::{BufReader, Read},
 };
+use tree_sitter::{Language, Parser, Tree, TreeCursor};
 
 /* ------- Parsing File ------- */
 fn main() {
     // Get Java Language
-    extern "C" { fn tree_sitter_java() -> Language; }
-    let language = unsafe { tree_sitter_java() };
+    extern "C" {
+        fn tree_sitter_python() -> Language;
+    }
+    let language = unsafe { tree_sitter_python() };
 
     // Create Parser
     let mut parser = Parser::new();
     parser.set_language(language).unwrap();
 
     // Parse Test String
-    let source = get_test_string("test.java");
+    let source = get_test_string("test.py");
     let tree = parser.parse(source, None).unwrap();
     println!("{}", make_tree_str(&tree));
 }
@@ -56,7 +58,7 @@ fn make_branch(cursor: &mut TreeCursor, indent: &str, last: bool) -> String {
             child_idx += 1;
 
             if !cursor.goto_next_sibling() {
-                break
+                break;
             }
         }
         cursor.goto_parent();

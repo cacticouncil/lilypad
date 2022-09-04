@@ -1,6 +1,11 @@
 use std::path::Path;
 
 fn main() {
+    slint_build::compile("ui/test.slint").unwrap();
+    compile_grammar();
+}
+
+fn compile_grammar() {
     let src_dir = Path::new("../tree-sitter-python/src");
 
     // compile parser

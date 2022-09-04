@@ -1,9 +1,3 @@
-[submodule "sitter-test/tree-sitter-java"]
-	path = sitter-test/tree-sitter-java
-	url = https://github.com/tree-sitter/tree-sitter-java
-[submodule "iced-sitter/tree-sitter-python"]
-	path = iced-sitter/tree-sitter-python
-	url = https://github.com/tree-sitter/tree-sitter-python
-[submodule "druid-sitter/tree-sitter-python"]
-	path = druid-sitter/tree-sitter-python
+[submodule "tree-sitter-python"]
+	path = tree-sitter-python
 	url = https://github.com/tree-sitter/tree-sitter-python

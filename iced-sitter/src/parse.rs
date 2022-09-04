@@ -18,10 +18,12 @@ pub fn parse(source: &str) -> Tree {
 }
 
 /* ------- Displaying Tree (still here for debugging) ------- */
+#[allow(dead_code)]
 pub fn make_tree_str(tree: &Tree) -> String {
     make_branch(&mut tree.root_node().walk(), "", true)
 }
 
+#[allow(dead_code)]
 fn make_branch(cursor: &mut TreeCursor, indent: &str, last: bool) -> String {
     let join_symbol = if last { "└─ " } else { "├─ " };
     let current_node = cursor.node();
