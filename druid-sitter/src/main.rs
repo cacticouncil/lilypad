@@ -1,12 +1,13 @@
 mod block_widget;
 mod parse;
 
-use druid::widget::{EnvScope, TextBox};
+//use druid::widget::{EnvScope, TextBox};
+use druid::widget::{Scroll};
 use druid::{
-    theme, AppLauncher, Color, Data, FontDescriptor, FontFamily, Insets, Key, Lens, PlatformError,
-    Widget, WidgetExt, WindowDesc,
+    AppLauncher, Data, FontDescriptor, FontFamily, Key, Lens, PlatformError,
+    Widget, WindowDesc,
 };
-use parse::parse;
+use parse::{parse};
 use std::rc::Rc;
 use std::{
     fs::File,
@@ -19,14 +20,14 @@ const MONO_FONT: Key<FontDescriptor> = Key::new("org.cacticouncil.lilypad.mono-f
 fn main() -> Result<(), PlatformError> {
     // get data from test file
     let source = get_test_string("test.py");
+    //let source = get_test_string("Python_Test_File.py");
     let tree = parse(&source);
     let data = Model {
         source,
         tree: Rc::new(tree),
     };
-
     // launch
-    let main_window = WindowDesc::new(ui_builder).title("Druid + Sitter Test");
+    let main_window = WindowDesc::new(ui_builder).title("Druid + Sitter Test"); //.window_size((1000.0, 1000.0))
     AppLauncher::with_window(main_window)
         .configure_env(|env, _state| {
             env.set(
@@ -44,24 +45,8 @@ pub struct Model {
 }
 
 fn ui_builder() -> impl Widget<Model> {
-    let blocks = block_widget::make_blocks();
-
-    let editor = EnvScope::new(
-        |env, _data| {
-            // so the blocks can show through
-            env.set(theme::BACKGROUND_LIGHT, Color::rgba8(0, 0, 0, 0));
-            // so the blocks line up with the text
-            env.set(theme::TEXTBOX_INSETS, Insets::uniform(0.0));
-            // so the selection color is less aggressive
-            env.set(theme::SELECTION_COLOR, Color::BLUE);
-        },
-        TextBox::multiline()
-            .with_font(MONO_FONT)
-            .lens(Model::source)
-            .background(blocks),
-    );
-
-    editor
+    Scroll::new(block_widget::make_blocks()).vertical()
+    //block_widget::make_blocks()
 }
 
 /* -------------------------------------------------------------------------- */
@@ -72,5 +57,5 @@ fn get_test_string(name: &'static str) -> String {
     buf_reader
         .read_to_string(&mut contents)
         .expect("could not read file");
-    return contents;
+    contents
 }

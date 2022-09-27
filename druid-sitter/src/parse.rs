@@ -1,4 +1,4 @@
-use tree_sitter::{Language, Parser, Tree};
+﻿use tree_sitter::{Language, Parser, Tree};
 
 pub fn parse(source: &str) -> Tree {
     // Get Language
