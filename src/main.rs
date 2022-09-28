@@ -19,8 +19,7 @@ const MONO_FONT: Key<FontDescriptor> = Key::new("org.cacticouncil.lilypad.mono-f
 
 fn main() -> Result<(), PlatformError> {
     // get data from test file
-    let source = get_test_string("test.py");
-    //let source = get_test_string("Python_Test_File.py");
+    let source = get_test_string("test1.py");
     let tree = parse(&source);
     let data = Model {
         source,
@@ -51,7 +50,7 @@ fn ui_builder() -> impl Widget<Model> {
 
 /* -------------------------------------------------------------------------- */
 fn get_test_string(name: &'static str) -> String {
-    let file = File::open(name).expect("test file not found");
+    let file = File::open(format!("{}{}", "test-files/", name)).expect("test file not found");
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader

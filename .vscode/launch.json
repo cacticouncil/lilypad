@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'sitter-test'",
+            "name": "Debug executable 'lilypad'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=sitter-test",
-                    "--package=sitter-test"
+                    "--bin=lilypad",
+                    "--package=lilypad"
                 ],
                 "filter": {
-                    "name": "sitter-test",
+                    "name": "lilypad",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'sitter-test'",
+            "name": "Debug unit tests in executable 'lilypad'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=sitter-test",
-                    "--package=sitter-test"
+                    "--bin=lilypad",
+                    "--package=lilypad"
                 ],
                 "filter": {
-                    "name": "sitter-test",
+                    "name": "lilypad",
                     "kind": "bin"
                 }
             },

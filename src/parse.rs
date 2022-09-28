@@ -1,42 +1,28 @@
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-};
-use tree_sitter::{Language, Parser, Tree, TreeCursor};
+﻿use tree_sitter::{Language, Parser, Tree, TreeCursor};
 
-/* ------- Parsing File ------- */
-fn main() {
-    // Get Java Language
+pub fn parse(source: &str) -> Tree {
+    // Get Language
     extern "C" {
         fn tree_sitter_python() -> Language;
     }
     let language = unsafe { tree_sitter_python() };
 
     // Create Parser
+    // In an actual application this wouldn't be built every time
     let mut parser = Parser::new();
     parser.set_language(language).unwrap();
 
-    // Parse Test String
-    let source = get_test_string("test.py");
-    let tree = parser.parse(source, None).unwrap();
-    println!("{}", make_tree_str(&tree));
+    // Parse Source
+    parser.parse(source, None).unwrap()
 }
 
-fn get_test_string(name: &'static str) -> String {
-    let file = File::open(name).expect("test file not found");
-    let mut buf_reader = BufReader::new(file);
-    let mut contents = String::new();
-    buf_reader
-        .read_to_string(&mut contents)
-        .expect("could not read file");
-    return contents;
-}
-
-/* ------- Displaying Tree ------- */
-fn make_tree_str(tree: &Tree) -> String {
+/* ------- Displaying Tree (still here for debugging) ------- */
+#[allow(dead_code)]
+pub fn make_tree_str(tree: &Tree) -> String {
     make_branch(&mut tree.root_node().walk(), "", true)
 }
 
+#[allow(dead_code)]
 fn make_branch(cursor: &mut TreeCursor, indent: &str, last: bool) -> String {
     let join_symbol = if last { "└─ " } else { "├─ " };
     let current_node = cursor.node();
@@ -50,8 +36,8 @@ fn make_branch(cursor: &mut TreeCursor, indent: &str, last: bool) -> String {
     let child_count = current_node.child_count();
     if cursor.goto_first_child() {
         let mut child_idx = 1;
+        let new_indent = format!("{}{}", indent, if last { "    " } else { "│  " });
         loop {
-            let new_indent = format!("{}{}", indent, if last { "    " } else { "│  " });
             let child_branch = make_branch(cursor, &new_indent, child_idx == child_count);
 
             result.push_str(&child_branch);

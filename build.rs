@@ -1,7 +1,7 @@
 use std::path::Path;
 
 fn main() {
-    let src_dir = Path::new("../tree-sitter-python/src");
+    let src_dir = Path::new("./tree-sitter-python/src");
 
     // compile parser
     let parser_path = src_dir.join("parser.c");

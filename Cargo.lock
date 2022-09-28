@@ -311,15 +311,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "druid-sitter"
-version = "0.1.0"
-dependencies = [
- "cc",
- "druid",
- "tree-sitter",
-]
-
-[[package]]
 name = "dwrote"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -781,6 +772,15 @@ name = "libc"
 version = "0.2.132"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8371e4e5341c3a96db127eb2465ac681ced4c433e01dd0e938adbef26ba93ba5"
+
+[[package]]
+name = "lilypad"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "druid",
+ "tree-sitter",
+]
 
 [[package]]
 name = "log"
