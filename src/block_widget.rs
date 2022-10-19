@@ -56,11 +56,9 @@ const FONT_HEIGHT: f64 = 20.0;
 fn draw_node(node: Node, source: &str, ctx: &mut PaintCtx) {
     // don't draw boxes for nodes that are just string literals
     // without this every space would get it's own color
-
     if !node.is_named() {
         return;
     }
-    //println!(".....{:#?}", node);
 
     // get color/see if this node should be drawn
     // don't draw boxes for nodes that aren't high level
@@ -77,40 +75,34 @@ fn draw_node(node: Node, source: &str, ctx: &mut PaintCtx) {
         (start.row as f64) * FONT_HEIGHT,
     );
 
+    let mut margin: f64 = 0.0;
+
+    // Check that node is high level and then determin the margin based on tabbing
+    if check_node_name(&node) {
+        margin = (start_pt.x) + (((node.start_position().column as f64/4.0) + 1.0) * (1.0 * FONT_WIDTH));  
+    }
+
     let size = {
         if start.row == end.row {
-            // if block is all on one row, then
-            let width = ((end.column - start.column) as f64) * FONT_WIDTH;
-            Size::new(width, FONT_HEIGHT)
+            // if block is all on one row, then 
+            Size::new(ctx.size().width - margin, FONT_HEIGHT)
         } else {
-            // if block is across rows,
-            // then the end column won't necessarily be the furthest point to the left
-            // this will also fix an out of bounds if start > end col
+            // if block is across rows
             let height = ((end.row - start.row + 1) as f64) * FONT_HEIGHT;
-            // find the longest line of the block
-            let columns = source[node.byte_range()]
-                .lines()
-                .map(|l| l.len())
-                .max()
-                .unwrap_or(0);
-            Size::new(columns as f64 * FONT_WIDTH, height)
+            // Fill entire screen width with block for module node
+            if node.kind() == "module" {
+                Size::new(ctx.size().width, height)
+            }
+            else {
+                Size::new((ctx.size().width) - margin, height)
+            }
         }
     };
-    
-
-    // // New
-    // let size = {
-    //     let width = ((get_first_node_line(node, source).len()) as f64) * FONT_WIDTH;
-    //     Size::new(width, FONT_HEIGHT)
-    // };
 
     // draw the block in
     let block = Rect::from_origin_size(start_pt, size);
     ctx.fill(block, &color);
-
-
-    //let block = Rect::from_origin_size(start_pt, size);
-    //ctx.fill(block, &color);
+    // draw text in
     draw_text(node, source, ctx, start_pt.x, start_pt.y);
 
 }
@@ -140,12 +132,6 @@ fn color(node: &Node) -> Option<Color> {
 
 fn draw_text(node: Node, source: &str, ctx: &mut PaintCtx, start_x: f64, start_y: f64) {
     let source_line = get_first_node_line(node, source);
-    
-    // for i in 0..source_lines.len(){
-    //     println!("{}...{:?}", i, source_lines[i]);
-    //     //println!("{:?}", &source[node.byte_range()]);
-    // }
-    
 
     let text = ctx.text();
         let layout = text
@@ -163,13 +149,12 @@ fn get_first_node_line(node: Node, source: &str) -> String{
         .next()
         .unwrap()
         .to_string()
+}
 
-    /*for i in 0..lines.len(){
-        if(lines[i].find("    ") != None){
-            println!("Tab");
-            let temp = lines[i].trim_start().to_string();
-            lines[i] = temp;
-        }
-        println!("...{:?}", lines[i]);
-    }*/
+fn check_node_name(node: &Node) -> bool{
+    let node_names = ["class_definition", "function_definition", "import_statement", "expression_statement", "while_statement", 
+                                "if_statement", "else_clause", "break_statement", "for_statement", "try_statement", "except_clause", "finally_clause", 
+                                "elif_clause", "comment", "continue_statement"];
+
+    node_names.contains(&node.kind())
 }

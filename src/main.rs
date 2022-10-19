@@ -5,7 +5,7 @@ mod parse;
 use druid::widget::{Scroll};
 use druid::{
     AppLauncher, Data, FontDescriptor, FontFamily, Key, Lens, PlatformError,
-    Widget, WindowDesc,
+    Widget, WindowDesc
 };
 use parse::{parse};
 use std::rc::Rc;
