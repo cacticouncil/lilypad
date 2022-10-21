@@ -1,13 +1,34 @@
-use crate::Model;
-use druid::piet::{TextLayoutBuilder, Text};
-use druid::widget::Painter;
-use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size, FontFamily};
+use druid::piet::{Text, TextLayoutBuilder};
+use druid::{
+    Color, Data, Event, FontFamily, Lens, LifeCycle, PaintCtx, Point, Rect, RenderContext, Size,
+    Widget,
+};
+use std::cell::RefCell;
+use std::sync::Arc;
 use tree_sitter::Node;
 
-pub fn make_blocks() -> Painter<Model> {
-    Painter::new(|ctx, data: &Model, _env| {
+use crate::parse::TreeManager;
+
+pub struct BlockEditor {
+    tree_manager: Arc<RefCell<TreeManager>>,
+}
+
+#[derive(Clone, Data, Lens)]
+pub struct EditorModel {
+    pub source: String,
+}
+
+impl BlockEditor {
+    pub fn new() -> Self {
+        BlockEditor {
+            tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
+        }
+    }
+
+    fn draw_blocks(&self, ctx: &mut PaintCtx, data: &EditorModel) {
         // pre-order traversal because we want to draw the parent under their children
-        let mut cursor = data.tree.as_ref().root_node().walk();
+        let tree_manager = self.tree_manager.borrow();
+        let mut cursor = tree_manager.tree.root_node().walk();
 
         'outer: loop {
             // first time encountering the node, so draw it
@@ -25,7 +46,6 @@ pub fn make_blocks() -> Painter<Model> {
             // travel back up
             // loop until we reach the root or can go to the next sibling of a node again
             'inner: loop {
-                
                 // break outer if we reached the root
                 if !cursor.goto_parent() {
                     break 'outer;
@@ -35,10 +55,76 @@ pub fn make_blocks() -> Painter<Model> {
                 if cursor.goto_next_sibling() {
                     break 'inner;
                 }
-
             }
         }
-    })
+    }
+}
+
+impl Widget<EditorModel> for BlockEditor {
+    fn event(
+        &mut self,
+        _ctx: &mut druid::EventCtx,
+        event: &druid::Event,
+        _data: &mut EditorModel,
+        _env: &druid::Env,
+    ) {
+        match event {
+            Event::MouseDown(mouse) => {
+                println!("click at {}", mouse.pos);
+            }
+
+            _ => (),
+        }
+    }
+
+    fn update(
+        &mut self,
+        _ctx: &mut druid::UpdateCtx,
+        _old_data: &EditorModel,
+        data: &EditorModel,
+        _env: &druid::Env,
+    ) {
+        // TODO: update the tree instead of replacing it every time
+        self.tree_manager.borrow_mut().replace_tree(&data.source);
+    }
+
+    fn layout(
+        &mut self,
+        _ctx: &mut druid::LayoutCtx,
+        bc: &druid::BoxConstraints,
+        data: &EditorModel,
+        _env: &druid::Env,
+    ) -> Size {
+        let max_chars = data.source.lines().map(|l| l.len()).max().unwrap_or(0);
+        let width = max_chars as f64 * FONT_WIDTH;
+        let height = data.source.lines().count() as f64 * FONT_HEIGHT;
+        let desired = Size { width, height };
+        bc.constrain(desired)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, _env: &druid::Env) {
+        // draw background
+        let background = Rect::from_origin_size(Point::ZERO, ctx.size());
+        ctx.fill(background, &Color::rgb(0.0, 0.4, 0.4));
+
+        // draw blocks
+        self.draw_blocks(ctx, data);
+    }
+
+    fn lifecycle(
+        &mut self,
+        _ctx: &mut druid::LifeCycleCtx,
+        event: &druid::LifeCycle,
+        data: &EditorModel,
+        _env: &druid::Env,
+    ) {
+        match event {
+            // replace the tree with a tree for the initial source
+            LifeCycle::WidgetAdded => self.tree_manager.borrow_mut().replace_tree(&data.source),
+
+            _ => (),
+        }
+    }
 }
 
 /*
@@ -77,14 +163,15 @@ fn draw_node(node: Node, source: &str, ctx: &mut PaintCtx) {
 
     let mut margin: f64 = 0.0;
 
-    // Check that node is high level and then determin the margin based on tabbing
+    // Check that node is high level and then determine the margin based on tabbing
     if check_node_name(&node) {
-        margin = (start_pt.x) + (((node.start_position().column as f64/4.0) + 1.0) * (1.0 * FONT_WIDTH));  
+        margin = (start_pt.x)
+            + (((node.start_position().column as f64 / 4.0) + 1.0) * (1.0 * FONT_WIDTH));
     }
 
     let size = {
         if start.row == end.row {
-            // if block is all on one row, then 
+            // if block is all on one row, then
             Size::new(ctx.size().width - margin, FONT_HEIGHT)
         } else {
             // if block is across rows
@@ -92,8 +179,7 @@ fn draw_node(node: Node, source: &str, ctx: &mut PaintCtx) {
             // Fill entire screen width with block for module node
             if node.kind() == "module" {
                 Size::new(ctx.size().width, height)
-            }
-            else {
+            } else {
                 Size::new((ctx.size().width) - margin, height)
             }
         }
@@ -104,12 +190,10 @@ fn draw_node(node: Node, source: &str, ctx: &mut PaintCtx) {
     ctx.fill(block, &color);
     // draw text in
     draw_text(node, source, ctx, start_pt.x, start_pt.y);
-
 }
 
 fn color(node: &Node) -> Option<Color> {
     match node.kind() {
-        "module" => Some(Color::rgb(0.0, 0.4, 0.4)),
         "class_definition" => Some(Color::rgb(0.9, 0.43, 0.212)),
         "function_definition" => Some(Color::rgb(0.0, 0.47, 0.47)),
         "import_statement" => Some(Color::rgb(0.77, 0.176, 0.188)),
@@ -134,16 +218,16 @@ fn draw_text(node: Node, source: &str, ctx: &mut PaintCtx, start_x: f64, start_y
     let source_line = get_first_node_line(node, source);
 
     let text = ctx.text();
-        let layout = text
-            .new_text_layout(source_line)
-            .font(FontFamily::new_unchecked("Roboto Mono"), 15.0)
-            .text_color(Color::WHITE)
-            .build()
-            .unwrap();
-        ctx.draw_text(&layout, (start_x, start_y));
+    let layout = text
+        .new_text_layout(source_line)
+        .font(FontFamily::new_unchecked("Roboto Mono"), 15.0)
+        .text_color(Color::WHITE)
+        .build()
+        .unwrap();
+    ctx.draw_text(&layout, (start_x, start_y));
 }
 
-fn get_first_node_line(node: Node, source: &str) -> String{
+fn get_first_node_line(node: Node, source: &str) -> String {
     source[node.byte_range()]
         .lines()
         .next()
@@ -151,10 +235,24 @@ fn get_first_node_line(node: Node, source: &str) -> String{
         .to_string()
 }
 
-fn check_node_name(node: &Node) -> bool{
-    let node_names = ["class_definition", "function_definition", "import_statement", "expression_statement", "while_statement", 
-                                "if_statement", "else_clause", "break_statement", "for_statement", "try_statement", "except_clause", "finally_clause", 
-                                "elif_clause", "comment", "continue_statement"];
+fn check_node_name(node: &Node) -> bool {
+    let node_names = [
+        "class_definition",
+        "function_definition",
+        "import_statement",
+        "expression_statement",
+        "while_statement",
+        "if_statement",
+        "else_clause",
+        "break_statement",
+        "for_statement",
+        "try_statement",
+        "except_clause",
+        "finally_clause",
+        "elif_clause",
+        "comment",
+        "continue_statement",
+    ];
 
     node_names.contains(&node.kind())
 }

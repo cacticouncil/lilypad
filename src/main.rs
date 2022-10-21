@@ -2,31 +2,23 @@ mod block_widget;
 mod parse;
 
 //use druid::widget::{EnvScope, TextBox};
-use druid::widget::{Scroll};
-use druid::{
-    AppLauncher, Data, FontDescriptor, FontFamily, Key, Lens, PlatformError,
-    Widget, WindowDesc
-};
-use parse::{parse};
-use std::rc::Rc;
+use druid::widget::Scroll;
+use druid::{AppLauncher, FontDescriptor, FontFamily, Key, PlatformError, Widget, WindowDesc};
 use std::{
     fs::File,
     io::{BufReader, Read},
 };
-use tree_sitter::Tree;
+
+use block_widget::EditorModel;
 
 const MONO_FONT: Key<FontDescriptor> = Key::new("org.cacticouncil.lilypad.mono-font");
 
 fn main() -> Result<(), PlatformError> {
     // get data from test file
     let source = get_test_string("test1.py");
-    let tree = parse(&source);
-    let data = Model {
-        source,
-        tree: Rc::new(tree),
-    };
+    let data = EditorModel { source };
     // launch
-    let main_window = WindowDesc::new(ui_builder).title("Druid + Sitter Test"); //.window_size((1000.0, 1000.0))
+    let main_window = WindowDesc::new(ui_builder).title("Lilypad Editor");
     AppLauncher::with_window(main_window)
         .configure_env(|env, _state| {
             env.set(
@@ -37,15 +29,8 @@ fn main() -> Result<(), PlatformError> {
         .launch(data)
 }
 
-#[derive(Clone, Data, Lens)]
-pub struct Model {
-    source: String,
-    tree: Rc<Tree>,
-}
-
-fn ui_builder() -> impl Widget<Model> {
-    Scroll::new(block_widget::make_blocks()).vertical()
-    //block_widget::make_blocks()
+fn ui_builder() -> impl Widget<EditorModel> {
+    Scroll::new(block_widget::BlockEditor::new()).vertical()
 }
 
 /* -------------------------------------------------------------------------- */
