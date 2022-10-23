@@ -1,7 +1,7 @@
-﻿use tree_sitter::{Language, Parser, Tree, TreeCursor};
+﻿use tree_sitter::{InputEdit, Language, Parser, Tree, TreeCursor};
 
 pub struct TreeManager {
-    pub tree: Tree,
+    tree: Tree,
     parser: Parser,
 }
 
@@ -15,23 +15,27 @@ impl TreeManager {
         let language = unsafe { tree_sitter_python() };
 
         // Create Parser
-        // In an actual application this wouldn't be built every time
         let mut parser = Parser::new();
         parser.set_language(language).unwrap();
 
-        // Parse Source
+        // Parse initial source
         let tree = parser.parse(source, None).unwrap();
 
         TreeManager { tree, parser }
     }
 
-    pub fn replace_tree(&mut self, new_source: &str) {
+    pub fn get_cursor(&self) -> TreeCursor {
+        self.tree.walk()
+    }
+
+    pub fn replace(&mut self, new_source: &str) {
         self.tree = self.parser.parse(new_source, None).unwrap();
     }
 
     #[allow(dead_code)]
-    pub fn update_tree(&mut self) {
-        todo!()
+    pub fn update(&mut self, new_source: &str, change: InputEdit) {
+        self.tree.edit(&change);
+        self.tree = self.parser.parse(new_source, Some(&self.tree)).unwrap();
     }
 }
 

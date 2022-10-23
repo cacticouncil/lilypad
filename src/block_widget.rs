@@ -28,7 +28,7 @@ impl BlockEditor {
     fn draw_blocks(&self, ctx: &mut PaintCtx, data: &EditorModel) {
         // pre-order traversal because we want to draw the parent under their children
         let tree_manager = self.tree_manager.borrow();
-        let mut cursor = tree_manager.tree.root_node().walk();
+        let mut cursor = tree_manager.get_cursor();
 
         'outer: loop {
             // first time encountering the node, so draw it
@@ -85,7 +85,7 @@ impl Widget<EditorModel> for BlockEditor {
         _env: &druid::Env,
     ) {
         // TODO: update the tree instead of replacing it every time
-        self.tree_manager.borrow_mut().replace_tree(&data.source);
+        self.tree_manager.borrow_mut().replace(&data.source);
     }
 
     fn layout(
@@ -120,7 +120,7 @@ impl Widget<EditorModel> for BlockEditor {
     ) {
         match event {
             // replace the tree with a tree for the initial source
-            LifeCycle::WidgetAdded => self.tree_manager.borrow_mut().replace_tree(&data.source),
+            LifeCycle::WidgetAdded => self.tree_manager.borrow_mut().replace(&data.source),
 
             _ => (),
         }
