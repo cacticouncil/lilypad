@@ -11,6 +11,7 @@ use crate::parse::TreeManager;
 
 pub struct BlockEditor {
     tree_manager: Arc<RefCell<TreeManager>>,
+    cursor_pos: Point,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -22,6 +23,7 @@ impl BlockEditor {
     pub fn new() -> Self {
         BlockEditor {
             tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
+            cursor_pos: Point::new(0., 0.),
         }
     }
 
@@ -58,6 +60,17 @@ impl BlockEditor {
             }
         }
     }
+
+    fn draw_cursor(&self, ctx: &mut PaintCtx) {
+        let block = Rect::from_origin_size(
+            Point::new(
+                self.cursor_pos.x * FONT_WIDTH,
+                self.cursor_pos.y * FONT_HEIGHT,
+            ),
+            Size::new(1.0, FONT_HEIGHT),
+        );
+        ctx.fill(block, &Color::BLACK);
+    }
 }
 
 impl Widget<EditorModel> for BlockEditor {
@@ -70,7 +83,11 @@ impl Widget<EditorModel> for BlockEditor {
     ) {
         match event {
             Event::MouseDown(mouse) => {
-                println!("click at {}", mouse.pos);
+                //println!("click at {}", mouse.pos);
+                let pos = calculate_char_position(mouse.pos);
+                //println!("X,Y: {},{}", pos.x, pos.y);
+                self.cursor_pos = pos;
+                _ctx.request_paint();
             }
 
             _ => (),
@@ -96,7 +113,7 @@ impl Widget<EditorModel> for BlockEditor {
         _env: &druid::Env,
     ) -> Size {
         let max_chars = data.source.lines().map(|l| l.len()).max().unwrap_or(0);
-        let width = max_chars as f64 * FONT_WIDTH;
+        let width = max_chars as f64 * FONT_WIDTH + (FONT_WIDTH * 4.0); // Setting the width of the window. May need to add a bit of a buffer (ex 4*width).
         let height = data.source.lines().count() as f64 * FONT_HEIGHT;
         let desired = Size { width, height };
         bc.constrain(desired)
@@ -109,6 +126,9 @@ impl Widget<EditorModel> for BlockEditor {
 
         // draw blocks
         self.draw_blocks(ctx, data);
+
+        //draw cursor
+        self.draw_cursor(ctx);
     }
 
     fn lifecycle(
@@ -255,4 +275,10 @@ fn check_node_name(node: &Node) -> bool {
     ];
 
     node_names.contains(&node.kind())
+}
+
+fn calculate_char_position(mouse_pos: Point) -> Point {
+    let x = (mouse_pos.x / FONT_WIDTH).round();
+    let y = (mouse_pos.y / FONT_HEIGHT).floor();
+    Point::new(x, y)
 }
