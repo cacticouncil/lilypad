@@ -251,7 +251,7 @@ impl BlockEditor {
                     .char_indices()
                     .nth(self.cursor_pos.x)
                     .map(|x| x.0)
-                    .unwrap_or(0);
+                    .unwrap_or(line.len());
                 break;
             }
 
