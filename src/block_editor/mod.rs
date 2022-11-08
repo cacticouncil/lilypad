@@ -3,6 +3,7 @@ use druid::{
     Rect, RenderContext, Size, SysMods, Widget,
 };
 use std::cell::RefCell;
+use std::env;
 use std::sync::Arc;
 use tree_sitter::InputEdit;
 
@@ -21,6 +22,7 @@ Got these values by running:
 */
 pub const FONT_WIDTH: f64 = 9.00146484375;
 pub const FONT_HEIGHT: f64 = 20.0;
+pub const OS: &str = env::consts::OS;
 
 pub struct BlockEditor {
     tree_manager: Arc<RefCell<TreeManager>>,
@@ -131,7 +133,13 @@ impl BlockEditor {
     fn insert_newline(&mut self, source: &mut String) {
         // update source
         let offset = self.current_offset(source);
-        source.insert(offset, '\n');
+        if OS == "macos" {
+            source.insert(offset, '\n');
+        } else if OS == "windows" {
+            source.insert_str(offset, "\r\n");
+        } else {
+            source.insert(offset, '\n');
+        }
 
         // move cursor
         let start_pos = self.cursor_pos.to_tree_sitter();
@@ -143,7 +151,7 @@ impl BlockEditor {
         let edits = InputEdit {
             start_byte: offset,
             old_end_byte: offset,
-            new_end_byte: offset + 1,
+            new_end_byte: offset + os_linebreak(OS),
             start_position: start_pos,
             old_end_position: start_pos,
             new_end_position: end_pos,
@@ -239,6 +247,7 @@ impl BlockEditor {
     }
 
     /* ------- Helpers ------- */
+
     /// get byte offset from current cursor location
     fn current_offset(&self, source: &str) -> usize {
         let mut offset: usize = 0;
@@ -255,7 +264,7 @@ impl BlockEditor {
                 break;
             }
 
-            offset += line.len() + 1; // + 1 for the \n at the end of the line
+            offset += line.len() + os_linebreak(OS); // + 1 for the \n at the end of the line
         }
         offset
     }
@@ -377,5 +386,15 @@ impl IntPoint {
 
     fn to_tree_sitter(&self) -> tree_sitter::Point {
         tree_sitter::Point::new(self.x, self.y)
+    }
+}
+
+// Determine linebreak size ("\r\n" vs '\n') based on OS
+fn os_linebreak(os: &str) -> usize {
+    match os {
+        "windows" => 2,
+        "macos" => 1,
+        "linux" => 1,
+        _ => 0,
     }
 }
