@@ -1,4 +1,4 @@
-mod block_widget;
+mod block_editor;
 mod parse;
 
 //use druid::widget::{EnvScope, TextBox};
@@ -9,7 +9,7 @@ use std::{
     io::{BufReader, Read},
 };
 
-use block_widget::EditorModel;
+use block_editor::{BlockEditor, EditorModel};
 
 const MONO_FONT: Key<FontDescriptor> = Key::new("org.cacticouncil.lilypad.mono-font");
 
@@ -30,7 +30,7 @@ fn main() -> Result<(), PlatformError> {
 }
 
 fn ui_builder() -> impl Widget<EditorModel> {
-    Scroll::new(block_widget::BlockEditor::new()).vertical()
+    Scroll::new(BlockEditor::new()).vertical()
 }
 
 /* -------------------------------------------------------------------------- */
