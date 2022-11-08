@@ -32,7 +32,6 @@ impl TreeManager {
         self.tree = self.parser.parse(new_source, None).unwrap();
     }
 
-    #[allow(dead_code)]
     pub fn update(&mut self, new_source: &str, change: InputEdit) {
         self.tree.edit(&change);
         self.tree = self.parser.parse(new_source, Some(&self.tree)).unwrap();

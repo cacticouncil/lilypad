@@ -1,17 +1,17 @@
 use druid::piet::{Text, TextLayoutBuilder};
 use druid::{
-    Color, Data, Event, FontFamily, Lens, LifeCycle, PaintCtx, Point, Rect, RenderContext, Size,
-    Widget,
+    Color, Data, Event, EventCtx, FontFamily, HotKey, KbKey, Lens, LifeCycle, MouseEvent, PaintCtx,
+    Point, Rect, RenderContext, Size, SysMods, Widget,
 };
 use std::cell::RefCell;
 use std::sync::Arc;
-use tree_sitter::Node;
+use tree_sitter::{InputEdit, Node};
 
 use crate::parse::TreeManager;
 
 pub struct BlockEditor {
     tree_manager: Arc<RefCell<TreeManager>>,
-    cursor_pos: Point,
+    cursor_pos: IntPoint,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -23,10 +23,11 @@ impl BlockEditor {
     pub fn new() -> Self {
         BlockEditor {
             tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
-            cursor_pos: Point::new(0., 0.),
+            cursor_pos: IntPoint::ZERO,
         }
     }
 
+    /* ------- Drawing ------- */
     fn draw_blocks(&self, ctx: &mut PaintCtx, data: &EditorModel) {
         // pre-order traversal because we want to draw the parent under their children
         let tree_manager = self.tree_manager.borrow();
@@ -64,30 +65,233 @@ impl BlockEditor {
     fn draw_cursor(&self, ctx: &mut PaintCtx) {
         let block = Rect::from_origin_size(
             Point::new(
-                self.cursor_pos.x * FONT_WIDTH,
-                self.cursor_pos.y * FONT_HEIGHT,
+                (self.cursor_pos.x as f64) * FONT_WIDTH,
+                (self.cursor_pos.y as f64) * FONT_HEIGHT,
             ),
-            Size::new(1.0, FONT_HEIGHT),
+            Size::new(2.0, FONT_HEIGHT),
         );
-        ctx.fill(block, &Color::BLACK);
+        ctx.fill(block, &Color::GREEN);
+    }
+
+    /* ------------------------------ Interactions ------------------------------ */
+
+    /* ------- Mouse ------- */
+    fn mouse_clicked(&mut self, mouse: &MouseEvent, ctx: &mut EventCtx) {
+        // move the cursor
+        let x = (mouse.pos.x / FONT_WIDTH).round() as usize;
+        let y = (mouse.pos.y / FONT_HEIGHT) as usize;
+        self.cursor_pos = IntPoint::new(x, y);
+        ctx.request_paint();
+
+        // request keyboard focus if not already focused
+        if !ctx.is_focused() {
+            ctx.request_focus();
+        }
+
+        // prevent another widget from also responding
+        ctx.set_handled();
+    }
+
+    /* ------- Text Editing ------- */
+    fn insert_str(&mut self, source: &mut String, add: &str) {
+        // update source
+        let offset = self.current_offset(source);
+        source.insert_str(offset, add);
+
+        // move cursor
+        let start_pos = self.cursor_pos.to_tree_sitter();
+        self.cursor_pos.x += add.chars().count();
+        let end_pos = self.cursor_pos.to_tree_sitter();
+
+        // update tree
+        let edits = InputEdit {
+            start_byte: offset,
+            old_end_byte: offset,
+            new_end_byte: offset + add.len(),
+            start_position: start_pos,
+            old_end_position: start_pos,
+            new_end_position: end_pos,
+        };
+        self.tree_manager.borrow_mut().update(source, edits);
+    }
+
+    fn insert_newline(&mut self, source: &mut String) {
+        // update source
+        let offset = self.current_offset(source);
+        source.insert(offset, '\n');
+
+        // move cursor
+        let start_pos = self.cursor_pos.to_tree_sitter();
+        self.cursor_pos.x = 0;
+        self.cursor_pos.y += 1;
+        let end_pos = self.cursor_pos.to_tree_sitter();
+
+        // update tree
+        let edits = InputEdit {
+            start_byte: offset,
+            old_end_byte: offset,
+            new_end_byte: offset + 1,
+            start_position: start_pos,
+            old_end_position: start_pos,
+            new_end_position: end_pos,
+        };
+        self.tree_manager.borrow_mut().update(source, edits);
+    }
+
+    fn backspace(&mut self, source: &mut String) {
+        let offset = self.current_offset(source);
+
+        // move cursor
+        let start_pos = self.cursor_pos.to_tree_sitter();
+        if self.cursor_pos.x == 0 {
+            // abort if in position (0,0)
+            if self.cursor_pos.y == 0 {
+                return;
+            }
+
+            // Move to the end of the line above.
+            // Done before string modified so if a newline is deleted,
+            // the cursor is sandwiched between the two newly joined lines.
+            self.cursor_pos.y -= 1;
+            self.cursor_to_line_end(source);
+        } else {
+            self.cursor_pos.x -= 1;
+        }
+        let end_pos = self.cursor_pos.to_tree_sitter();
+
+        // update source
+        let removed = source.remove(offset - 1);
+
+        // update tree
+        let edits = InputEdit {
+            start_byte: offset,
+            old_end_byte: offset,
+            new_end_byte: offset - removed.len_utf8(),
+            start_position: start_pos,
+            old_end_position: start_pos,
+            new_end_position: end_pos,
+        };
+        self.tree_manager.borrow_mut().update(source, edits);
+    }
+
+    /* ------- Cursor Movement ------- */
+    fn cursor_up(&mut self, source: &str) {
+        if self.cursor_pos.y != 0 {
+            self.cursor_pos.y -= 1;
+            // the normal text editor experience has a "memory" of how far right
+            // the cursor started during a chain for arrow up/down (and then it snaps back there).
+            // if that memory is implemented, it can replace self.cursor_pos.x
+            self.cursor_to_col(self.cursor_pos.x, source);
+        }
+    }
+
+    fn cursor_down(&mut self, source: &str) {
+        let next_line = self.cursor_pos.y + 1;
+        let last_line = source.lines().count() - 1;
+        self.cursor_pos.y = std::cmp::min(next_line, last_line);
+        self.cursor_to_col(self.cursor_pos.x, source);
+    }
+
+    fn cursor_left(&mut self, source: &str) {
+        if self.cursor_pos.x == 0 && self.cursor_pos.y != 0 {
+            self.cursor_pos.y -= 1;
+            self.cursor_to_line_end(source)
+        } else {
+            self.cursor_pos.x -= 1;
+        }
+    }
+
+    fn cursor_right(&mut self, source: &str) {
+        // go to next line if at end of current line
+        let curr_line_len = source.lines().nth(self.cursor_pos.y).unwrap_or("").len();
+        if self.cursor_pos.x == curr_line_len {
+            let last_line = source.lines().count() - 1;
+            if self.cursor_pos.y != last_line {
+                self.cursor_pos.x = 0;
+                self.cursor_pos.y += 1;
+            }
+        } else {
+            self.cursor_pos.x += 1;
+        }
+    }
+
+    fn cursor_to_line_end(&mut self, source: &str) {
+        self.cursor_pos.x = source.lines().nth(self.cursor_pos.y).unwrap_or("").len();
+    }
+
+    /// goes to column without going past end of line
+    fn cursor_to_col(&mut self, col: usize, source: &str) {
+        let curr_line_len = source.lines().nth(self.cursor_pos.y).unwrap_or("").len();
+        self.cursor_pos.x = std::cmp::min(col, curr_line_len);
+    }
+
+    /* ------- Helpers ------- */
+    /// get byte offset from current cursor location
+    fn current_offset(&self, source: &str) -> usize {
+        let mut offset: usize = 0;
+        for (num, line) in source.lines().enumerate() {
+            if num == self.cursor_pos.y {
+                // position in the current line
+                // gets the byte offset of the cursor within the current line
+                // (supports utf-8 characters)
+                offset += line
+                    .char_indices()
+                    .nth(self.cursor_pos.x)
+                    .map(|x| x.0)
+                    .unwrap_or(0);
+                break;
+            }
+
+            offset += line.len() + 1; // + 1 for the \n at the end of the line
+        }
+        offset
     }
 }
 
 impl Widget<EditorModel> for BlockEditor {
     fn event(
         &mut self,
-        _ctx: &mut druid::EventCtx,
+        ctx: &mut druid::EventCtx,
         event: &druid::Event,
-        _data: &mut EditorModel,
+        data: &mut EditorModel,
         _env: &druid::Env,
     ) {
         match event {
-            Event::MouseDown(mouse) => {
-                //println!("click at {}", mouse.pos);
-                let pos = calculate_char_position(mouse.pos);
-                //println!("X,Y: {},{}", pos.x, pos.y);
-                self.cursor_pos = pos;
-                _ctx.request_paint();
+            Event::MouseDown(mouse) => self.mouse_clicked(mouse, ctx),
+
+            Event::KeyDown(key_event) => {
+                match key_event {
+                    // Hotkeys
+                    key if HotKey::new(SysMods::Cmd, "c").matches(key) => {
+                        println!("example copy command")
+                    }
+
+                    // Normal typing
+                    key => {
+                        match &key.key {
+                            // Text Inputs
+                            KbKey::Backspace => self.backspace(&mut data.source),
+                            KbKey::Enter => self.insert_newline(&mut data.source),
+                            KbKey::Tab => self.insert_str(&mut data.source, "    "),
+                            KbKey::Character(char) => self.insert_str(&mut data.source, char),
+
+                            // Arrow Keys
+                            KbKey::ArrowUp => self.cursor_up(&data.source),
+                            KbKey::ArrowDown => self.cursor_down(&data.source),
+                            KbKey::ArrowLeft => self.cursor_left(&data.source),
+                            KbKey::ArrowRight => self.cursor_right(&data.source),
+
+                            _ => {}
+                        }
+                    }
+                }
+
+                // redraw
+                ctx.request_layout(); // probably should only conditionally do this
+                ctx.request_paint();
+
+                // prevent another widget from also responding
+                ctx.set_handled()
             }
 
             _ => (),
@@ -141,7 +345,6 @@ impl Widget<EditorModel> for BlockEditor {
         match event {
             // replace the tree with a tree for the initial source
             LifeCycle::WidgetAdded => self.tree_manager.borrow_mut().replace(&data.source),
-
             _ => (),
         }
     }
@@ -213,6 +416,10 @@ fn draw_node(node: Node, source: &str, ctx: &mut PaintCtx) {
 }
 
 fn color(node: &Node) -> Option<Color> {
+    if node.is_error() {
+        return Some(Color::rgb(1.0, 0.0, 0.0));
+    }
+
     match node.kind() {
         "class_definition" => Some(Color::rgb(0.9, 0.43, 0.212)),
         "function_definition" => Some(Color::rgb(0.0, 0.47, 0.47)),
@@ -277,8 +484,19 @@ fn check_node_name(node: &Node) -> bool {
     node_names.contains(&node.kind())
 }
 
-fn calculate_char_position(mouse_pos: Point) -> Point {
-    let x = (mouse_pos.x / FONT_WIDTH).round();
-    let y = (mouse_pos.y / FONT_HEIGHT).floor();
-    Point::new(x, y)
+struct IntPoint {
+    x: usize,
+    y: usize,
+}
+
+impl IntPoint {
+    const ZERO: IntPoint = IntPoint { x: 0, y: 0 };
+
+    fn new(x: usize, y: usize) -> IntPoint {
+        IntPoint { x, y }
+    }
+
+    fn to_tree_sitter(&self) -> tree_sitter::Point {
+        tree_sitter::Point::new(self.x, self.y)
+    }
 }
