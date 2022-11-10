@@ -1,6 +1,6 @@
 use druid::{
-    Color, Data, Event, EventCtx, HotKey, KbKey, Lens, LifeCycle, MouseEvent, PaintCtx, Point,
-    Rect, RenderContext, Size, SysMods, Widget,
+    Color, Data, Event, EventCtx, HotKey, KbKey, Lens, LifeCycle, MouseButton, MouseEvent,
+    PaintCtx, Point, Rect, RenderContext, Size, SysMods, Widget,
 };
 use std::cell::RefCell;
 use std::env;
@@ -27,6 +27,8 @@ pub const OS: &str = env::consts::OS;
 pub struct BlockEditor {
     tree_manager: Arc<RefCell<TreeManager>>,
     cursor_pos: IntPoint,
+    selection: (IntPoint, IntPoint),
+    mouse_state: MouseState,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -39,6 +41,8 @@ impl BlockEditor {
         BlockEditor {
             tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
             cursor_pos: IntPoint::ZERO,
+            selection: (IntPoint::ZERO, IntPoint::ZERO),
+            mouse_state: MouseState::FALSE,
         }
     }
 
@@ -88,14 +92,116 @@ impl BlockEditor {
         ctx.fill(block, &Color::GREEN);
     }
 
+    fn draw_selection(&self, source: &str, ctx: &mut PaintCtx) {
+        // Forward selection, multiple lines
+        if self.selection.1.y as i32 - self.selection.0.y as i32 > 0 {
+            // Fill first line from cursor to end
+            selection_block(
+                self.selection.0.x as f64,
+                self.selection.0.y as f64,
+                (source.lines().nth(self.selection.0.y).unwrap_or("").len() as f64)
+                    - (self.selection.0.x as f64),
+                ctx,
+            );
+
+            // NEED TO FILL ANY IN-BETWEEN LINES
+            // Need to check if y1-y0 is more than 1 line
+            if self.selection.1.y as i32 - self.selection.0.y as i32 > 1 {
+                for i in 1..(self.selection.1.y - self.selection.0.y) {
+                    selection_block(
+                        0.,
+                        (self.selection.1.y - i) as f64,
+                        source
+                            .lines()
+                            .nth(self.selection.1.y - i)
+                            .unwrap_or("")
+                            .len() as f64,
+                        ctx,
+                    );
+                }
+            }
+
+            // Fill last line  from the left until cursor
+            selection_block(
+                0.,
+                self.selection.1.y as f64,
+                self.selection.1.x as f64,
+                ctx,
+            );
+        }
+        // Just one line
+        else if self.selection.1.y as i32 - self.selection.0.y as i32 == 0 {
+            selection_block(
+                self.selection.0.x as f64,
+                self.selection.0.y as f64,
+                (self.selection.1.x as f64) - (self.selection.0.x as f64),
+                ctx,
+            );
+        }
+        // Backwards selection, multiple lines
+        // MAY WANT TO MAKE AN ELSE IF?
+        else {
+            // Fill first line from cursor to beginning
+            selection_block(
+                0.,
+                self.selection.0.y as f64,
+                self.selection.0.x as f64,
+                ctx,
+            );
+
+            // NEED TO FILL ANY IN-BETWEEN LINES
+            // Need to check if y1-y0 is more than 1 line ( <-1)
+            if (self.selection.1.y as i32 - self.selection.0.y as i32) < -1 {
+                for i in 1..(self.selection.0.y - self.selection.1.y) {
+                    selection_block(
+                        0.,
+                        (self.selection.1.y + i) as f64,
+                        source
+                            .lines()
+                            .nth(self.selection.1.y + i)
+                            .unwrap_or("")
+                            .len() as f64,
+                        ctx,
+                    );
+                }
+            }
+            // Fill last line from the right until cursor
+            selection_block(
+                self.selection.1.x as f64,
+                self.selection.1.y as f64,
+                (source.lines().nth(self.selection.1.y).unwrap_or("").len() as f64)
+                    - (self.selection.1.x as f64),
+                ctx,
+            );
+        }
+    }
+
     /* ------------------------------ Interactions ------------------------------ */
 
     /* ------- Mouse ------- */
     fn mouse_clicked(&mut self, mouse: &MouseEvent, ctx: &mut EventCtx) {
-        // move the cursor
+        // move the cursor and get selection start position
         let x = (mouse.pos.x / FONT_WIDTH).round() as usize;
         let y = (mouse.pos.y / FONT_HEIGHT) as usize;
         self.cursor_pos = IntPoint::new(x, y);
+        self.selection.0 = IntPoint::new(self.cursor_pos.x, self.cursor_pos.y);
+        ctx.request_paint();
+
+        // request keyboard focus if not already focused
+        if !ctx.is_focused() {
+            ctx.request_focus();
+        }
+
+        // prevent another widget from also responding
+        ctx.set_handled();
+    }
+
+    fn mouse_moved(&mut self, mouse: &MouseEvent, ctx: &mut EventCtx) {
+        // move the cursor and get selection end position
+        self.cursor_pos.x = (mouse.pos.x / FONT_WIDTH).round() as usize;
+        self.cursor_pos.y = (mouse.pos.y / FONT_HEIGHT) as usize;
+        self.selection.1 = IntPoint::new(self.cursor_pos.x, self.cursor_pos.y);
+
         ctx.request_paint();
 
         // request keyboard focus if not already focused
@@ -236,6 +342,12 @@ impl BlockEditor {
         }
     }
 
+    fn cursor_to_line_start(&mut self, source: &str) {
+        let line = source.lines().nth(self.cursor_pos.y).unwrap_or("");
+        let index = line.len() - line.trim_start().len();
+        self.cursor_pos.x = index;
+    }
+
     fn cursor_to_line_end(&mut self, source: &str) {
         self.cursor_pos.x = source.lines().nth(self.cursor_pos.y).unwrap_or("").len();
     }
@@ -279,8 +391,22 @@ impl Widget<EditorModel> for BlockEditor {
         _env: &druid::Env,
     ) {
         match event {
-            Event::MouseDown(mouse) => self.mouse_clicked(mouse, ctx),
+            Event::MouseDown(mouse) if mouse.button == MouseButton::Left => {
+                self.mouse_clicked(mouse, ctx);
+                self.mouse_state.mouse_pressed = true;
+            }
 
+            Event::MouseUp(mouse) if mouse.button == MouseButton::Left => {
+                self.mouse_state.mouse_pressed = false;
+                self.mouse_state.mouse_moved = false;
+            }
+
+            Event::MouseMove(mouse) => {
+                if self.mouse_state.mouse_pressed {
+                    self.mouse_moved(mouse, ctx);
+                    self.mouse_state.mouse_moved = true;
+                }
+            }
             Event::KeyDown(key_event) => {
                 match key_event {
                     // Hotkeys
@@ -302,6 +428,10 @@ impl Widget<EditorModel> for BlockEditor {
                             KbKey::ArrowDown => self.cursor_down(&data.source),
                             KbKey::ArrowLeft => self.cursor_left(&data.source),
                             KbKey::ArrowRight => self.cursor_right(&data.source),
+
+                            // Home and End buttons
+                            KbKey::Home => self.cursor_to_line_start(&data.source),
+                            KbKey::End => self.cursor_to_line_end(&data.source),
 
                             _ => {}
                         }
@@ -355,6 +485,11 @@ impl Widget<EditorModel> for BlockEditor {
 
         //draw cursor
         self.draw_cursor(ctx);
+
+        //draw selection
+        if self.mouse_state.mouse_moved {
+            self.draw_selection(&data.source, ctx);
+        }
     }
 
     fn lifecycle(
@@ -372,6 +507,7 @@ impl Widget<EditorModel> for BlockEditor {
     }
 }
 
+#[derive(Debug)] // Not sure what this is doing but needed to add for debugging
 struct IntPoint {
     x: usize,
     y: usize,
@@ -389,6 +525,27 @@ impl IntPoint {
     }
 }
 
+struct MouseState {
+    mouse_pressed: bool,
+    mouse_moved: bool,
+}
+
+impl MouseState {
+    const FALSE: MouseState = MouseState {
+        mouse_pressed: false,
+        mouse_moved: false,
+    };
+    //Currently not being used
+    /*
+    fn new(mouse_pressed: bool, mouse_moved: bool) -> MouseState {
+        MouseState {
+            mouse_pressed,
+            mouse_moved,
+        }
+    }
+    */
+}
+
 // Determine linebreak size ("\r\n" vs '\n') based on OS
 fn os_linebreak(os: &str) -> usize {
     match os {
@@ -397,4 +554,12 @@ fn os_linebreak(os: &str) -> usize {
         "linux" => 1,
         _ => 0,
     }
+}
+
+fn selection_block(x: f64, y: f64, width: f64, ctx: &mut PaintCtx) {
+    let block = Rect::from_origin_size(
+        Point::new(x * FONT_WIDTH, y * FONT_HEIGHT),
+        Size::new(width * FONT_WIDTH, FONT_HEIGHT),
+    );
+    ctx.fill(block, &Color::rgba(0.255, 0.255, 0.255, 0.5));
 }
