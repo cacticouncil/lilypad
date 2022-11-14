@@ -3,7 +3,8 @@ use druid::{
     PaintCtx, Point, Rect, RenderContext, Size, SysMods, Widget,
 };
 use std::cell::RefCell;
-use std::env;
+use std::cmp::Ordering;
+use std::ops::Range;
 use std::sync::Arc;
 use tree_sitter::InputEdit;
 
@@ -22,13 +23,11 @@ Got these values by running:
 */
 pub const FONT_WIDTH: f64 = 9.00146484375;
 pub const FONT_HEIGHT: f64 = 20.0;
-pub const OS: &str = env::consts::OS;
 
 pub struct BlockEditor {
     tree_manager: Arc<RefCell<TreeManager>>,
-    cursor_pos: IntPoint,
-    selection: (IntPoint, IntPoint),
-    mouse_state: MouseState,
+    selection: Selection,
+    mouse_pressed: bool,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -40,9 +39,8 @@ impl BlockEditor {
     pub fn new() -> Self {
         BlockEditor {
             tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
-            cursor_pos: IntPoint::ZERO,
-            selection: (IntPoint::ZERO, IntPoint::ZERO),
-            mouse_state: MouseState::FALSE,
+            selection: Selection::ZERO,
+            mouse_pressed: false,
         }
     }
 
@@ -82,10 +80,11 @@ impl BlockEditor {
     }
 
     fn draw_cursor(&self, ctx: &mut PaintCtx) {
+        // we want to draw the cursor where the mouse has last been (selection end)
         let block = Rect::from_origin_size(
             Point::new(
-                (self.cursor_pos.x as f64) * FONT_WIDTH,
-                (self.cursor_pos.y as f64) * FONT_HEIGHT,
+                (self.selection.end.x as f64) * FONT_WIDTH,
+                (self.selection.end.y as f64) * FONT_HEIGHT,
             ),
             Size::new(2.0, FONT_HEIGHT),
         );
@@ -93,98 +92,68 @@ impl BlockEditor {
     }
 
     fn draw_selection(&self, source: &str, ctx: &mut PaintCtx) {
-        // Forward selection, multiple lines
-        if self.selection.1.y as i32 - self.selection.0.y as i32 > 0 {
-            // Fill first line from cursor to end
-            selection_block(
-                self.selection.0.x as f64,
-                self.selection.0.y as f64,
-                (source.lines().nth(self.selection.0.y).unwrap_or("").len() as f64)
-                    - (self.selection.0.x as f64),
-                ctx,
-            );
+        let start_y = self.selection.start.y;
+        let end_y = self.selection.end.y;
 
-            // NEED TO FILL ANY IN-BETWEEN LINES
-            // Need to check if y1-y0 is more than 1 line
-            if self.selection.1.y as i32 - self.selection.0.y as i32 > 1 {
-                for i in 1..(self.selection.1.y - self.selection.0.y) {
-                    selection_block(
-                        0.,
-                        (self.selection.1.y - i) as f64,
-                        source
-                            .lines()
-                            .nth(self.selection.1.y - i)
-                            .unwrap_or("")
-                            .len() as f64,
-                        ctx,
-                    );
+        match end_y.cmp(&start_y) {
+            Ordering::Greater => {
+                // Forward selection, multiple lines
+                // Fill first line from cursor to end
+                selection_block(
+                    self.selection.start.x,
+                    self.selection.start.y,
+                    line_len(self.selection.start.y, source) - self.selection.start.x,
+                    ctx,
+                );
+
+                // fill in any in between lines
+                for line in (start_y + 1)..end_y {
+                    selection_block(0, line, line_len(line, source), ctx);
                 }
+
+                // Fill last line from the left until cursor
+                selection_block(0, self.selection.end.y, self.selection.end.x, ctx);
             }
+            Ordering::Less => {
+                // Backwards selection, multiple lines
 
-            // Fill last line  from the left until cursor
-            selection_block(
-                0.,
-                self.selection.1.y as f64,
-                self.selection.1.x as f64,
-                ctx,
-            );
-        }
-        // Just one line
-        else if self.selection.1.y as i32 - self.selection.0.y as i32 == 0 {
-            selection_block(
-                self.selection.0.x as f64,
-                self.selection.0.y as f64,
-                (self.selection.1.x as f64) - (self.selection.0.x as f64),
-                ctx,
-            );
-        }
-        // Backwards selection, multiple lines
-        // MAY WANT TO MAKE AN ELSE IF?
-        else {
-            // Fill first line from cursor to beginning
-            selection_block(
-                0.,
-                self.selection.0.y as f64,
-                self.selection.0.x as f64,
-                ctx,
-            );
+                // Fill first line from cursor to beginning
+                selection_block(0, self.selection.start.y, self.selection.start.x, ctx);
 
-            // NEED TO FILL ANY IN-BETWEEN LINES
-            // Need to check if y1-y0 is more than 1 line ( <-1)
-            if (self.selection.1.y as i32 - self.selection.0.y as i32) < -1 {
-                for i in 1..(self.selection.0.y - self.selection.1.y) {
-                    selection_block(
-                        0.,
-                        (self.selection.1.y + i) as f64,
-                        source
-                            .lines()
-                            .nth(self.selection.1.y + i)
-                            .unwrap_or("")
-                            .len() as f64,
-                        ctx,
-                    );
+                // fill in between lines
+                for line in (end_y + 1)..start_y {
+                    selection_block(0, line, line_len(line, source), ctx);
                 }
+
+                // Fill last line from the right until cursor
+                selection_block(
+                    self.selection.end.x,
+                    self.selection.end.y,
+                    line_len(self.selection.end.y, source) - self.selection.end.x,
+                    ctx,
+                );
             }
-            // Fill last line from the right until cursor
-            selection_block(
-                self.selection.1.x as f64,
-                self.selection.1.y as f64,
-                (source.lines().nth(self.selection.1.y).unwrap_or("").len() as f64)
-                    - (self.selection.1.x as f64),
-                ctx,
-            );
+            Ordering::Equal => {
+                // Just one line
+                let ord_sel = self.selection.ordered();
+                selection_block(
+                    ord_sel.start.x,
+                    ord_sel.start.y,
+                    ord_sel.end.x - ord_sel.start.x,
+                    ctx,
+                );
+            }
         }
     }
 
     /* ------------------------------ Interactions ------------------------------ */
 
     /* ------- Mouse ------- */
-    fn mouse_clicked(&mut self, mouse: &MouseEvent, ctx: &mut EventCtx) {
+    fn mouse_clicked(&mut self, mouse: &MouseEvent, source: &str, ctx: &mut EventCtx) {
         // move the cursor and get selection start position
         let x = (mouse.pos.x / FONT_WIDTH).round() as usize;
         let y = (mouse.pos.y / FONT_HEIGHT) as usize;
-        self.cursor_pos = IntPoint::new(x, y);
-        self.selection.0 = IntPoint::new(self.cursor_pos.x, self.cursor_pos.y);
+        self.selection = Selection::new_cursor(clamp_col(y, x, source), y);
         ctx.request_paint();
 
         // request keyboard focus if not already focused
@@ -196,11 +165,11 @@ impl BlockEditor {
         ctx.set_handled();
     }
 
-    fn mouse_moved(&mut self, mouse: &MouseEvent, ctx: &mut EventCtx) {
-        // move the cursor and get selection end position
-        self.cursor_pos.x = (mouse.pos.x / FONT_WIDTH).round() as usize;
-        self.cursor_pos.y = (mouse.pos.y / FONT_HEIGHT) as usize;
-        self.selection.1 = IntPoint::new(self.cursor_pos.x, self.cursor_pos.y);
+    fn mouse_moved(&mut self, mouse: &MouseEvent, source: &str, ctx: &mut EventCtx) {
+        // set selection end position to new position
+        let x = (mouse.pos.x / FONT_WIDTH).round() as usize;
+        let y = (mouse.pos.y / FONT_HEIGHT) as usize;
+        self.selection.end = IntPoint::new(clamp_col(y, x, source), y);
 
         ctx.request_paint();
 
@@ -216,170 +185,214 @@ impl BlockEditor {
     /* ------- Text Editing ------- */
     fn insert_str(&mut self, source: &mut String, add: &str) {
         // update source
-        let offset = self.current_offset(source);
-        source.insert_str(offset, add);
+        let old_selection = self.selection.ordered();
+        let offsets = old_selection.offset_in(source);
+        source.replace_range(offsets.to_range(), add);
 
         // move cursor
-        let start_pos = self.cursor_pos.to_tree_sitter();
-        self.cursor_pos.x += add.chars().count();
-        let end_pos = self.cursor_pos.to_tree_sitter();
+        self.selection = Selection::new_cursor(
+            old_selection.start.x + add.chars().count(),
+            old_selection.start.y,
+        );
 
         // update tree
         let edits = InputEdit {
-            start_byte: offset,
-            old_end_byte: offset,
-            new_end_byte: offset + add.len(),
-            start_position: start_pos,
-            old_end_position: start_pos,
-            new_end_position: end_pos,
+            start_byte: offsets.start,
+            old_end_byte: offsets.end,
+            new_end_byte: offsets.start + add.len(),
+            start_position: old_selection.start.to_tree_sitter(),
+            old_end_position: old_selection.end.to_tree_sitter(),
+            new_end_position: self.selection.end.to_tree_sitter(),
         };
         self.tree_manager.borrow_mut().update(source, edits);
     }
 
     fn insert_newline(&mut self, source: &mut String) {
+        // TODO: maintain indent level
+        let old_selection = self.selection.ordered();
+
         // update source
-        let offset = self.current_offset(source);
-        if OS == "macos" {
-            source.insert(offset, '\n');
-        } else if OS == "windows" {
-            source.insert_str(offset, "\r\n");
-        } else {
-            source.insert(offset, '\n');
-        }
+        let offsets = old_selection.ordered().offset_in(source);
+        source.replace_range(offsets.to_range(), os_linebreak());
 
         // move cursor
-        let start_pos = self.cursor_pos.to_tree_sitter();
-        self.cursor_pos.x = 0;
-        self.cursor_pos.y += 1;
-        let end_pos = self.cursor_pos.to_tree_sitter();
+        self.selection = Selection::new_cursor(0, old_selection.start.y + 1);
 
         // update tree
         let edits = InputEdit {
-            start_byte: offset,
-            old_end_byte: offset,
-            new_end_byte: offset + os_linebreak(OS),
-            start_position: start_pos,
-            old_end_position: start_pos,
-            new_end_position: end_pos,
+            start_byte: offsets.start,
+            old_end_byte: offsets.end,
+            new_end_byte: offsets.start + os_linebreak().len(),
+            start_position: old_selection.start.to_tree_sitter(),
+            old_end_position: old_selection.end.to_tree_sitter(),
+            new_end_position: self.selection.end.to_tree_sitter(),
         };
         self.tree_manager.borrow_mut().update(source, edits);
     }
 
     fn backspace(&mut self, source: &mut String) {
-        let offset = self.current_offset(source);
+        let old_selection = self.selection.ordered();
 
-        // move cursor
-        let start_pos = self.cursor_pos.to_tree_sitter();
-        if self.cursor_pos.x == 0 {
-            // abort if in position (0,0)
-            if self.cursor_pos.y == 0 {
-                return;
+        // for normal cursor, delete preceding character
+        if old_selection.is_cursor() {
+            // move cursor
+            if old_selection.start.x == 0 {
+                // abort if in position (0,0)
+                if old_selection.start.y == 0 {
+                    return;
+                }
+
+                // Move to the end of the line above.
+                // Done before string modified so if a newline is deleted,
+                // the cursor is sandwiched between the two newly joined lines.
+                let above = old_selection.start.y - 1;
+                self.selection = Selection::new_cursor(line_len(above, source), above);
+            } else {
+                // just move back one char
+                self.selection =
+                    Selection::new_cursor(old_selection.start.x - 1, old_selection.start.y);
             }
 
-            // Move to the end of the line above.
-            // Done before string modified so if a newline is deleted,
-            // the cursor is sandwiched between the two newly joined lines.
-            self.cursor_pos.y -= 1;
-            self.cursor_to_line_end(source);
-        } else {
-            self.cursor_pos.x -= 1;
+            // update source
+            let offset = old_selection.start.offset_in(source);
+            let removed = source.remove(offset - 1);
+
+            // update tree
+            let edits = InputEdit {
+                start_byte: offset,
+                old_end_byte: offset,
+                new_end_byte: offset - removed.len_utf8(),
+                start_position: old_selection.start.to_tree_sitter(),
+                old_end_position: old_selection.start.to_tree_sitter(),
+                new_end_position: self.selection.start.to_tree_sitter(),
+            };
+            self.tree_manager.borrow_mut().update(source, edits);
         }
-        let end_pos = self.cursor_pos.to_tree_sitter();
+        // for selection, delete text inside
+        else {
+            // set cursor to start of selection
+            self.selection = Selection::new_cursor(old_selection.start.x, old_selection.start.y);
 
-        // update source
-        let removed = source.remove(offset - 1);
+            // remove everything in range
+            let offsets = old_selection.offset_in(source);
+            source.replace_range(offsets.to_range(), "");
 
-        // update tree
-        let edits = InputEdit {
-            start_byte: offset,
-            old_end_byte: offset,
-            new_end_byte: offset - removed.len_utf8(),
-            start_position: start_pos,
-            old_end_position: start_pos,
-            new_end_position: end_pos,
-        };
-        self.tree_manager.borrow_mut().update(source, edits);
+            // update tree
+            let edits = InputEdit {
+                start_byte: offsets.start,
+                old_end_byte: offsets.end,
+                new_end_byte: offsets.start,
+                start_position: old_selection.start.to_tree_sitter(),
+                old_end_position: old_selection.end.to_tree_sitter(),
+                new_end_position: old_selection.start.to_tree_sitter(),
+            };
+            self.tree_manager.borrow_mut().update(source, edits);
+        }
     }
 
     /* ------- Cursor Movement ------- */
     fn cursor_up(&mut self, source: &str) {
-        if self.cursor_pos.y != 0 {
-            self.cursor_pos.y -= 1;
+        // when moving up, use top of selection
+        let cursor_pos = self.selection.ordered().start;
+
+        self.selection = if cursor_pos.y == 0 {
+            Selection::new_cursor(0, 0)
+        } else {
             // the normal text editor experience has a "memory" of how far right
             // the cursor started during a chain for arrow up/down (and then it snaps back there).
             // if that memory is implemented, it can replace self.cursor_pos.x
-            self.cursor_to_col(self.cursor_pos.x, source);
+            Selection::new_cursor(
+                clamp_col(cursor_pos.y - 1, cursor_pos.x, source),
+                cursor_pos.y - 1,
+            )
         }
     }
 
     fn cursor_down(&mut self, source: &str) {
-        let next_line = self.cursor_pos.y + 1;
+        // when moving down use bottom of selection
+        let cursor_pos = self.selection.ordered().end;
+
         let last_line = source.lines().count() - 1;
-        self.cursor_pos.y = std::cmp::min(next_line, last_line);
-        self.cursor_to_col(self.cursor_pos.x, source);
+        let next_line = std::cmp::min(cursor_pos.y + 1, last_line);
+
+        self.selection = if cursor_pos.y == last_line {
+            // if on last line, just move to end of line
+            Selection::new_cursor(
+                source.lines().last().unwrap_or("").chars().count(),
+                last_line,
+            )
+        } else {
+            // same memory thing as above applies here
+            Selection::new_cursor(clamp_col(next_line, cursor_pos.x, source), next_line)
+        }
     }
 
     fn cursor_left(&mut self, source: &str) {
-        if self.cursor_pos.x == 0 && self.cursor_pos.y != 0 {
-            self.cursor_pos.y -= 1;
-            self.cursor_to_line_end(source)
+        if self.selection.is_cursor() {
+            // actually move if cursor
+            let cursor_pos = self.selection.start;
+            if cursor_pos.x == 0 {
+                // if at start of line, move to end of line above
+                if cursor_pos.y != 0 {
+                    self.selection =
+                        Selection::new_cursor(line_len(cursor_pos.y - 1, source), cursor_pos.y - 1);
+                }
+            } else {
+                self.selection = Selection::new_cursor(cursor_pos.x - 1, cursor_pos.y);
+            }
         } else {
-            self.cursor_pos.x -= 1;
+            // just move cursor to start of selection
+            let start = self.selection.ordered().start;
+            self.selection = Selection::new_cursor(start.x, start.y);
         }
     }
 
     fn cursor_right(&mut self, source: &str) {
-        // go to next line if at end of current line
-        let curr_line_len = source.lines().nth(self.cursor_pos.y).unwrap_or("").len();
-        if self.cursor_pos.x == curr_line_len {
-            let last_line = source.lines().count() - 1;
-            if self.cursor_pos.y != last_line {
-                self.cursor_pos.x = 0;
-                self.cursor_pos.y += 1;
+        if self.selection.is_cursor() {
+            // actually move if cursor
+            let cursor_pos = self.selection.start;
+
+            let curr_line_len = line_len(cursor_pos.y, source);
+            if cursor_pos.x == curr_line_len {
+                // if at end of current line, go to next line
+                let last_line = source.lines().count() - 1;
+                if cursor_pos.y != last_line {
+                    self.selection = Selection::new_cursor(0, cursor_pos.y + 1);
+                }
+            } else {
+                self.selection = Selection::new_cursor(cursor_pos.x + 1, cursor_pos.y);
             }
         } else {
-            self.cursor_pos.x += 1;
+            // just move cursor to end of selection
+            let end = self.selection.ordered().end;
+            self.selection = Selection::new_cursor(end.x, end.y);
         }
     }
 
     fn cursor_to_line_start(&mut self, source: &str) {
-        let line = source.lines().nth(self.cursor_pos.y).unwrap_or("");
-        let index = line.len() - line.trim_start().len();
-        self.cursor_pos.x = index;
+        // go with whatever line the mouse was last on
+        let cursor_pos = self.selection.end;
+
+        let line = source.lines().nth(cursor_pos.y).unwrap_or("");
+        let start_idx = line.len() - line.trim_start().len();
+        self.selection = Selection::new_cursor(start_idx, cursor_pos.y);
     }
 
     fn cursor_to_line_end(&mut self, source: &str) {
-        self.cursor_pos.x = source.lines().nth(self.cursor_pos.y).unwrap_or("").len();
+        // go with whatever line the mouse was last on
+        let cursor_pos = self.selection.end;
+
+        self.selection = Selection::new_cursor(line_len(cursor_pos.y, source), cursor_pos.y);
     }
+}
 
-    /// goes to column without going past end of line
-    fn cursor_to_col(&mut self, col: usize, source: &str) {
-        let curr_line_len = source.lines().nth(self.cursor_pos.y).unwrap_or("").len();
-        self.cursor_pos.x = std::cmp::min(col, curr_line_len);
-    }
+fn clamp_col(row: usize, col: usize, source: &str) -> usize {
+    std::cmp::min(col, line_len(row, source))
+}
 
-    /* ------- Helpers ------- */
-
-    /// get byte offset from current cursor location
-    fn current_offset(&self, source: &str) -> usize {
-        let mut offset: usize = 0;
-        for (num, line) in source.lines().enumerate() {
-            if num == self.cursor_pos.y {
-                // position in the current line
-                // gets the byte offset of the cursor within the current line
-                // (supports utf-8 characters)
-                offset += line
-                    .char_indices()
-                    .nth(self.cursor_pos.x)
-                    .map(|x| x.0)
-                    .unwrap_or(line.len());
-                break;
-            }
-
-            offset += line.len() + os_linebreak(OS); // + 1 for the \n at the end of the line
-        }
-        offset
-    }
+/// the number of characters in line of source
+fn line_len(row: usize, source: &str) -> usize {
+    source.lines().nth(row).unwrap_or("").chars().count()
 }
 
 impl Widget<EditorModel> for BlockEditor {
@@ -392,19 +405,17 @@ impl Widget<EditorModel> for BlockEditor {
     ) {
         match event {
             Event::MouseDown(mouse) if mouse.button == MouseButton::Left => {
-                self.mouse_clicked(mouse, ctx);
-                self.mouse_state.mouse_pressed = true;
+                self.mouse_clicked(mouse, &data.source, ctx);
+                self.mouse_pressed = true;
             }
 
             Event::MouseUp(mouse) if mouse.button == MouseButton::Left => {
-                self.mouse_state.mouse_pressed = false;
-                self.mouse_state.mouse_moved = false;
+                self.mouse_pressed = false;
             }
 
             Event::MouseMove(mouse) => {
-                if self.mouse_state.mouse_pressed {
-                    self.mouse_moved(mouse, ctx);
-                    self.mouse_state.mouse_moved = true;
+                if self.mouse_pressed {
+                    self.mouse_moved(mouse, &data.source, ctx);
                 }
             }
             Event::KeyDown(key_event) => {
@@ -468,7 +479,12 @@ impl Widget<EditorModel> for BlockEditor {
         data: &EditorModel,
         _env: &druid::Env,
     ) -> Size {
-        let max_chars = data.source.lines().map(|l| l.len()).max().unwrap_or(0);
+        let max_chars = data
+            .source
+            .lines()
+            .map(|l| l.chars().count())
+            .max()
+            .unwrap_or(0);
         let width = max_chars as f64 * FONT_WIDTH + (FONT_WIDTH * 4.0); // Setting the width of the window. May need to add a bit of a buffer (ex 4*width).
         let height = data.source.lines().count() as f64 * FONT_HEIGHT;
         let desired = Size { width, height };
@@ -483,11 +499,9 @@ impl Widget<EditorModel> for BlockEditor {
         // draw blocks
         self.draw_blocks(ctx, data);
 
-        //draw cursor
+        // draw cursor and selection
         self.draw_cursor(ctx);
-
-        //draw selection
-        if self.mouse_state.mouse_moved {
+        if !self.selection.is_cursor() {
             self.draw_selection(&data.source, ctx);
         }
     }
@@ -507,14 +521,85 @@ impl Widget<EditorModel> for BlockEditor {
     }
 }
 
-#[derive(Debug)] // Not sure what this is doing but needed to add for debugging
+/* ------------------------------ helper types ------------------------------ */
+
+struct Selection {
+    start: IntPoint,
+    end: IntPoint,
+}
+
+impl Selection {
+    const ZERO: Self = Selection {
+        start: IntPoint::ZERO,
+        end: IntPoint::ZERO,
+    };
+
+    fn new(start: IntPoint, end: IntPoint) -> Self {
+        Selection { start, end }
+    }
+
+    fn new_cursor(x: usize, y: usize) -> Self {
+        Selection {
+            start: IntPoint::new(x, y),
+            end: IntPoint::new(x, y),
+        }
+    }
+
+    fn is_cursor(&self) -> bool {
+        self.start == self.end
+    }
+
+    fn ordered(&self) -> Selection {
+        if self.start.y < self.end.y {
+            Selection {
+                start: self.start,
+                end: self.end,
+            }
+        } else if self.start.y > self.end.y {
+            Selection {
+                start: self.end,
+                end: self.start,
+            }
+        } else if self.start.x < self.end.x {
+            Selection {
+                start: self.start,
+                end: self.end,
+            }
+        } else {
+            Selection {
+                start: self.end,
+                end: self.start,
+            }
+        }
+    }
+
+    fn offset_in(&self, string: &str) -> TextRange {
+        TextRange {
+            start: self.start.offset_in(string),
+            end: self.end.offset_in(string),
+        }
+    }
+}
+
+struct TextRange {
+    start: usize,
+    end: usize,
+}
+
+impl TextRange {
+    fn to_range(&self) -> Range<usize> {
+        self.start..self.end
+    }
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
 struct IntPoint {
     x: usize,
     y: usize,
 }
 
 impl IntPoint {
-    const ZERO: IntPoint = IntPoint { x: 0, y: 0 };
+    const ZERO: Self = IntPoint { x: 0, y: 0 };
 
     fn new(x: usize, y: usize) -> IntPoint {
         IntPoint { x, y }
@@ -523,43 +608,40 @@ impl IntPoint {
     fn to_tree_sitter(&self) -> tree_sitter::Point {
         tree_sitter::Point::new(self.x, self.y)
     }
-}
 
-struct MouseState {
-    mouse_pressed: bool,
-    mouse_moved: bool,
-}
+    fn offset_in(&self, string: &str) -> usize {
+        let mut offset: usize = 0;
+        for (num, line) in string.lines().enumerate() {
+            if num == self.y {
+                // position in the current line
+                // gets the byte offset of the cursor within the current line
+                // (supports utf-8 characters)
+                offset += line
+                    .char_indices()
+                    .nth(self.x)
+                    .map(|x| x.0)
+                    .unwrap_or(line.len());
+                break;
+            }
 
-impl MouseState {
-    const FALSE: MouseState = MouseState {
-        mouse_pressed: false,
-        mouse_moved: false,
-    };
-    //Currently not being used
-    /*
-    fn new(mouse_pressed: bool, mouse_moved: bool) -> MouseState {
-        MouseState {
-            mouse_pressed,
-            mouse_moved,
+            offset += line.len() + os_linebreak().len(); // factor in the linebreak
         }
-    }
-    */
-}
-
-// Determine linebreak size ("\r\n" vs '\n') based on OS
-fn os_linebreak(os: &str) -> usize {
-    match os {
-        "windows" => 2,
-        "macos" => 1,
-        "linux" => 1,
-        _ => 0,
+        offset
     }
 }
 
-fn selection_block(x: f64, y: f64, width: f64, ctx: &mut PaintCtx) {
+fn selection_block(x: usize, y: usize, width: usize, ctx: &mut PaintCtx) {
     let block = Rect::from_origin_size(
-        Point::new(x * FONT_WIDTH, y * FONT_HEIGHT),
-        Size::new(width * FONT_WIDTH, FONT_HEIGHT),
+        Point::new(x as f64 * FONT_WIDTH, y as f64 * FONT_HEIGHT),
+        Size::new(width as f64 * FONT_WIDTH, FONT_HEIGHT),
     );
     ctx.fill(block, &Color::rgba(0.255, 0.255, 0.255, 0.5));
+}
+
+const fn os_linebreak() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "\r\n"
+    } else {
+        "\n"
+    }
 }
