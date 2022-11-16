@@ -1,16 +1,20 @@
 use druid::{
     Color, Data, Event, EventCtx, HotKey, KbKey, Lens, LifeCycle, MouseButton, MouseEvent,
-    PaintCtx, Point, Rect, RenderContext, Size, SysMods, Widget,
+    PaintCtx, Point, Rect, RenderContext, Size, SysMods, Widget, TimerToken,
 };
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::Duration;
 use tree_sitter::InputEdit;
 
 use crate::parse::TreeManager;
 
 mod node;
+
+//controls cursor blinking speed
+static TIMER_INTERVAL: Duration = Duration::from_millis(700);
 
 /*
 Got these values by running:
@@ -28,6 +32,8 @@ pub struct BlockEditor {
     tree_manager: Arc<RefCell<TreeManager>>,
     selection: Selection,
     mouse_pressed: bool,
+    timer_id: TimerToken,
+    cursor_visible: bool,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -41,6 +47,8 @@ impl BlockEditor {
             tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
             selection: Selection::ZERO,
             mouse_pressed: false,
+            timer_id: TimerToken::INVALID,
+            cursor_visible: true,
         }
     }
 
@@ -88,7 +96,10 @@ impl BlockEditor {
             ),
             Size::new(2.0, FONT_HEIGHT),
         );
-        ctx.fill(block, &Color::GREEN);
+        if self.cursor_visible {
+            //colors cursor
+            ctx.fill(block, &Color::WHITE);
+        }
     }
 
     fn draw_selection(&self, source: &str, ctx: &mut PaintCtx) {
@@ -404,6 +415,19 @@ impl Widget<EditorModel> for BlockEditor {
         _env: &druid::Env,
     ) {
         match event {
+            Event::WindowConnected => {
+            //starts initial timer
+                self.timer_id = ctx.request_timer(TIMER_INTERVAL);
+            }
+            Event::Timer(id) => {
+                if *id == self.timer_id {
+                    //make cursor blink and then reset timer
+                    //println!("timer done");
+                    self.cursor_visible = !self.cursor_visible;
+                    ctx.request_paint();
+                    self.timer_id = ctx.request_timer(TIMER_INTERVAL);
+                }
+            }
             Event::MouseDown(mouse) if mouse.button == MouseButton::Left => {
                 self.mouse_clicked(mouse, &data.source, ctx);
                 self.mouse_pressed = true;
