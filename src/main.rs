@@ -18,7 +18,7 @@ fn main() -> Result<(), PlatformError> {
     let source = get_test_string("test1.py");
     let data = EditorModel { source };
     // launch
-    let main_window = WindowDesc::new(ui_builder).title("Lilypad Editor");
+    let main_window = WindowDesc::new(ui_builder()).title("Lilypad Editor");
     AppLauncher::with_window(main_window)
         .configure_env(|env, _state| {
             env.set(

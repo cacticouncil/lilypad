@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-druid = "0.7"
+druid = "0.8"
 tree-sitter = "0.20"
 
 [build-dependencies]

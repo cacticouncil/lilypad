@@ -1,6 +1,6 @@
 use druid::{
     Color, Data, Event, EventCtx, HotKey, KbKey, Lens, LifeCycle, MouseButton, MouseEvent,
-    PaintCtx, Point, Rect, RenderContext, Size, SysMods, Widget, TimerToken,
+    PaintCtx, Point, Rect, RenderContext, Size, SysMods, TimerToken, Widget,
 };
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -25,7 +25,7 @@ Got these values by running:
     let size = layout.size();
     println!("{:}", size);
 */
-pub const FONT_WIDTH: f64 = 9.00146484375;
+pub const FONT_WIDTH: f64 = 9.0;
 pub const FONT_HEIGHT: f64 = 20.0;
 
 pub struct BlockEditor {
@@ -416,7 +416,7 @@ impl Widget<EditorModel> for BlockEditor {
     ) {
         match event {
             Event::WindowConnected => {
-            //starts initial timer
+                //starts initial timer
                 self.timer_id = ctx.request_timer(TIMER_INTERVAL);
             }
             Event::Timer(id) => {
