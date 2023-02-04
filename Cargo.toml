@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 druid = "0.8"
 tree-sitter = "0.20"
+tree-sitter-python = "0.20"
 
 [build-dependencies]
 cc = "*"

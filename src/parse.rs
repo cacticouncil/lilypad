@@ -1,4 +1,4 @@
-﻿use tree_sitter::{InputEdit, Language, Parser, Tree, TreeCursor};
+﻿use tree_sitter::{InputEdit, Parser, Tree, TreeCursor};
 
 pub struct TreeManager {
     tree: Tree,
@@ -8,14 +8,9 @@ pub struct TreeManager {
 /* ------- Parsing  ------- */
 impl TreeManager {
     pub fn new(source: &str) -> TreeManager {
-        // Get Language
-        extern "C" {
-            fn tree_sitter_python() -> Language;
-        }
-        let language = unsafe { tree_sitter_python() };
-
         // Create Parser
         let mut parser = Parser::new();
+        let language = tree_sitter_python::language();
         parser.set_language(language).unwrap();
 
         // Parse initial source
