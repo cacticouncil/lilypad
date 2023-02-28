@@ -2,9 +2,29 @@
 
 A next generation dual modal code editor
 
-## In order to run
+## Prerequisite Installs
 
-1. **Install Rust** (Instructions on how to install Rust can be found here: https://doc.rust-lang.org/book/ch01-01-installation.html)
-2. **Install the font Roboto Mono** (The download for the font can be found here: https://fonts.google.com/specimen/Roboto+Mono)
-3. **Clone the repo with `git clone`**
-4. **Run the program** using the command `cargo run` in the terminal
+- Both
+    - [Rust](https://rustup.rs/)
+    - [Roboto Mono Font](https://fonts.google.com/specimen/Roboto+Mono)
+- Web
+    - [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+    - [Just Command Runner](https://github.com/casey/just) (optional)
+    - [Host These Things Please](https://crates.io/crates/https) (optional)
+
+## Running
+
+### Native App
+
+1. `cargo run`
+
+### VSCode Extension
+
+1. `just wasm-vscode`
+2. Open `lilypad-vscode/` in [VSCode Insiders](https://code.visualstudio.com/insiders/)
+3. Run using VSCode
+
+### In Browser
+
+1. `just wasm-web`
+2. `http`

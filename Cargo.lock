@@ -78,6 +78,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1ad822118d20d2c234f427000d5acc36eabe1e29a348c89b63dd60b13f28e5d"
 
 [[package]]
+name = "bytemuck"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c041d3eab048880cb0b86b256447da3f18859a163c3b8d8893f4e6368abe6393"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aca418a974d83d40a0c1f0c5cba6ff4bc28d8df099109ca459a2118d40b6322"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "c2rust-bitfields"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb34f0c0ace43530b2df7f18bc69ee0c4082158aa451ece29602f8c841e73764"
+dependencies = [
+ "c2rust-bitfields-derive",
+]
+
+[[package]]
+name = "c2rust-bitfields-derive"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dd1601a7b828ab874d890e5a895563ca8ad485bdd3d2a359f148c8b72537241"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "cairo-rs"
 version = "0.16.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -101,12 +141,6 @@ dependencies = [
  "libc",
  "system-deps",
 ]
-
-[[package]]
-name = "cc"
-version = "1.0.73"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
 
 [[package]]
 name = "cfg-expr"
@@ -726,10 +760,11 @@ checksum = "8371e4e5341c3a96db127eb2465ac681ced4c433e01dd0e938adbef26ba93ba5"
 name = "lilypad"
 version = "0.1.0"
 dependencies = [
- "cc",
+ "console_error_panic_hook",
  "druid",
- "tree-sitter",
- "tree-sitter-python",
+ "tree-sitter-c2rust",
+ "tree-sitter-python-c2rust",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1279,23 +1314,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter"
+name = "tree-sitter-c2rust"
 version = "0.20.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4423c784fe11398ca91e505cdc71356b07b1a924fc8735cfab5333afe3e18bc"
+checksum = "32bfab3f29d635905100e1110d3b0c84008eca0e485595958803aa2b8e57a6d2"
 dependencies = [
- "cc",
  "regex",
+ "tree-sitter-c2rust-core",
 ]
 
 [[package]]
-name = "tree-sitter-python"
-version = "0.20.2"
+name = "tree-sitter-c2rust-core"
+version = "0.20.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dda114f58048f5059dcf158aff691dffb8e113e6d2b50d94263fd68711975287"
+checksum = "01ade89302f5a416955e898e2fa73efc7fa23aa7b2f8bbd29af40168e34abfbc"
 dependencies = [
- "cc",
- "tree-sitter",
+ "c2rust-bitfields",
+ "once_cell",
+]
+
+[[package]]
+name = "tree-sitter-python-c2rust"
+version = "0.20.2"
+source = "git+https://github.com/liamrosenfeld/tree-sitter-python-c2rust#7c7fe238fa57a2f9b1f0149f2db7b610224d2719"
+dependencies = [
+ "bytemuck",
+ "tree-sitter-c2rust",
 ]
 
 [[package]]

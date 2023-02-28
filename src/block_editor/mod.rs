@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
-use tree_sitter::InputEdit;
+use tree_sitter_c2rust::InputEdit;
 
 use crate::parse::TreeManager;
 
@@ -629,8 +629,8 @@ impl IntPoint {
         IntPoint { x, y }
     }
 
-    fn to_tree_sitter(&self) -> tree_sitter::Point {
-        tree_sitter::Point::new(self.x, self.y)
+    fn to_tree_sitter(&self) -> tree_sitter_c2rust::Point {
+        tree_sitter_c2rust::Point::new(self.x, self.y)
     }
 
     fn offset_in(&self, string: &str) -> usize {

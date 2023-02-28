@@ -1,21 +1,25 @@
 mod block_editor;
 mod parse;
 
-//use druid::widget::{EnvScope, TextBox};
 use druid::widget::Scroll;
 use druid::{AppLauncher, FontDescriptor, FontFamily, Key, PlatformError, Widget, WindowDesc};
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-};
 
 use block_editor::{BlockEditor, EditorModel};
+
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn wasm_main() {
+    // This hook is necessary to get panic messages in the console
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    main().expect("could not launch")
+}
 
 const MONO_FONT: Key<FontDescriptor> = Key::new("org.cacticouncil.lilypad.mono-font");
 
 fn main() -> Result<(), PlatformError> {
     // get data from test file
-    let source = get_test_string("test1.py");
+    let source = include_str!("../test-files/test1.py").to_string();
     let data = EditorModel { source };
     // launch
     let main_window = WindowDesc::new(ui_builder()).title("Lilypad Editor");
@@ -31,15 +35,4 @@ fn main() -> Result<(), PlatformError> {
 
 fn ui_builder() -> impl Widget<EditorModel> {
     Scroll::new(BlockEditor::new()).vertical()
-}
-
-/* -------------------------------------------------------------------------- */
-fn get_test_string(name: &'static str) -> String {
-    let file = File::open(format!("{}{}", "test-files/", name)).expect("test file not found");
-    let mut buf_reader = BufReader::new(file);
-    let mut contents = String::new();
-    buf_reader
-        .read_to_string(&mut contents)
-        .expect("could not read file");
-    contents
 }

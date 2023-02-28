@@ -1,6 +1,6 @@
 use druid::piet::{Text, TextLayoutBuilder};
 use druid::{Color, FontFamily, PaintCtx, Point, Rect, RenderContext, Size};
-use tree_sitter::Node;
+use tree_sitter_c2rust::Node;
 
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 

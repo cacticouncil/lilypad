@@ -3,10 +3,20 @@ name = "lilypad"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "lilypad_web"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "lilypad_native"
+path = "src/bin.rs"
+
 [dependencies]
 druid = "0.8"
-tree-sitter = "0.20"
-tree-sitter-python = "0.20"
 
-[build-dependencies]
-cc = "*"
+tree-sitter-c2rust = "0.20.9"
+tree-sitter-python-c2rust = { git = "https://github.com/liamrosenfeld/tree-sitter-python-c2rust" }
+
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"

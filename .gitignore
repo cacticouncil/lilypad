@@ -134,3 +134,7 @@ target/
 
 # Support for Project snippet scope
 !.vscode/*.code-snippets
+
+## wasm pack
+
+pkg/

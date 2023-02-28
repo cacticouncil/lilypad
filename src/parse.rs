@@ -1,4 +1,4 @@
-﻿use tree_sitter::{InputEdit, Parser, Tree, TreeCursor};
+﻿use tree_sitter_c2rust::{InputEdit, Parser, Tree, TreeCursor};
 
 pub struct TreeManager {
     tree: Tree,
@@ -10,7 +10,7 @@ impl TreeManager {
     pub fn new(source: &str) -> TreeManager {
         // Create Parser
         let mut parser = Parser::new();
-        let language = tree_sitter_python::language();
+        let language = tree_sitter_python_c2rust::language();
         parser.set_language(language).unwrap();
 
         // Parse initial source
