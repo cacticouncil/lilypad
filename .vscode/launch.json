@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'lilypad'",
+            "name": "Debug executable 'lilypad_native'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=lilypad",
+                    "--bin=lilypad_native",
                     "--package=lilypad"
                 ],
                 "filter": {
-                    "name": "lilypad",
+                    "name": "lilypad_native",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'lilypad'",
+            "name": "Debug unit tests in executable 'lilypad_native'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=lilypad",
+                    "--bin=lilypad_native",
                     "--package=lilypad"
                 ],
                 "filter": {
-                    "name": "lilypad",
+                    "name": "lilypad_native",
                     "kind": "bin"
                 }
             },

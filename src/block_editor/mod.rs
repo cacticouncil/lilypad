@@ -194,6 +194,10 @@ impl BlockEditor {
     }
 
     /* ------- Text Editing ------- */
+    fn send_vscode_edit(text: &str, range: Selection) {
+        crate::vscode::edited(text, range.start.y, range.start.x, range.end.y, range.end.x)
+    }
+
     fn insert_str(&mut self, source: &mut String, add: &str) {
         // update source
         let old_selection = self.selection.ordered();
@@ -216,6 +220,9 @@ impl BlockEditor {
             new_end_position: self.selection.end.to_tree_sitter(),
         };
         self.tree_manager.borrow_mut().update(source, edits);
+
+        // update vscode
+        Self::send_vscode_edit(add, old_selection);
     }
 
     fn insert_newline(&mut self, source: &mut String) {
@@ -239,6 +246,9 @@ impl BlockEditor {
             new_end_position: self.selection.end.to_tree_sitter(),
         };
         self.tree_manager.borrow_mut().update(source, edits);
+
+        // update vscode
+        Self::send_vscode_edit(os_linebreak(), old_selection);
     }
 
     fn backspace(&mut self, source: &mut String) {
@@ -278,6 +288,16 @@ impl BlockEditor {
                 new_end_position: self.selection.start.to_tree_sitter(),
             };
             self.tree_manager.borrow_mut().update(source, edits);
+
+            // update vscode
+            // FIXME: delete at start of line
+            crate::vscode::edited(
+                "",
+                old_selection.start.y,
+                old_selection.start.x - 1,
+                old_selection.start.y,
+                old_selection.start.x,
+            )
         }
         // for selection, delete text inside
         else {
@@ -298,6 +318,9 @@ impl BlockEditor {
                 new_end_position: old_selection.start.to_tree_sitter(),
             };
             self.tree_manager.borrow_mut().update(source, edits);
+
+            // update vscode
+            Self::send_vscode_edit("", old_selection);
         }
     }
 
@@ -481,6 +504,20 @@ impl Widget<EditorModel> for BlockEditor {
                 ctx.set_handled()
             }
 
+            Event::Command(command) => {
+                if let Some(new_text) = command.get(crate::shared::UPDATE_TEXT_SELECTOR) {
+                    // update state and tree
+                    data.source = new_text.clone();
+                    self.tree_manager.borrow_mut().replace(&data.source);
+
+                    ctx.set_handled();
+                    ctx.request_layout();
+
+                    // prevent another widget from also responding
+                    ctx.set_handled()
+                }
+            }
+
             _ => (),
         }
     }
@@ -493,6 +530,7 @@ impl Widget<EditorModel> for BlockEditor {
         _env: &druid::Env,
     ) {
         // TODO: update the tree instead of replacing it every time
+        // when does this fire???
         self.tree_manager.borrow_mut().replace(&data.source);
     }
 

@@ -1,7 +1,7 @@
-pub mod block_editor;
-pub mod parse;
+mod block_editor;
+mod parse;
+mod shared;
 
-//use druid::widget::{EnvScope, TextBox};
 use druid::widget::Scroll;
 use druid::{AppLauncher, FontDescriptor, FontFamily, Key, PlatformError, Widget, WindowDesc};
 use std::{
@@ -42,4 +42,10 @@ fn get_test_string(name: &'static str) -> String {
         .read_to_string(&mut contents)
         .expect("could not read file");
     contents
+}
+
+// temp shim
+pub mod vscode {
+    pub fn started() {}
+    pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
 }

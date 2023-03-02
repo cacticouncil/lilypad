@@ -12,11 +12,21 @@ crate-type = ["cdylib", "rlib"]
 name = "lilypad_native"
 path = "src/bin.rs"
 
+[profile.release]
+lto = true
+
 [dependencies]
 druid = "0.8"
 
+# tree sitter
 tree-sitter-c2rust = "0.20.9"
-tree-sitter-python-c2rust = { git = "https://github.com/liamrosenfeld/tree-sitter-python-c2rust" }
+tree-sitter-python-wasm-compatible = { git = "https://github.com/liamrosenfeld/tree-sitter-python-wasm-compatible" }
 
+
+# wasm stuff
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
+wee_alloc = "0.4"
+
+# general util
+once_cell = "1.17"

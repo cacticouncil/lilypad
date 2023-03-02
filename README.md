@@ -9,6 +9,7 @@ A next generation dual modal code editor
     - [Roboto Mono Font](https://fonts.google.com/specimen/Roboto+Mono)
 - Web
     - [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+    - LLVM (`tree-sitter-python-wasm-compatible` requires `llvm-ar`) 
     - [Just Command Runner](https://github.com/casey/just) (optional)
     - [Host These Things Please](https://crates.io/crates/https) (optional)
 
