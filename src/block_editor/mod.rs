@@ -1,6 +1,6 @@
 use druid::{
-    Color, Data, Event, EventCtx, HotKey, KbKey, Lens, LifeCycle, MouseButton, MouseEvent,
-    PaintCtx, Point, Rect, RenderContext, Size, SysMods, TimerToken, Widget,
+    Color, Data, Event, EventCtx, HotKey, KbKey, Lens, LifeCycle, Modifiers, MouseButton,
+    MouseEvent, PaintCtx, Point, Rect, RenderContext, Size, SysMods, TimerToken, Widget,
 };
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -10,6 +10,7 @@ use std::time::Duration;
 use tree_sitter_c2rust::InputEdit;
 
 use crate::parse::TreeManager;
+use crate::vscode;
 
 mod node;
 
@@ -195,7 +196,7 @@ impl BlockEditor {
 
     /* ------- Text Editing ------- */
     fn send_vscode_edit(text: &str, range: Selection) {
-        crate::vscode::edited(text, range.start.y, range.start.x, range.end.y, range.end.x)
+        vscode::edited(text, range.start.y, range.start.x, range.end.y, range.end.x)
     }
 
     fn insert_str(&mut self, source: &mut String, add: &str) {
@@ -291,7 +292,7 @@ impl BlockEditor {
 
             // update vscode
             // FIXME: delete at start of line
-            crate::vscode::edited(
+            vscode::edited(
                 "",
                 old_selection.start.y,
                 old_selection.start.x - 1,
@@ -465,35 +466,34 @@ impl Widget<EditorModel> for BlockEditor {
                     self.mouse_moved(mouse, &data.source, ctx);
                 }
             }
+
             Event::KeyDown(key_event) => {
-                match key_event {
-                    // Hotkeys
-                    key if HotKey::new(SysMods::Cmd, "c").matches(key) => {
-                        println!("example copy command")
-                    }
+                // let VSCode handle hotkeys
+                // TODO: hotkeys on native
+                if key_event.mods.contains(Modifiers::META)
+                    || key_event.mods.contains(Modifiers::CONTROL)
+                {
+                    return;
+                }
 
-                    // Normal typing
-                    key => {
-                        match &key.key {
-                            // Text Inputs
-                            KbKey::Backspace => self.backspace(&mut data.source),
-                            KbKey::Enter => self.insert_newline(&mut data.source),
-                            KbKey::Tab => self.insert_str(&mut data.source, "    "),
-                            KbKey::Character(char) => self.insert_str(&mut data.source, char),
+                match &key_event.key {
+                    // Text Inputs
+                    KbKey::Backspace => self.backspace(&mut data.source),
+                    KbKey::Enter => self.insert_newline(&mut data.source),
+                    KbKey::Tab => self.insert_str(&mut data.source, "    "),
+                    KbKey::Character(char) => self.insert_str(&mut data.source, char),
 
-                            // Arrow Keys
-                            KbKey::ArrowUp => self.cursor_up(&data.source),
-                            KbKey::ArrowDown => self.cursor_down(&data.source),
-                            KbKey::ArrowLeft => self.cursor_left(&data.source),
-                            KbKey::ArrowRight => self.cursor_right(&data.source),
+                    // Arrow Keys
+                    KbKey::ArrowUp => self.cursor_up(&data.source),
+                    KbKey::ArrowDown => self.cursor_down(&data.source),
+                    KbKey::ArrowLeft => self.cursor_left(&data.source),
+                    KbKey::ArrowRight => self.cursor_right(&data.source),
 
-                            // Home and End buttons
-                            KbKey::Home => self.cursor_to_line_start(&data.source),
-                            KbKey::End => self.cursor_to_line_end(&data.source),
+                    // Home and End buttons
+                    KbKey::Home => self.cursor_to_line_start(&data.source),
+                    KbKey::End => self.cursor_to_line_end(&data.source),
 
-                            _ => {}
-                        }
-                    }
+                    _ => {}
                 }
 
                 // redraw
@@ -501,11 +501,12 @@ impl Widget<EditorModel> for BlockEditor {
                 ctx.request_paint();
 
                 // prevent another widget from also responding
-                ctx.set_handled()
+                ctx.set_handled();
             }
 
             Event::Command(command) => {
-                if let Some(new_text) = command.get(crate::shared::UPDATE_TEXT_SELECTOR) {
+                // VSCode new text
+                if let Some(new_text) = command.get(vscode::UPDATE_TEXT_SELECTOR) {
                     // update state and tree
                     data.source = new_text.clone();
                     self.tree_manager.borrow_mut().replace(&data.source);
@@ -515,6 +516,24 @@ impl Widget<EditorModel> for BlockEditor {
 
                     // prevent another widget from also responding
                     ctx.set_handled()
+                }
+                // VSCode Copy/Cut/Paste
+                else if let Some(_) = command.get(vscode::COPY_SELECTOR) {
+                    let selection = self.selection.ordered().offset_in(&data.source);
+                    let selected_text = data.source[selection.start..selection.end].to_string();
+                    vscode::set_clipboard(selected_text);
+                } else if let Some(_) = command.get(vscode::CUT_SELECTOR) {
+                    // get selection
+                    let selection = self.selection.ordered().offset_in(&data.source);
+                    let selected_text = data.source[selection.start..selection.end].to_string();
+
+                    // remove selection
+                    self.insert_str(&mut data.source, "");
+
+                    // return selection
+                    vscode::set_clipboard(selected_text);
+                } else if let Some(text) = command.get(vscode::PASTE_SELECTOR) {
+                    self.insert_str(&mut data.source, &text)
                 }
             }
 
@@ -554,10 +573,6 @@ impl Widget<EditorModel> for BlockEditor {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, _env: &druid::Env) {
-        // draw background
-        let background = Rect::from_origin_size(Point::ZERO, ctx.size());
-        ctx.fill(background, &Color::rgb(0.0, 0.4, 0.4));
-
         // draw blocks
         self.draw_blocks(ctx, data);
 

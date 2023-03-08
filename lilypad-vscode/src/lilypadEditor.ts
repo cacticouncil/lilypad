@@ -32,6 +32,26 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             });
         }
 
+        // Override Clipboard actions
+        vscode.commands.registerCommand("editor.action.clipboardCopyAction", _ => {
+            webviewPanel.webview.postMessage({
+                type: "copy",
+            });
+        });
+        vscode.commands.registerCommand("editor.action.clipboardCutAction", _ => {
+            webviewPanel.webview.postMessage({
+                type: "cut",
+            });
+        });
+        vscode.commands.registerCommand("editor.action.clipboardPasteAction", _ => {
+            vscode.env.clipboard.readText().then(clipboard => {
+                webviewPanel.webview.postMessage({
+                    type: "paste",
+                    text: clipboard
+                });
+            });
+        });
+
         // Hook up event handlers so that we can synchronize the webview with the text document.
         //
         // The text document acts as our model, so we have to sync change in the document to our
@@ -56,7 +76,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             switch (message.type) {
                 case "started":
                     updateWebview();
-                    return;
+                    break;
                 case "edited":
                     const range = new vscode.Range(
                         message.range.startLine,
@@ -65,6 +85,10 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                         message.range.endCol
                     );
                     this.updateTextDocument(document, message.text, range);
+                    break;
+                case "set_clipboard":
+                    vscode.env.clipboard.writeText(message.text);
+                    break;
             }
         });
     }

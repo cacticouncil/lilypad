@@ -1,4 +1,4 @@
-import init, { run_editor, update_text } from "./lilypad_web.js";
+import init, { run_editor, update_text, copy_selection, cut_selection, insert_text } from "./lilypad_web.js";
 
 async function run() {
   await init();
@@ -16,7 +16,6 @@ export function started() {
 
 export function edited(newText, startLine, startCol, endLine, endCol) {
   const range = { startLine, startCol, endLine, endCol };
-  console.log(range);
   vscode.postMessage({
     type: "edited",
     text: newText,
@@ -24,13 +23,29 @@ export function edited(newText, startLine, startCol, endLine, endCol) {
   });
 }
 
+export function setClipboard(text) {
+  vscode.postMessage({
+    type: "set_clipboard",
+    text: text,
+  });
+}
+
 // extension -> web view messages
-window.addEventListener('message', event => {
+window.addEventListener("message", event => {
   const message = event.data;
   switch (message.type) {
     case "update":
-        update_text(message.text);
-        break;
+      update_text(message.text);
+      break;
+    case "copy":
+      copy_selection();
+      break;
+    case "cut":
+      cut_selection();
+      break;
+    case "paste":
+      insert_text(message.text);
+      break;
   }
 });
 

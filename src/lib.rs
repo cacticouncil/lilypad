@@ -1,13 +1,12 @@
 mod block_editor;
 mod parse;
-mod shared;
 
 use std::sync::Arc;
 
 use druid::widget::Scroll;
 use druid::{
     AppLauncher, ExtEventSink, FontDescriptor, FontFamily, Key, PlatformError, Target, Widget,
-    WindowDesc,
+    WidgetExt, WindowDesc,
 };
 use once_cell::sync::OnceCell;
 
@@ -24,12 +23,14 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
+    pub(crate) fn log(s: &str);
 }
 
 macro_rules! console_log {
-    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+    ($($t:tt)*) => (crate::log(&format_args!($($t)*).to_string()))
 }
+
+pub(crate) use console_log;
 
 /* ----- Javascript -> WASM ----- */
 #[wasm_bindgen]
@@ -42,7 +43,37 @@ pub fn run_editor() {
 #[wasm_bindgen]
 pub fn update_text(text: String) {
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(shared::UPDATE_TEXT_SELECTOR, text, Target::Global)
+        sink.submit_command(vscode::UPDATE_TEXT_SELECTOR, text, Target::Global)
+            .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
+#[wasm_bindgen]
+pub fn copy_selection() {
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(vscode::COPY_SELECTOR, (), Target::Global)
+            .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
+#[wasm_bindgen]
+pub fn cut_selection() {
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(vscode::CUT_SELECTOR, (), Target::Global)
+            .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
+#[wasm_bindgen]
+pub fn insert_text(text: String) {
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(vscode::PASTE_SELECTOR, text, Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -51,7 +82,13 @@ pub fn update_text(text: String) {
 
 /* ----- WASM -> Javascript ----- */
 pub mod vscode {
+    use druid::Selector;
     use wasm_bindgen::prelude::*;
+
+    pub const UPDATE_TEXT_SELECTOR: Selector<String> = Selector::new("update_text");
+    pub const COPY_SELECTOR: Selector<()> = Selector::new("copy");
+    pub const CUT_SELECTOR: Selector<()> = Selector::new("cut");
+    pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
 
     #[wasm_bindgen(raw_module = "./run.js")]
     extern "C" {
@@ -63,6 +100,8 @@ pub mod vscode {
             end_line: usize,
             end_col: usize,
         );
+        #[wasm_bindgen(js_name = setClipboard)]
+        pub fn set_clipboard(text: String);
     }
 }
 
@@ -88,7 +127,7 @@ fn main() -> Result<(), PlatformError> {
     });
 
     // get event sink for launcher
-    EVENT_SINK.set(Arc::new(launcher.get_external_handle()));
+    let _ = EVENT_SINK.set(Arc::new(launcher.get_external_handle()));
 
     vscode::started();
 
@@ -97,5 +136,7 @@ fn main() -> Result<(), PlatformError> {
 }
 
 fn ui_builder() -> impl Widget<EditorModel> {
-    Scroll::new(BlockEditor::new()).vertical()
+    Scroll::new(BlockEditor::new())
+        .vertical()
+        .background(druid::Color::rgb(0.14, 0.15, 0.18))
 }

@@ -1,9 +1,10 @@
 mod block_editor;
 mod parse;
-mod shared;
 
 use druid::widget::Scroll;
-use druid::{AppLauncher, FontDescriptor, FontFamily, Key, PlatformError, Widget, WindowDesc};
+use druid::{
+    AppLauncher, FontDescriptor, FontFamily, Key, PlatformError, Widget, WidgetExt, WindowDesc,
+};
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -30,7 +31,9 @@ fn main() -> Result<(), PlatformError> {
 }
 
 fn ui_builder() -> impl Widget<EditorModel> {
-    Scroll::new(BlockEditor::new()).vertical()
+    Scroll::new(BlockEditor::new())
+        .vertical()
+        .background(druid::Color::rgb(0.14, 0.15, 0.18))
 }
 
 /* -------------------------------------------------------------------------- */
@@ -45,7 +48,17 @@ fn get_test_string(name: &'static str) -> String {
 }
 
 // temp shim
-pub mod vscode {
-    pub fn started() {}
+pub(crate) mod vscode {
+    use druid::Selector;
+
+    pub const UPDATE_TEXT_SELECTOR: Selector<String> = Selector::new("UNUSED");
+    pub const COPY_SELECTOR: Selector<()> = Selector::new("UNUSED");
+    pub const CUT_SELECTOR: Selector<()> = Selector::new("UNUSED");
+    pub const PASTE_SELECTOR: Selector<String> = Selector::new("UNUSED");
+
+    // pub fn started() {}
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
+    pub fn set_clipboard(_: String) {}
 }
+
+// pub(crate) use println as console_log;
