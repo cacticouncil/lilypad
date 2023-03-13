@@ -49,7 +49,7 @@ fn color(node: &Node) -> Option<Color> {
         "if_statement" => Some(IF),
         "for_statement" => Some(FOR),
         "try_statement" => Some(TRY),
-        "comment" => Some(COMMENT),
+        // "comment" => Some(COMMENT),
         _ => None,
     }
 }

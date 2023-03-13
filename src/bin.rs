@@ -17,7 +17,7 @@ const MONO_FONT: Key<FontDescriptor> = Key::new("org.cacticouncil.lilypad.mono-f
 
 fn main() -> Result<(), PlatformError> {
     // get data from test file
-    let source = get_test_string("test1.py");
+    let source = get_test_string("test3.py");
     let data = EditorModel { source };
     // launch
     let main_window = WindowDesc::new(ui_builder()).title("Lilypad Editor");
@@ -34,7 +34,7 @@ fn main() -> Result<(), PlatformError> {
 fn ui_builder() -> impl Widget<EditorModel> {
     Scroll::new(BlockEditor::new())
         .vertical()
-        .background(druid::Color::rgb(0.14, 0.15, 0.18))
+        .background(theme::BACKGROUND)
 }
 
 /* -------------------------------------------------------------------------- */

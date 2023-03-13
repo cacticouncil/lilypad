@@ -75,7 +75,6 @@ impl Widget<EditorModel> for BlockEditor {
                 }
 
                 // redraw
-                self.text_drawer.text_changed();
                 ctx.request_layout(); // probably should only conditionally do this
                 ctx.request_paint();
 

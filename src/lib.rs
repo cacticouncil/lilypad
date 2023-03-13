@@ -139,5 +139,5 @@ fn main() -> Result<(), PlatformError> {
 fn ui_builder() -> impl Widget<EditorModel> {
     Scroll::new(BlockEditor::new())
         .vertical()
-        .background(druid::Color::rgb(0.14, 0.15, 0.18))
+        .background(theme::BACKGROUND)
 }

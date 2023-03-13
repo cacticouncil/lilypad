@@ -1,24 +1,26 @@
+use druid::Color;
+
 pub mod syntax {
     use druid::Color;
 
-    use super::one_dark;
+    use super::one_dark::*;
 
-    pub const FUNCTION: Color = one_dark::BLUE;
-    pub const FUNCTION_BUILT_IN: Color = one_dark::CYAN;
-    pub const KEYWORD: Color = one_dark::MAGENTA;
-    pub const OPERATOR: Color = Color::WHITE;
-    pub const PROPERTY: Color = Color::WHITE;
-    pub const INTERPOLATION: Color = one_dark::LIGHT_YELLOW;
-    pub const STRING: Color = one_dark::GREEN;
-    pub const TYPE: Color = one_dark::WHITE;
-    pub const VARIABLE: Color = one_dark::WHITE;
-    pub const CONSTRUCTOR: Color = one_dark::BLUE;
-    pub const CONSTANT: Color = one_dark::DARK_YELLOW;
-    pub const LITERAL: Color = one_dark::DARK_YELLOW;
-    pub const ESCAPE_SEQUENCE: Color = one_dark::CYAN;
-    pub const COMMENT: Color = one_dark::COMMENT_GREY;
+    pub const FUNCTION: Color = BLUE;
+    pub const FUNCTION_BUILT_IN: Color = CYAN;
+    pub const KEYWORD: Color = MAGENTA;
+    pub const OPERATOR: Color = WHITE;
+    pub const PROPERTY: Color = DARK_RED;
+    pub const INTERPOLATION: Color = LIGHT_YELLOW;
+    pub const STRING: Color = GREEN;
+    pub const TYPE: Color = LIGHT_YELLOW;
+    pub const VARIABLE: Color = DARK_RED;
+    pub const CONSTRUCTOR: Color = BLUE;
+    pub const CONSTANT: Color = DARK_YELLOW;
+    pub const LITERAL: Color = DARK_YELLOW;
+    pub const ESCAPE_SEQUENCE: Color = CYAN;
+    pub const COMMENT: Color = COMMENT_GREY;
 
-    pub const DEFAULT: Color = one_dark::WHITE;
+    pub const DEFAULT: Color = WHITE;
 }
 
 pub mod blocks {
@@ -34,6 +36,8 @@ pub mod blocks {
 
     pub const GENERIC: Color = Color::rgb8(127, 51, 127);
 }
+
+pub const BACKGROUND: Color = one_dark::BLACK;
 
 #[allow(dead_code)]
 mod one_dark {
