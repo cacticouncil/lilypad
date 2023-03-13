@@ -19,8 +19,9 @@ lto = true
 druid = "0.8"
 
 # tree sitter
-tree-sitter-c2rust = "0.20.9"
+tree-sitter-c2rust = { git = "https://github.com/shadaj/tree-sitter-c2rust/" }
 tree-sitter-python-wasm-compatible = { git = "https://github.com/liamrosenfeld/tree-sitter-python-wasm-compatible" }
+tree-sitter-highlight = { git = "https://github.com/shadaj/tree-sitter-c2rust/" }
 
 
 # wasm stuff

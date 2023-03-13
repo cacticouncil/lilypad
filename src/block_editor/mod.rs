@@ -5,13 +5,15 @@ use std::time::Duration;
 
 use crate::parse::TreeManager;
 
+mod block;
 mod drawing;
 mod interactions;
 mod lifecycle;
-mod node;
 mod selection;
+mod text_drawer;
 
 use selection::*;
+use text_drawer::*;
 
 //controls cursor blinking speed
 pub const TIMER_INTERVAL: Duration = Duration::from_millis(700);
@@ -34,6 +36,7 @@ pub struct BlockEditor {
     mouse_pressed: bool,
     timer_id: TimerToken,
     cursor_visible: bool,
+    text_drawer: TextDrawer,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -49,6 +52,7 @@ impl BlockEditor {
             mouse_pressed: false,
             timer_id: TimerToken::INVALID,
             cursor_visible: true,
+            text_drawer: TextDrawer::new(),
         }
     }
 }

@@ -1,17 +1,18 @@
 use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
 use std::cmp::Ordering;
 
-use super::{line_len, node, BlockEditor, EditorModel, FONT_HEIGHT, FONT_WIDTH};
+use super::{block, line_len, BlockEditor, FONT_HEIGHT, FONT_WIDTH};
 
 impl BlockEditor {
-    pub fn draw_blocks(&self, ctx: &mut PaintCtx, data: &EditorModel) {
+    pub fn draw_blocks(&self, ctx: &mut PaintCtx) {
         // pre-order traversal because we want to draw the parent under their children
         let tree_manager = self.tree_manager.borrow();
         let mut cursor = tree_manager.get_cursor();
 
         'outer: loop {
             // first time encountering the node, so draw it
-            node::draw(cursor.node(), &data.source, ctx);
+            block::draw(cursor.node(), ctx);
+
             // keep traveling down the tree as far as we can
             if cursor.goto_first_child() {
                 continue;

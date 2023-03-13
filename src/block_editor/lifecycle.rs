@@ -75,6 +75,7 @@ impl Widget<EditorModel> for BlockEditor {
                 }
 
                 // redraw
+                self.text_drawer.text_changed();
                 ctx.request_layout(); // probably should only conditionally do this
                 ctx.request_paint();
 
@@ -123,12 +124,9 @@ impl Widget<EditorModel> for BlockEditor {
         &mut self,
         _ctx: &mut druid::UpdateCtx,
         _old_data: &EditorModel,
-        data: &EditorModel,
+        _data: &EditorModel,
         _env: &druid::Env,
     ) {
-        // TODO: update the tree instead of replacing it every time
-        // when does this fire???
-        self.tree_manager.borrow_mut().replace(&data.source);
     }
 
     fn layout(
@@ -152,10 +150,15 @@ impl Widget<EditorModel> for BlockEditor {
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, _env: &druid::Env) {
         // draw blocks
-        self.draw_blocks(ctx, data);
+        self.draw_blocks(ctx);
+
+        // draw text on top of blocks
+        self.text_drawer.draw(&data.source, ctx);
 
         // draw cursor and selection
         self.draw_cursor(ctx);
+
+        // if there is a selection, draw it too
         if !self.selection.is_cursor() {
             self.draw_selection(&data.source, ctx);
         }

@@ -1,5 +1,6 @@
 mod block_editor;
 mod parse;
+mod theme;
 
 use druid::widget::Scroll;
 use druid::{

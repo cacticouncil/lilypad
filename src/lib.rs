@@ -1,5 +1,6 @@
 mod block_editor;
 mod parse;
+mod theme;
 
 use std::sync::Arc;
 
@@ -123,7 +124,7 @@ fn main() -> Result<(), PlatformError> {
         env.set(
             MONO_FONT,
             FontDescriptor::new(FontFamily::new_unchecked("Roboto Mono")).with_size(15.0),
-        );
+        ); // this is currently unused but could be used later to change the font as a setting
     });
 
     // get event sink for launcher

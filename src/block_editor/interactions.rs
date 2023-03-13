@@ -31,6 +31,9 @@ impl BlockEditor {
 
         // update vscode
         Self::send_vscode_edit(add, old_selection);
+
+        // notify text drawer
+        self.text_drawer.text_changed();
     }
 
     pub fn insert_newline(&mut self, source: &mut String) {
@@ -57,6 +60,9 @@ impl BlockEditor {
 
         // update vscode
         Self::send_vscode_edit(os_linebreak(), old_selection);
+
+        // notify text drawer
+        self.text_drawer.text_changed();
     }
 
     pub fn backspace(&mut self, source: &mut String) {
@@ -130,6 +136,9 @@ impl BlockEditor {
             // update vscode
             Self::send_vscode_edit("", old_selection);
         }
+
+        // notify text drawer
+        self.text_drawer.text_changed();
     }
 
     fn send_vscode_edit(text: &str, range: Selection) {
