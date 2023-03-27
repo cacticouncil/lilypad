@@ -26,15 +26,15 @@ pub mod syntax {
 pub mod blocks {
     use druid::Color;
 
-    pub const CLASS: Color = Color::rgb8(230, 110, 54);
-    pub const FUNCTION: Color = Color::rgb8(0, 120, 120);
-    pub const IF: Color = Color::rgb8(128, 22, 56);
-    pub const WHILE: Color = Color::rgb8(78, 0, 78);
-    pub const FOR: Color = Color::rgb8(78, 0, 78);
-    pub const TRY: Color = Color::rgb8(128, 51, 51);
-    pub const COMMENT: Color = Color::rgb8(90, 90, 90);
+    pub const CLASS: Color = Color::rgb8(247, 109, 60);
+    pub const FUNCTION: Color = Color::rgb8(163, 93, 213);
+    pub const IF: Color = Color::rgb8(103, 199, 40);
+    pub const WHILE: Color = Color::rgb8(245, 163, 0);
+    pub const FOR: Color = Color::rgb8(255, 131, 193);
+    pub const TRY: Color = Color::rgb8(84, 129, 230);
+    pub const COMMENT: Color = Color::rgb8(131, 144, 152);
 
-    pub const GENERIC: Color = Color::rgb8(127, 51, 127);
+    pub const GENERIC: Color = Color::rgb8(42, 189, 218);
 }
 
 pub const BACKGROUND: Color = one_dark::BLACK;
@@ -43,16 +43,18 @@ pub const BACKGROUND: Color = one_dark::BLACK;
 mod one_dark {
     use druid::Color;
 
-    pub const BLACK: Color = Color::rgb8(40, 44, 52);
-    pub const WHITE: Color = Color::rgb8(171, 178, 191);
-    pub const LIGHT_RED: Color = Color::rgb8(224, 108, 117);
-    pub const DARK_RED: Color = Color::rgb8(190, 80, 70);
-    pub const GREEN: Color = Color::rgb8(152, 195, 121);
-    pub const LIGHT_YELLOW: Color = Color::rgb8(229, 192, 123);
-    pub const DARK_YELLOW: Color = Color::rgb8(209, 154, 102);
-    pub const BLUE: Color = Color::rgb8(97, 175, 239);
-    pub const MAGENTA: Color = Color::rgb8(198, 120, 221);
-    pub const CYAN: Color = Color::rgb8(86, 182, 194);
-    pub const GUTTER_GREY: Color = Color::rgb8(76, 82, 99);
-    pub const COMMENT_GREY: Color = Color::rgb8(92, 99, 112);
+    pub const BLACK: Color = Color::rgb8(41, 41, 41);
+    pub const WHITE: Color = Color::rgb8(244, 244, 244);
+
+    pub const LIGHT_RED: Color = Color::rgb8(184, 5, 5);
+    pub const DARK_RED: Color = Color::rgb8(157, 18, 0);
+    pub const GREEN: Color = Color::rgb8(52, 100, 20);
+    pub const LIGHT_YELLOW: Color = Color::rgb8(255, 226, 110);
+    pub const DARK_YELLOW: Color = Color::rgb8(244, 224, 0);
+    pub const BLUE: Color = Color::rgb8(28, 80, 118);
+    pub const MAGENTA: Color = Color::rgb8(112, 32, 146);
+    pub const CYAN: Color = Color::rgb8(16, 71, 82);
+
+    pub const GUTTER_GREY: Color = Color::rgb8(78, 78, 78);
+    pub const COMMENT_GREY: Color = Color::rgb8(131, 144, 152);
 }

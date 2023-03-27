@@ -1,4 +1,5 @@
 use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
+use druid::kurbo::{RoundedRect};
 use tree_sitter_c2rust::Node;
 
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
@@ -29,7 +30,7 @@ pub fn draw(node: Node, ctx: &mut PaintCtx) {
     );
 
     // draw it
-    let block = Rect::from_origin_size(start_pt, size);
+    let block = RoundedRect::from_origin_size(start_pt, size, 5.0);
     ctx.fill(block, &color);
 }
 
