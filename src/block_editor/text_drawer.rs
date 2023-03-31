@@ -1,13 +1,17 @@
 use druid::{
-    piet::{
-        PietTextLayout, PietTextLayoutBuilder, Text, TextAttribute, TextLayout, TextLayoutBuilder,
-    },
+    piet::{PietTextLayout, Text, TextLayoutBuilder},
     Color, FontFamily, PaintCtx, Point, RenderContext,
 };
 use tree_sitter_highlight::{Highlight, HighlightConfiguration, HighlightEvent, Highlighter};
 
 use crate::block_editor::FONT_HEIGHT;
 use crate::theme;
+
+#[cfg(target_family = "wasm")]
+use druid::piet::TextLayout;
+
+#[cfg(not(target_family = "wasm"))]
+use druid::piet::{PietTextLayoutBuilder, TextAttribute};
 
 pub struct TextDrawer {
     highlighter: Highlighter,

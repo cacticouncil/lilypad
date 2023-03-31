@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::parse::TreeManager;
 
-mod block;
+mod block_drawer;
 mod drawing;
 mod interactions;
 mod lifecycle;

@@ -1,10 +1,42 @@
-use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
-use druid::kurbo::{RoundedRect};
-use tree_sitter_c2rust::Node;
+use druid::kurbo::RoundedRect;
+use druid::{Color, PaintCtx, Point, RenderContext, Size};
+use tree_sitter_c2rust::{Node, TreeCursor};
 
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 
-pub fn draw(node: Node, ctx: &mut PaintCtx) {
+pub fn draw_for_tree(mut cursor: TreeCursor, ctx: &mut PaintCtx) {
+    // pre-order traversal because we want to draw the parent under their children
+    'outer: loop {
+        // first time encountering the node, so draw it
+        draw_node(cursor.node(), ctx);
+
+        // keep traveling down the tree as far as we can
+        if cursor.goto_first_child() {
+            continue;
+        }
+
+        // if we can't travel any further down, try the next sibling
+        if cursor.goto_next_sibling() {
+            continue;
+        }
+
+        // travel back up
+        // loop until we reach the root or can go to the next sibling of a node again
+        'inner: loop {
+            // break outer if we reached the root
+            if !cursor.goto_parent() {
+                break 'outer;
+            }
+
+            // if there is a sibling at this level, visit the sibling's subtree
+            if cursor.goto_next_sibling() {
+                break 'inner;
+            }
+        }
+    }
+}
+
+fn draw_node(node: Node, ctx: &mut PaintCtx) {
     // get color (and see if this node should be drawn)
     let color = match color(&node) {
         Some(color) => color,
