@@ -6,8 +6,9 @@ use super::{block_drawer, line_len, BlockEditor, FONT_HEIGHT, FONT_WIDTH};
 impl BlockEditor {
     pub fn draw_blocks(&self, ctx: &mut PaintCtx) {
         let tree_manager = self.tree_manager.borrow();
-        let cursor = tree_manager.get_cursor();
-        block_drawer::draw_for_tree(cursor, ctx);
+        let mut cursor = tree_manager.get_cursor();
+        let blocks = block_drawer::blocks_for_tree(&mut cursor);
+        block_drawer::draw_blocks(blocks, ctx);
     }
 
     pub fn draw_cursor(&self, ctx: &mut PaintCtx) {

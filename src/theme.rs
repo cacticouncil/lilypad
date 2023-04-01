@@ -32,8 +32,6 @@ pub mod blocks {
     pub const WHILE: Color = Color::rgb8(245, 163, 0);
     pub const FOR: Color = Color::rgb8(255, 131, 193);
     pub const TRY: Color = Color::rgb8(84, 129, 230);
-    pub const COMMENT: Color = Color::rgb8(131, 144, 152);
-
     pub const GENERIC: Color = Color::rgb8(42, 189, 218);
 }
 
@@ -41,6 +39,24 @@ pub const BACKGROUND: Color = one_dark::BLACK;
 
 #[allow(dead_code)]
 mod one_dark {
+    use druid::Color;
+
+    pub const BLACK: Color = Color::rgb8(40, 44, 52);
+    pub const WHITE: Color = Color::rgb8(171, 178, 191);
+    pub const LIGHT_RED: Color = Color::rgb8(224, 108, 117);
+    pub const DARK_RED: Color = Color::rgb8(190, 80, 70);
+    pub const GREEN: Color = Color::rgb8(152, 195, 121);
+    pub const LIGHT_YELLOW: Color = Color::rgb8(229, 192, 123);
+    pub const DARK_YELLOW: Color = Color::rgb8(209, 154, 102);
+    pub const BLUE: Color = Color::rgb8(97, 175, 239);
+    pub const MAGENTA: Color = Color::rgb8(198, 120, 221);
+    pub const CYAN: Color = Color::rgb8(86, 182, 194);
+    pub const GUTTER_GREY: Color = Color::rgb8(76, 82, 99);
+    pub const COMMENT_GREY: Color = Color::rgb8(92, 99, 112);
+}
+
+#[allow(dead_code)]
+mod other_theme {
     use druid::Color;
 
     pub const BLACK: Color = Color::rgb8(41, 41, 41);
