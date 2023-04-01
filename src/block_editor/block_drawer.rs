@@ -121,8 +121,10 @@ pub fn blocks_for_tree(cursor: &mut TreeCursor) -> Vec<Block> {
         let next = &children[i + 1];
 
         if curr.syntax_type == BlockType::Generic && next.syntax_type == BlockType::Generic {
-            let gap = next.line - (curr.line + curr.height);
-            children[i].height += gap + next.height;
+            if curr.line < next.line {
+                let gap = next.line - (curr.line + curr.height);
+                children[i].height += gap + next.height;
+            }
 
             // does not merge children because currently generic blocks won't have any.
             // if that changes, that will need to be added here

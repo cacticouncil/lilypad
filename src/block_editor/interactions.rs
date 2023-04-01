@@ -82,10 +82,28 @@ impl BlockEditor {
                 // the cursor is sandwiched between the two newly joined lines.
                 let above = old_selection.start.y - 1;
                 self.selection = Selection::new_cursor(line_len(above, source), above);
+
+                // update vscode
+                vscode::edited(
+                    "",
+                    old_selection.start.y - 1,
+                    line_len(above, source),
+                    old_selection.start.y,
+                    old_selection.start.x,
+                )
             } else {
                 // just move back one char
                 self.selection =
                     Selection::new_cursor(old_selection.start.x - 1, old_selection.start.y);
+
+                // update vscode
+                vscode::edited(
+                    "",
+                    old_selection.start.y,
+                    old_selection.start.x - 1,
+                    old_selection.start.y,
+                    old_selection.start.x,
+                )
             }
 
             // update source
@@ -102,16 +120,6 @@ impl BlockEditor {
                 new_end_position: self.selection.start.as_tree_sitter(),
             };
             self.tree_manager.borrow_mut().update(source, edits);
-
-            // update vscode
-            // FIXME: delete at start of line
-            vscode::edited(
-                "",
-                old_selection.start.y,
-                old_selection.start.x - 1,
-                old_selection.start.y,
-                old_selection.start.x,
-            )
         }
         // for selection, delete text inside
         else {
