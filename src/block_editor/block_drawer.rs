@@ -121,7 +121,7 @@ pub fn blocks_for_tree(cursor: &mut TreeCursor) -> Vec<Block> {
         let next = &children[i + 1];
 
         if curr.syntax_type == BlockType::Generic && next.syntax_type == BlockType::Generic {
-            if curr.line < next.line {
+            if curr.line + curr.height <= next.line {
                 let gap = next.line - (curr.line + curr.height);
                 children[i].height += gap + next.height;
             }

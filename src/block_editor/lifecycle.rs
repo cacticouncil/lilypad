@@ -89,6 +89,9 @@ impl Widget<EditorModel> for BlockEditor {
                     data.source = new_text.clone();
                     self.tree_manager.borrow_mut().replace(&data.source);
 
+                    // mark new text layout
+                    self.text_drawer.text_changed();
+
                     ctx.set_handled();
                     ctx.request_layout();
 
