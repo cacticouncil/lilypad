@@ -9,7 +9,7 @@ impl BlockEditor {
     pub fn draw_cursor(&self, ctx: &mut PaintCtx) {
         if self.cursor_visible {
             // we want to draw the cursor where the mouse has last been (selection end)
-            let total_pad: f64 = self.padding[..=self.selection.end.y].iter().sum();
+            let total_pad: f64 = self.padding.iter().take(self.selection.end.y + 1).sum();
             let block = Rect::from_origin_size(
                 Point::new(
                     super::OUTER_PAD + (self.selection.end.x as f64) * FONT_WIDTH,
@@ -89,11 +89,11 @@ impl BlockEditor {
         ctx: &mut PaintCtx,
     ) {
         // TODO: don't calculate every time
-        let total_pad: f64 = if chained_below {
-            self.padding[..y].iter().sum()
-        } else {
-            self.padding[..=y].iter().sum()
-        };
+        let total_pad: f64 = self
+            .padding
+            .iter()
+            .take(if chained_below { y } else { y + 1 })
+            .sum();
 
         let block = Rect::from_origin_size(
             Point::new(

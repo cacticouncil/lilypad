@@ -42,6 +42,7 @@ impl BlockType {
     fn from_node(node: &Node) -> Option<Self> {
         use BlockType::*;
 
+        // todo: this might not be necessary once lsp errors are added
         if node.is_error() {
             return Some(Error);
         }
@@ -231,7 +232,7 @@ fn draw_block(
 /* ---------------------------- padding for text ---------------------------- */
 
 pub fn make_padding(blocks: &Vec<Block>, line_count: usize) -> Vec<f64> {
-    let mut padding = vec![0.0; line_count + 1];
+    let mut padding = vec![0.0; line_count];
     padding_helper(blocks, &mut padding);
     padding
 }
@@ -240,7 +241,11 @@ fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
     for block in blocks {
         if block.syntax_type != BlockType::Divider {
             padding[block.line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
-            padding[block.line + block.height] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
+
+            let end_row = block.line + block.height;
+            if end_row < padding.len() {
+                padding[end_row] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
+            }
         }
         padding_helper(&block.children, padding);
     }

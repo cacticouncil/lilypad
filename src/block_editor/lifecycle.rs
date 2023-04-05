@@ -151,7 +151,7 @@ impl Widget<EditorModel> for BlockEditor {
         let width = f64::max(text_width, window_width);
 
         // height is just height of text
-        let height = data.source.lines().count() as f64 * FONT_HEIGHT
+        let height = super::line_count(&data.source) as f64 * FONT_HEIGHT
             + super::OUTER_PAD
             + self.padding.iter().sum::<f64>();
         let desired = Size { width, height };
@@ -168,8 +168,8 @@ impl Widget<EditorModel> for BlockEditor {
             self.blocks = block_drawer::blocks_for_tree(&mut cursor);
 
             // get padding
-            let line_count = &data.source.lines().count();
-            self.padding = block_drawer::make_padding(&self.blocks, *line_count);
+            let line_count = super::line_count(&data.source);
+            self.padding = block_drawer::make_padding(&self.blocks, line_count);
 
             // layout text
             self.text_drawer.layout(&data.source, ctx);

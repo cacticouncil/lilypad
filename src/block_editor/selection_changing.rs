@@ -68,7 +68,7 @@ impl BlockEditor {
             let curr_line_len = line_len(cursor_pos.y, source);
             if cursor_pos.x == curr_line_len {
                 // if at end of current line, go to next line
-                let last_line = source.lines().count() - 1;
+                let last_line = super::line_count(source) - 1;
                 if cursor_pos.y != last_line {
                     self.selection = Selection::new_cursor(0, cursor_pos.y + 1);
                 }
@@ -120,8 +120,7 @@ impl BlockEditor {
         // find the line clicked on by finding the next one and then going back one
         let mut y: usize = 0;
         let mut total_pad = 0.0;
-        // do check the last padding since there is no line there
-        for row_pad in &self.padding[..(self.padding.len() - 1)] {
+        for row_pad in &self.padding {
             total_pad += row_pad;
             let curr_line_start = total_pad + (y as f64 * FONT_HEIGHT);
             let raw_y = mouse.pos.y - super::OUTER_PAD;
@@ -131,6 +130,8 @@ impl BlockEditor {
             y += 1;
         }
         y = y.saturating_sub(1);
+
+        // TODO: if past last line, move to end of last line
 
         let x_raw =
             ((mouse.pos.x - super::OUTER_PAD - super::TEXT_L_PAD) / FONT_WIDTH).round() as usize;

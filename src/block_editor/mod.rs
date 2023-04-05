@@ -71,3 +71,8 @@ impl BlockEditor {
 fn line_len(row: usize, source: &str) -> usize {
     source.lines().nth(row).unwrap_or("").chars().count()
 }
+
+fn line_count(source: &str) -> usize {
+    // add one if the last line is a newline (because the lines method does not include that)
+    source.lines().count() + if source.ends_with("\n") { 1 } else { 0 }
+}
