@@ -4,6 +4,10 @@ use tree_sitter_c2rust::{Node, TreeCursor};
 
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 
+use super::OUTER_PAD;
+
+/* ------------------------------ tree handling ----------------------------- */
+
 #[derive(PartialEq)]
 enum BlockType {
     Class,
@@ -30,7 +34,7 @@ impl BlockType {
             For => Some(FOR),
             Try => Some(TRY),
             Generic => Some(GENERIC),
-            Error => Some(Color::rgb8(255, 0, 0)),
+            Error => Some(ERROR),
             Divider => None,
         }
     }
@@ -146,42 +150,98 @@ pub fn blocks_for_tree(cursor: &mut TreeCursor) -> Vec<Block> {
     root
 }
 
-pub fn draw_blocks(blocks: Vec<Block>, ctx: &mut PaintCtx) {
-    draw_blocks_helper(&blocks, 0, ctx);
+/* --------------------------------- drawing -------------------------------- */
+
+const OUTER_CORNER_RAD: f64 = 6.0;
+const MIN_CORNER_RAD: f64 = 1.5;
+
+const BLOCK_STROKE_WIDTH: f64 = 3.0;
+const BLOCK_INNER_PAD: f64 = 2.0;
+const BLOCK_TOP_PAD: f64 = 1.0;
+
+pub fn draw_blocks(blocks: &Vec<Block>, ctx: &mut PaintCtx) {
+    draw_blocks_helper(blocks, 0, 0.0, ctx);
 }
 
-fn draw_blocks_helper(blocks: &Vec<Block>, level: usize, ctx: &mut PaintCtx) {
+fn draw_blocks_helper(
+    blocks: &Vec<Block>,
+    level: usize,
+    mut total_padding: f64,
+    ctx: &mut PaintCtx,
+) -> f64 {
     for block in blocks {
-        let drawn = draw_block(block, level, ctx);
-        draw_blocks_helper(&block.children, level + if drawn { 1 } else { 0 }, ctx);
+        if block.syntax_type == BlockType::Divider {
+            // do not draw this block
+            total_padding = draw_blocks_helper(&block.children, level, total_padding, ctx);
+        } else {
+            total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
+
+            // draw children first to get total size
+            let inside_padding =
+                draw_blocks_helper(&block.children, level + 1, total_padding, ctx) - total_padding;
+
+            draw_block(block, level, total_padding, inside_padding, ctx);
+            total_padding += inside_padding;
+            total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
+        }
     }
+
+    total_padding
 }
 
-fn draw_block(block: &Block, level: usize, ctx: &mut PaintCtx) -> bool {
+fn draw_block(
+    block: &Block,
+    level: usize,
+    padding_above: f64,
+    padding_inside: f64,
+    ctx: &mut PaintCtx,
+) {
     // No color for invisible nodes
     let color = match block.color() {
         Some(color) => color,
-        None => return false,
+        None => return,
     };
 
     let start_pt = Point::new(
-        (block.col as f64) * FONT_WIDTH,
-        (block.line as f64) * FONT_HEIGHT,
+        (block.col as f64) * FONT_WIDTH + OUTER_PAD - (BLOCK_STROKE_WIDTH / 2.0),
+        (block.line as f64) * FONT_HEIGHT + OUTER_PAD - (BLOCK_STROKE_WIDTH / 2.0) + padding_above,
     );
 
     // determine the margin based on level
-    let margin = (start_pt.x) + (((level as f64) + 1.0) * FONT_WIDTH);
+    let margin =
+        (start_pt.x) + ((level as f64) * (BLOCK_INNER_PAD + BLOCK_STROKE_WIDTH)) + OUTER_PAD;
 
     // get the size of the rectangle to draw
     let size = Size::new(
         (ctx.size().width) - margin,
-        (block.height as f64) * FONT_HEIGHT,
+        ((block.height as f64) * FONT_HEIGHT) + (BLOCK_INNER_PAD * 2.0) + padding_inside,
+    );
+
+    // nested corner radii should be r_inner = r_outer - distance
+    let rounding = f64::max(
+        OUTER_CORNER_RAD - (level as f64 * BLOCK_INNER_PAD),
+        MIN_CORNER_RAD,
     );
 
     // draw it
-    let rect = RoundedRect::from_origin_size(start_pt, size, 5.0);
-    ctx.stroke(rect, &color, 3.0);
-    // ctx.fill(rect, &block.color());
+    let rect = RoundedRect::from_origin_size(start_pt, size, rounding);
+    ctx.stroke(rect, &color, BLOCK_STROKE_WIDTH);
+}
 
-    true
+/* ---------------------------- padding for text ---------------------------- */
+
+pub fn make_padding(blocks: &Vec<Block>, line_count: usize) -> Vec<f64> {
+    let mut padding = vec![0.0; line_count + 1];
+    padding_helper(blocks, &mut padding);
+    padding
+}
+
+fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
+    for block in blocks {
+        if block.syntax_type != BlockType::Divider {
+            padding[block.line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
+            padding[block.line + block.height] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
+        }
+        padding_helper(&block.children, padding);
+    }
 }

@@ -21,7 +21,6 @@ use druid::piet::TextAttribute;
 pub struct TextDrawer {
     highlighter: Highlighter,
     highlighter_config: HighlightConfiguration,
-    text_changed: bool,
     cache: Vec<ColoredText>,
 }
 
@@ -41,30 +40,22 @@ impl TextDrawer {
             highlighter,
             highlighter_config,
             cache: vec![],
-            text_changed: true,
         }
     }
 
-    pub fn text_changed(&mut self) {
-        self.text_changed = true
-    }
-
-    pub fn draw(&mut self, source: &str, ctx: &mut PaintCtx) {
-        if self.text_changed {
-            self.layout(source, ctx);
-            self.text_changed = false;
-        }
-
+    pub fn draw(&self, padding: &[f64], ctx: &mut PaintCtx) {
+        let mut total_padding = 0.0;
         for (num, layout) in self.cache.iter().enumerate() {
+            total_padding += padding[num];
             let pos = Point {
-                x: 0.0,
-                y: (num as f64) * FONT_HEIGHT,
+                x: super::OUTER_PAD + super::TEXT_L_PAD,
+                y: ((num as f64) * FONT_HEIGHT) + total_padding + super::OUTER_PAD,
             };
             layout.draw(pos, ctx);
         }
     }
 
-    fn layout(&mut self, source: &str, ctx: &mut PaintCtx) {
+    pub fn layout(&mut self, source: &str, ctx: &mut PaintCtx) {
         // erase old values
         self.cache.clear();
 

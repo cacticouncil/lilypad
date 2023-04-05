@@ -1,6 +1,6 @@
 use druid::{Event, KbKey, LifeCycle, Modifiers, MouseButton, PaintCtx, Size, Widget};
 
-use super::{BlockEditor, EditorModel, FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL};
+use super::{block_drawer, BlockEditor, EditorModel, FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL};
 use crate::vscode;
 
 impl Widget<EditorModel> for BlockEditor {
@@ -90,7 +90,7 @@ impl Widget<EditorModel> for BlockEditor {
                     self.tree_manager.borrow_mut().replace(&data.source);
 
                     // mark new text layout
-                    self.text_drawer.text_changed();
+                    self.text_changed = true;
 
                     ctx.set_handled();
                     ctx.request_layout();
@@ -133,37 +133,63 @@ impl Widget<EditorModel> for BlockEditor {
 
     fn layout(
         &mut self,
-        _ctx: &mut druid::LayoutCtx,
+        ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
         data: &EditorModel,
         _env: &druid::Env,
     ) -> Size {
+        // width is max between text and window
         let max_chars = data
             .source
             .lines()
             .map(|l| l.chars().count())
             .max()
             .unwrap_or(0);
-        let width = max_chars as f64 * FONT_WIDTH + (FONT_WIDTH * 4.0); // Setting the width of the window. May need to add a bit of a buffer (ex 4*width).
-        let height = data.source.lines().count() as f64 * FONT_HEIGHT;
+        let text_width =
+            max_chars as f64 * FONT_WIDTH + super::OUTER_PAD + super::TEXT_L_PAD + 40.0;
+        let window_width = ctx.window().get_size().width;
+        let width = f64::max(text_width, window_width);
+
+        // height is just height of text
+        let height = data.source.lines().count() as f64 * FONT_HEIGHT
+            + super::OUTER_PAD
+            + self.padding.iter().sum::<f64>();
         let desired = Size { width, height };
+
         bc.constrain(desired)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, _env: &druid::Env) {
-        // draw blocks
-        self.draw_blocks(ctx);
+        // recompute cached objects if text changed
+        if self.text_changed {
+            // get blocks
+            let tree_manager = self.tree_manager.borrow();
+            let mut cursor = tree_manager.get_cursor();
+            self.blocks = block_drawer::blocks_for_tree(&mut cursor);
 
-        // draw text on top of blocks
-        self.text_drawer.draw(&data.source, ctx);
+            // get padding
+            let line_count = &data.source.lines().count();
+            self.padding = block_drawer::make_padding(&self.blocks, *line_count);
 
-        // draw cursor and selection
-        self.draw_cursor(ctx);
+            // layout text
+            self.text_drawer.layout(&data.source, ctx);
 
-        // if there is a selection, draw it too
+            self.text_changed = false;
+        }
+
+        // draw selection under text and blocks
         if !self.selection.is_cursor() {
             self.draw_selection(&data.source, ctx);
         }
+
+        // draw blocks
+        block_drawer::draw_blocks(&self.blocks, ctx);
+
+        // draw text on top of blocks
+        self.text_drawer.draw(&self.padding, ctx);
+
+        // draw cursor and selection
+        self.draw_cursor(ctx);
     }
 
     fn lifecycle(

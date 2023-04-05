@@ -138,6 +138,6 @@ fn main() -> Result<(), PlatformError> {
 
 fn ui_builder() -> impl Widget<EditorModel> {
     Scroll::new(BlockEditor::new())
-        .vertical()
+        .content_must_fill(true)
         .background(theme::BACKGROUND)
 }

@@ -1,9 +1,13 @@
 def foo(x):
-    print(f"hello\n {' '.join(['world', x])}")
+    if x:
+        print(f"hello\n {' '.join(['world', x])}")
+        x = 3
+    else:
+        print("3")
 
 # comment
 if True:
     y = 42
 
 while y == 42:
-    y -= 1
+    x -= 1

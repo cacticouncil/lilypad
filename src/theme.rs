@@ -33,9 +33,12 @@ pub mod blocks {
     pub const FOR: Color = Color::rgb8(255, 131, 193);
     pub const TRY: Color = Color::rgb8(84, 129, 230);
     pub const GENERIC: Color = Color::rgb8(42, 189, 218);
+    pub const ERROR: Color = Color::rgb8(255, 0, 0);
 }
 
 pub const BACKGROUND: Color = one_dark::BLACK;
+pub const CURSOR: Color = Color::rgb8(0x52, 0x8B, 0xFF);
+pub const SELECTION: Color = Color::rgb8(0x3D, 0x45, 0x55);
 
 #[allow(dead_code)]
 mod one_dark {

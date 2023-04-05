@@ -6,11 +6,12 @@ use std::time::Duration;
 use crate::parse::TreeManager;
 
 mod block_drawer;
-mod drawing;
-mod interactions;
 mod lifecycle;
 mod selection;
+mod selection_changing;
+mod selection_drawer;
 mod text_drawer;
+mod text_editing;
 
 use selection::*;
 use text_drawer::*;
@@ -30,6 +31,9 @@ Got these values by running:
 pub const FONT_WIDTH: f64 = 9.0;
 pub const FONT_HEIGHT: f64 = 20.0;
 
+const OUTER_PAD: f64 = 16.0;
+const TEXT_L_PAD: f64 = 2.0;
+
 pub struct BlockEditor {
     tree_manager: Arc<RefCell<TreeManager>>,
     selection: Selection,
@@ -37,6 +41,9 @@ pub struct BlockEditor {
     timer_id: TimerToken,
     cursor_visible: bool,
     text_drawer: TextDrawer,
+    text_changed: bool,
+    blocks: Vec<block_drawer::Block>,
+    padding: Vec<f64>,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -53,6 +60,9 @@ impl BlockEditor {
             timer_id: TimerToken::INVALID,
             cursor_visible: true,
             text_drawer: TextDrawer::new(),
+            text_changed: true,
+            blocks: vec![],
+            padding: vec![],
         }
     }
 }
