@@ -48,7 +48,7 @@ impl TextDrawer {
         for (num, layout) in self.cache.iter().enumerate() {
             total_padding += padding[num];
             let pos = Point {
-                x: super::OUTER_PAD + super::TEXT_L_PAD,
+                x: super::OUTER_PAD + super::GUTTER_WIDTH + super::TEXT_L_PAD,
                 y: ((num as f64) * FONT_HEIGHT) + total_padding + super::OUTER_PAD,
             };
             layout.draw(pos, ctx);

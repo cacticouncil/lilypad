@@ -4,7 +4,7 @@ use tree_sitter_c2rust::{Node, TreeCursor};
 
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 
-use super::OUTER_PAD;
+use super::{GUTTER_WIDTH, OUTER_PAD};
 
 /* ------------------------------ tree handling ----------------------------- */
 
@@ -204,7 +204,7 @@ fn draw_block(
     };
 
     let start_pt = Point::new(
-        (block.col as f64) * FONT_WIDTH + OUTER_PAD - (BLOCK_STROKE_WIDTH / 2.0),
+        (block.col as f64) * FONT_WIDTH + OUTER_PAD + GUTTER_WIDTH - (BLOCK_STROKE_WIDTH / 2.0),
         (block.line as f64) * FONT_HEIGHT + OUTER_PAD - (BLOCK_STROKE_WIDTH / 2.0) + padding_above,
     );
 

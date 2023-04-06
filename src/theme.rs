@@ -40,6 +40,8 @@ pub const BACKGROUND: Color = one_dark::BLACK;
 pub const CURSOR: Color = Color::rgb8(0x52, 0x8B, 0xFF);
 pub const SELECTION: Color = Color::rgb8(0x3D, 0x45, 0x55);
 
+pub const LINE_NUMBERS: Color = one_dark::GUTTER_GREY;
+
 #[allow(dead_code)]
 mod one_dark {
     use druid::Color;

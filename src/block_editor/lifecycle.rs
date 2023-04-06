@@ -1,6 +1,8 @@
 use druid::{Event, KbKey, LifeCycle, Modifiers, MouseButton, PaintCtx, Size, Widget};
 
-use super::{block_drawer, BlockEditor, EditorModel, FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL};
+use super::{
+    block_drawer, gutter_drawer, BlockEditor, EditorModel, FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL,
+};
 use crate::vscode;
 
 impl Widget<EditorModel> for BlockEditor {
@@ -145,8 +147,11 @@ impl Widget<EditorModel> for BlockEditor {
             .map(|l| l.chars().count())
             .max()
             .unwrap_or(0);
-        let text_width =
-            max_chars as f64 * FONT_WIDTH + super::OUTER_PAD + super::TEXT_L_PAD + 40.0;
+        let text_width = max_chars as f64 * FONT_WIDTH
+            + super::OUTER_PAD
+            + super::GUTTER_WIDTH
+            + super::TEXT_L_PAD
+            + 40.0; // extra space for nesting blocks
         let window_width = ctx.window().get_size().width;
         let width = f64::max(text_width, window_width);
 
@@ -187,6 +192,9 @@ impl Widget<EditorModel> for BlockEditor {
 
         // draw text on top of blocks
         self.text_drawer.draw(&self.padding, ctx);
+
+        // draw gutter
+        gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.y, ctx);
 
         // draw cursor and selection
         self.draw_cursor(ctx);

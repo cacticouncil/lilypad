@@ -133,8 +133,9 @@ impl BlockEditor {
 
         // TODO: if past last line, move to end of last line
 
-        let x_raw =
-            ((mouse.pos.x - super::OUTER_PAD - super::TEXT_L_PAD) / FONT_WIDTH).round() as usize;
+        let x_raw = ((mouse.pos.x - super::OUTER_PAD - super::GUTTER_WIDTH - super::TEXT_L_PAD)
+            / FONT_WIDTH)
+            .round() as usize;
         let x_bound = clamp_col(y, x_raw, source);
 
         IntPoint::new(x_bound, y)

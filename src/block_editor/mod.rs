@@ -6,6 +6,7 @@ use std::time::Duration;
 use crate::parse::TreeManager;
 
 mod block_drawer;
+mod gutter_drawer;
 mod lifecycle;
 mod selection;
 mod selection_changing;
@@ -33,6 +34,7 @@ pub const FONT_HEIGHT: f64 = 20.0;
 
 const OUTER_PAD: f64 = 16.0;
 const TEXT_L_PAD: f64 = 2.0;
+const GUTTER_WIDTH: f64 = 30.0;
 
 pub struct BlockEditor {
     tree_manager: Arc<RefCell<TreeManager>>,
