@@ -6,6 +6,14 @@ use druid::{
 use crate::theme;
 
 pub fn draw_line_numbers(padding: &Vec<f64>, curr_line: usize, ctx: &mut PaintCtx) {
+    // if document is empty
+    if padding.is_empty() {
+        let text = make_num_text(1, true, ctx);
+        let pos = Point::new(super::GUTTER_WIDTH - text.size().width, super::OUTER_PAD);
+        ctx.draw_text(&text, pos);
+        return;
+    }
+
     let mut y_pos = super::OUTER_PAD;
     for (num, padding) in padding.iter().enumerate() {
         y_pos += padding;
