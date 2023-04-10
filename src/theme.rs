@@ -36,10 +36,19 @@ pub mod blocks {
     pub const ERROR: Color = Color::rgb8(255, 0, 0);
 }
 
+pub mod diagnostic {
+    use druid::Color;
+
+    pub const ERROR: Color = Color::rgb8(0xC2, 0x40, 0x38);
+    pub const WARNING: Color = Color::rgb8(0xD1, 0x9A, 0x66);
+    pub const INFO: Color = Color::rgb8(0x37, 0x94, 0xFF);
+    pub const HINT: Color = Color::rgb8(0xA0, 0xA0, 0xA0);
+}
+
 pub const BACKGROUND: Color = one_dark::BLACK;
 pub const CURSOR: Color = Color::rgb8(0x52, 0x8B, 0xFF);
 pub const SELECTION: Color = Color::rgb8(0x3D, 0x45, 0x55);
-
+pub const POPUP_BACKGROUND: Color = Color::rgb8(0x1E, 0x22, 0x27);
 pub const LINE_NUMBERS: Color = one_dark::GUTTER_GREY;
 
 #[allow(dead_code)]

@@ -9,7 +9,7 @@ use std::{
     ops::Range,
 };
 
-use crate::block_editor::FONT_HEIGHT;
+use super::{FONT_HEIGHT, FONT_SIZE};
 use crate::theme;
 
 #[cfg(target_family = "wasm")]
@@ -48,7 +48,7 @@ impl TextDrawer {
         for (num, layout) in self.cache.iter().enumerate() {
             total_padding += padding[num];
             let pos = Point {
-                x: super::OUTER_PAD + super::GUTTER_WIDTH + super::TEXT_L_PAD,
+                x: super::TOTAL_TEXT_X_OFFSET,
                 y: ((num as f64) * FONT_HEIGHT) + total_padding + super::OUTER_PAD,
             };
             layout.draw(pos, ctx);
@@ -231,7 +231,7 @@ impl<'a> ColoredTextBuilder<'a> {
         let mut layout = ctx
             .text()
             .new_text_layout(self.text.to_string())
-            .font(font_family, 15.0)
+            .font(font_family, FONT_SIZE)
             .default_attribute(TextAttribute::TextColor(theme::syntax::DEFAULT));
 
         // apply colors
@@ -253,7 +253,7 @@ impl<'a> ColoredTextBuilder<'a> {
             let font_family = FontFamily::new_unchecked("Roboto Mono");
             ctx.text()
                 .new_text_layout(text.to_string())
-                .font(font_family, 15.0)
+                .font(font_family, FONT_SIZE)
                 .text_color(color)
                 .build()
                 .unwrap()

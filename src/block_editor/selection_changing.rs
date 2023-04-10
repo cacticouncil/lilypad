@@ -1,6 +1,6 @@
 use druid::{EventCtx, MouseEvent};
 
-use super::{line_len, BlockEditor, IntPoint, Selection, FONT_HEIGHT, FONT_WIDTH};
+use super::{line_len, BlockEditor, IntPoint, TextRange, FONT_HEIGHT, FONT_WIDTH};
 
 impl BlockEditor {
     /* ----------------------------- Cursor Movement ---------------------------- */
@@ -9,12 +9,12 @@ impl BlockEditor {
         let cursor_pos = self.selection.ordered().start;
 
         self.selection = if cursor_pos.y == 0 {
-            Selection::new_cursor(0, 0)
+            TextRange::new_cursor(0, 0)
         } else {
             // TODO: the normal text editor experience has a "memory" of how far right
             // the cursor started during a chain for arrow up/down (and then it snaps back there).
             // if that memory is implemented, it can replace self.cursor_pos.x
-            Selection::new_cursor(
+            TextRange::new_cursor(
                 clamp_col(cursor_pos.y - 1, cursor_pos.x, source),
                 cursor_pos.y - 1,
             )
@@ -30,13 +30,13 @@ impl BlockEditor {
 
         self.selection = if cursor_pos.y == last_line {
             // if on last line, just move to end of line
-            Selection::new_cursor(
+            TextRange::new_cursor(
                 source.lines().last().unwrap_or("").chars().count(),
                 last_line,
             )
         } else {
             // same memory thing as above applies here
-            Selection::new_cursor(clamp_col(next_line, cursor_pos.x, source), next_line)
+            TextRange::new_cursor(clamp_col(next_line, cursor_pos.x, source), next_line)
         }
     }
 
@@ -48,15 +48,15 @@ impl BlockEditor {
                 // if at start of line, move to end of line above
                 if cursor_pos.y != 0 {
                     self.selection =
-                        Selection::new_cursor(line_len(cursor_pos.y - 1, source), cursor_pos.y - 1);
+                        TextRange::new_cursor(line_len(cursor_pos.y - 1, source), cursor_pos.y - 1);
                 }
             } else {
-                self.selection = Selection::new_cursor(cursor_pos.x - 1, cursor_pos.y);
+                self.selection = TextRange::new_cursor(cursor_pos.x - 1, cursor_pos.y);
             }
         } else {
             // just move cursor to start of selection
             let start = self.selection.ordered().start;
-            self.selection = Selection::new_cursor(start.x, start.y);
+            self.selection = TextRange::new_cursor(start.x, start.y);
         }
     }
 
@@ -70,15 +70,15 @@ impl BlockEditor {
                 // if at end of current line, go to next line
                 let last_line = super::line_count(source) - 1;
                 if cursor_pos.y != last_line {
-                    self.selection = Selection::new_cursor(0, cursor_pos.y + 1);
+                    self.selection = TextRange::new_cursor(0, cursor_pos.y + 1);
                 }
             } else {
-                self.selection = Selection::new_cursor(cursor_pos.x + 1, cursor_pos.y);
+                self.selection = TextRange::new_cursor(cursor_pos.x + 1, cursor_pos.y);
             }
         } else {
             // just move cursor to end of selection
             let end = self.selection.ordered().end;
-            self.selection = Selection::new_cursor(end.x, end.y);
+            self.selection = TextRange::new_cursor(end.x, end.y);
         }
     }
 
@@ -88,14 +88,14 @@ impl BlockEditor {
 
         let line = source.lines().nth(cursor_pos.y).unwrap_or("");
         let start_idx = line.len() - line.trim_start().len();
-        self.selection = Selection::new_cursor(start_idx, cursor_pos.y);
+        self.selection = TextRange::new_cursor(start_idx, cursor_pos.y);
     }
 
     pub fn cursor_to_line_end(&mut self, source: &str) {
         // go with whatever line the mouse was last on
         let cursor_pos = self.selection.end;
 
-        self.selection = Selection::new_cursor(line_len(cursor_pos.y, source), cursor_pos.y);
+        self.selection = TextRange::new_cursor(line_len(cursor_pos.y, source), cursor_pos.y);
     }
 
     /* ------------------------------ Mouse Clicks ------------------------------ */
@@ -116,7 +116,7 @@ impl BlockEditor {
         self.selection.end = self.mouse_to_coord(mouse, source);
     }
 
-    fn mouse_to_coord(&self, mouse: &MouseEvent, source: &str) -> IntPoint {
+    pub fn mouse_to_coord(&self, mouse: &MouseEvent, source: &str) -> IntPoint {
         // find the line clicked on by finding the next one and then going back one
         let mut y: usize = 0;
         let mut total_pad = 0.0;

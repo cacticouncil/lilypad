@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
+    internalEdit = false;
 
     private static readonly viewType = "lilypad.frameBased";
 
@@ -19,18 +20,11 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         webviewPanel: vscode.WebviewPanel,
         token: vscode.CancellationToken
     ): Promise<void> {
-        // Setup initial content for the webview
+        // Create Webview
         webviewPanel.webview.options = {
             enableScripts: true,
         };
         webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
-
-        function updateWebview() {
-            webviewPanel.webview.postMessage({
-                type: "update",
-                text: document.getText(),
-            });
-        }
 
         // Override Clipboard actions
         vscode.commands.registerCommand("editor.action.clipboardCopyAction", _ => {
@@ -52,43 +46,87 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             });
         });
 
-        // Hook up event handlers so that we can synchronize the webview with the text document.
-        //
-        // The text document acts as our model, so we have to sync change in the document to our
-        // editor and sync changes in the editor back to the document.
-        // 
-        // Remember that a single text document can also be shared between multiple custom
-        // editors (this happens for example when you split a custom editor)
-
+        // Sync our editor to external changes
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
             if (e.document.uri.toString() === document.uri.toString()) {
-                updateWebview();
+                // sometimes there are random empty triggers,
+                // don't change internal edits on those
+                if (e.contentChanges.length === 0) {
+                    return;
+                }
+
+                // don't notify of edit that the editor made itself
+                // from what I can tell, edits are sent in order so this should work
+                if (this.internalEdit) {
+                    this.internalEdit = false;
+                    return;
+                }
+
+                // notify
+                for (const change of e.contentChanges) {
+                    webviewPanel.webview.postMessage({
+                        type: "apply_edit",
+                        edit: change,
+                    });
+                }
             }
         });
 
-        // Make sure we get rid of the listener when our editor is closed.
+        // Listen for new diagnostics
+        const changeDiagnosticsSubscription = vscode.languages.onDidChangeDiagnostics(e => {
+            if (e.uris.map(u => u.toString()).includes(document.uri.toString())) {
+                webviewPanel.webview.postMessage({
+                    type: "new_diagnostics",
+                    diagnostics: vscode.languages.getDiagnostics(document.uri)
+                });
+            }
+        });
+
+        // Get rid of the listeners when our editor is closed.
         webviewPanel.onDidDispose(() => {
             changeDocumentSubscription.dispose();
+            changeDiagnosticsSubscription.dispose();
         });
 
         // Receive message from the webview.
         webviewPanel.webview.onDidReceiveMessage(message => {
             switch (message.type) {
                 case "started":
-                    updateWebview();
+                    webviewPanel.webview.postMessage({
+                        type: "set_text",
+                        text: document.getText(),
+                    });
                     break;
                 case "edited":
-                    const range = new vscode.Range(
+                    const editedRange = new vscode.Range(
                         message.range.startLine,
                         message.range.startCol,
                         message.range.endLine,
                         message.range.endCol
                     );
-                    this.updateTextDocument(document, message.text, range);
+                    this.updateTextDocument(document, message.text, editedRange);
                     break;
                 case "set_clipboard":
                     vscode.env.clipboard.writeText(message.text);
                     break;
+                case "get_quick_fixes":
+                    const cursor = new vscode.Range(message.line, message.col,
+                                                    message.line, message.col);
+                    vscode.commands.executeCommand(
+                        "vscode.executeCodeActionProvider",
+                        document.uri,
+                        cursor,
+                        vscode.CodeActionKind.QuickFix.value,
+                        5 // limit to receive
+                    ).then((actions: any) => {
+                        webviewPanel.webview.postMessage({
+                            type: "return_quick_fixes",
+                            actions: actions.map((action: any) => action.command)
+                        });
+                    });
+                    break;
+                case "execute_command":
+                    vscode.commands.executeCommand(message.command, ...message.args);
             }
         });
     }
@@ -100,6 +138,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             range,
             newText
         );
+        this.internalEdit = true;
         return vscode.workspace.applyEdit(edit);
     }
 

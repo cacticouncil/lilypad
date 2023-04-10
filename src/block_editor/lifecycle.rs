@@ -1,9 +1,12 @@
-use druid::{Event, KbKey, LifeCycle, Modifiers, MouseButton, PaintCtx, Size, Widget};
+use druid::{
+    Event, KbKey, LifeCycle, Modifiers, MouseButton, PaintCtx, Point, Rect, RenderContext, Size,
+    Widget,
+};
 
 use super::{
     block_drawer, gutter_drawer, BlockEditor, EditorModel, FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL,
 };
-use crate::vscode;
+use crate::{theme, vscode};
 
 impl Widget<EditorModel> for BlockEditor {
     fn event(
@@ -11,8 +14,14 @@ impl Widget<EditorModel> for BlockEditor {
         ctx: &mut druid::EventCtx,
         event: &druid::Event,
         data: &mut EditorModel,
-        _env: &druid::Env,
+        env: &druid::Env,
     ) {
+        // first see if child handled it
+        self.diagnostic_popup.event(ctx, event, data, env);
+        if ctx.is_handled() {
+            return;
+        }
+
         match event {
             Event::WindowConnected => {
                 //starts initial timer
@@ -36,6 +45,23 @@ impl Widget<EditorModel> for BlockEditor {
             Event::MouseUp(mouse) if mouse.button == MouseButton::Left => {
                 self.mouse_pressed = false;
                 ctx.request_paint();
+
+                // diagnostic selection
+                // TODO: change to a hover??
+                // TODO: multiple diagnostics displayed at once
+                if self.selection.is_cursor() {
+                    let coord = self.mouse_to_coord(mouse, &data.source);
+                    data.diagnostic_selection = None;
+                    for diagnostic in &data.diagnostics {
+                        if diagnostic.range.contains(coord) {
+                            data.diagnostic_selection = Some(diagnostic.id);
+                            break;
+                        }
+                    }
+                } else {
+                    data.diagnostic_selection = None
+                }
+
                 ctx.set_handled();
             }
 
@@ -76,6 +102,9 @@ impl Widget<EditorModel> for BlockEditor {
                     _ => {}
                 }
 
+                // close any open popups
+                data.diagnostic_selection = None;
+
                 // redraw
                 ctx.request_layout(); // probably should only conditionally do this
                 ctx.request_paint();
@@ -86,7 +115,7 @@ impl Widget<EditorModel> for BlockEditor {
 
             Event::Command(command) => {
                 // VSCode new text
-                if let Some(new_text) = command.get(vscode::UPDATE_TEXT_SELECTOR) {
+                if let Some(new_text) = command.get(vscode::SET_TEXT_SELECTOR) {
                     // update state and tree
                     data.source = new_text.clone();
                     self.tree_manager.borrow_mut().replace(&data.source);
@@ -97,14 +126,18 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.set_handled();
                     ctx.request_layout();
 
-                    // prevent another widget from also responding
-                    ctx.set_handled()
+                    ctx.set_handled();
+                } else if let Some(edit) = command.get(vscode::APPLY_EDIT_SELECTOR) {
+                    self.apply_edit(&mut data.source, edit);
+                    ctx.set_handled();
                 }
                 // VSCode Copy/Cut/Paste
                 else if command.get(vscode::COPY_SELECTOR).is_some() {
                     let selection = self.selection.ordered().offset_in(&data.source);
                     let selected_text = data.source[selection.start..selection.end].to_string();
                     vscode::set_clipboard(selected_text);
+
+                    ctx.set_handled();
                 } else if command.get(vscode::CUT_SELECTOR).is_some() {
                     // get selection
                     let selection = self.selection.ordered().offset_in(&data.source);
@@ -115,8 +148,21 @@ impl Widget<EditorModel> for BlockEditor {
 
                     // return selection
                     vscode::set_clipboard(selected_text);
+
+                    ctx.set_handled()
                 } else if let Some(text) = command.get(vscode::PASTE_SELECTOR) {
-                    self.insert_str(&mut data.source, text)
+                    self.insert_str(&mut data.source, text);
+                    ctx.set_handled();
+                }
+                // VSCode Diagnostics
+                else if let Some(diagnostics) = command.get(vscode::DIAGNOSTICS_SELECTOR) {
+                    data.diagnostics = diagnostics.clone();
+
+                    // this probably should be handled by the update function
+                    // because diagnostics is in data
+                    ctx.request_paint();
+
+                    ctx.set_handled()
                 }
             }
 
@@ -126,11 +172,12 @@ impl Widget<EditorModel> for BlockEditor {
 
     fn update(
         &mut self,
-        _ctx: &mut druid::UpdateCtx,
+        ctx: &mut druid::UpdateCtx,
         _old_data: &EditorModel,
-        _data: &EditorModel,
-        _env: &druid::Env,
+        data: &EditorModel,
+        env: &druid::Env,
     ) {
+        self.diagnostic_popup.update(ctx, data, env);
     }
 
     fn layout(
@@ -138,7 +185,7 @@ impl Widget<EditorModel> for BlockEditor {
         ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
         data: &EditorModel,
-        _env: &druid::Env,
+        env: &druid::Env,
     ) -> Size {
         // width is max between text and window
         let max_chars = data
@@ -161,10 +208,15 @@ impl Widget<EditorModel> for BlockEditor {
             + self.padding.iter().sum::<f64>();
         let desired = Size { width, height };
 
+        // add hover child
+        let point = self.diagnostic_popup.widget().calc_origin(&self.padding);
+        self.diagnostic_popup.set_origin(ctx, point);
+        self.diagnostic_popup.layout(ctx, bc, data, env);
+
         bc.constrain(desired)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, _env: &druid::Env) {
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, env: &druid::Env) {
         // recompute cached objects if text changed
         if self.text_changed {
             // get blocks
@@ -182,16 +234,27 @@ impl Widget<EditorModel> for BlockEditor {
             self.text_changed = false;
         }
 
+        // draw background
+        let bg_rect = Rect::from_origin_size(Point::ZERO, ctx.size());
+        ctx.fill(bg_rect, &theme::BACKGROUND);
+
         // draw selection under text and blocks
         if !self.selection.is_cursor() {
             self.draw_selection(&data.source, ctx);
         }
 
-        // draw blocks
+        // draw content
         block_drawer::draw_blocks(&self.blocks, ctx);
-
-        // draw text on top of blocks
         self.text_drawer.draw(&self.padding, ctx);
+
+        // draw diagnostics
+        // TODO: draw higher priorities on top
+        for diagnostic in &data.diagnostics {
+            diagnostic.draw(&self.padding, ctx);
+        }
+
+        // draw diagnostic popup (if any)
+        self.diagnostic_popup.paint(ctx, data, env);
 
         // draw gutter
         gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.y, ctx);
@@ -202,15 +265,17 @@ impl Widget<EditorModel> for BlockEditor {
 
     fn lifecycle(
         &mut self,
-        _ctx: &mut druid::LifeCycleCtx,
+        ctx: &mut druid::LifeCycleCtx,
         event: &druid::LifeCycle,
         data: &EditorModel,
-        _env: &druid::Env,
+        env: &druid::Env,
     ) {
-        match event {
-            // replace the tree with a tree for the initial source
-            LifeCycle::WidgetAdded => self.tree_manager.borrow_mut().replace(&data.source),
-            _ => (),
+        // replace the tree with a tree for the initial source
+        if let LifeCycle::WidgetAdded = event {
+            self.tree_manager.borrow_mut().replace(&data.source)
         }
+
+        // add diagnostic popup child
+        self.diagnostic_popup.lifecycle(ctx, event, data, env);
     }
 }

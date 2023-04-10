@@ -1,23 +1,27 @@
+use serde::{Deserialize, Deserializer};
 use std::ops::Range;
 
-pub struct Selection {
+/* ------------------------------- Text Range ------------------------------- */
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TextRange {
     pub start: IntPoint,
     pub end: IntPoint,
 }
 
-impl Selection {
-    pub const ZERO: Self = Selection {
+impl TextRange {
+    pub const ZERO: Self = TextRange {
         start: IntPoint::ZERO,
         end: IntPoint::ZERO,
     };
 
     #[allow(dead_code)] // will be used later
     pub fn new(start: IntPoint, end: IntPoint) -> Self {
-        Selection { start, end }
+        TextRange { start, end }
     }
 
     pub fn new_cursor(x: usize, y: usize) -> Self {
-        Selection {
+        TextRange {
             start: IntPoint::new(x, y),
             end: IntPoint::new(x, y),
         }
@@ -27,48 +31,65 @@ impl Selection {
         self.start == self.end
     }
 
-    pub fn ordered(&self) -> Selection {
+    pub fn ordered(&self) -> TextRange {
         if self.start.y < self.end.y {
-            Selection {
+            TextRange {
                 start: self.start,
                 end: self.end,
             }
         } else if self.start.y > self.end.y {
-            Selection {
+            TextRange {
                 start: self.end,
                 end: self.start,
             }
         } else if self.start.x < self.end.x {
-            Selection {
+            TextRange {
                 start: self.start,
                 end: self.end,
             }
         } else {
-            Selection {
+            TextRange {
                 start: self.end,
                 end: self.start,
             }
         }
     }
 
-    pub fn offset_in(&self, string: &str) -> TextRange {
-        TextRange {
-            start: self.start.offset_in(string),
-            end: self.end.offset_in(string),
-        }
+    pub fn offset_in(&self, string: &str) -> Range<usize> {
+        self.start.offset_in(string)..self.end.offset_in(string)
+    }
+
+    pub fn contains(&self, point: IntPoint) -> bool {
+        // TODO: multiline
+        point.y >= self.start.y
+            && point.y <= self.end.y
+            && point.x >= self.start.x
+            && point.x <= self.end.x
     }
 }
 
-pub struct TextRange {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl TextRange {
-    pub fn as_range(&self) -> Range<usize> {
-        self.start..self.end
+impl<'de> Deserialize<'de> for TextRange {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // TODO: actual error handling
+        let json = serde_json::Value::deserialize(deserializer)?;
+        let arr = json.as_array().unwrap();
+        Ok(TextRange::new(
+            IntPoint::new(
+                arr[0].get("character").unwrap().as_u64().unwrap() as usize,
+                arr[0].get("line").unwrap().as_u64().unwrap() as usize,
+            ),
+            IntPoint::new(
+                arr[1].get("character").unwrap().as_u64().unwrap() as usize,
+                arr[1].get("line").unwrap().as_u64().unwrap() as usize,
+            ),
+        ))
     }
 }
+
+/* -------------------------------- Int Point ------------------------------- */
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct IntPoint {
@@ -106,6 +127,14 @@ impl IntPoint {
         }
         offset
     }
+}
+
+/* ---------------------------------- Extra --------------------------------- */
+
+#[derive(serde::Deserialize, Debug)]
+pub struct TextEdit {
+    pub text: String,
+    pub range: TextRange,
 }
 
 pub const fn os_linebreak() -> &'static str {

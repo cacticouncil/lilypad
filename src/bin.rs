@@ -3,9 +3,7 @@ mod parse;
 mod theme;
 
 use druid::widget::Scroll;
-use druid::{
-    AppLauncher, FontDescriptor, FontFamily, Key, PlatformError, Widget, WidgetExt, WindowDesc,
-};
+use druid::{AppLauncher, PlatformError, Widget, WindowDesc};
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -13,28 +11,21 @@ use std::{
 
 use block_editor::{BlockEditor, EditorModel};
 
-const MONO_FONT: Key<FontDescriptor> = Key::new("org.cacticouncil.lilypad.mono-font");
-
 fn main() -> Result<(), PlatformError> {
     // get data from test file
     let source = get_test_string("test3.py");
-    let data = EditorModel { source };
+    let data = EditorModel {
+        source,
+        diagnostics: vec![block_editor::diagnostics::Diagnostic::example()],
+        diagnostic_selection: None,
+    };
     // launch
     let main_window = WindowDesc::new(ui_builder()).title("Lilypad Editor");
-    AppLauncher::with_window(main_window)
-        .configure_env(|env, _state| {
-            env.set(
-                MONO_FONT,
-                FontDescriptor::new(FontFamily::new_unchecked("Roboto Mono")).with_size(15.0),
-            );
-        })
-        .launch(data)
+    AppLauncher::with_window(main_window).launch(data)
 }
 
 fn ui_builder() -> impl Widget<EditorModel> {
-    Scroll::new(BlockEditor::new())
-        .content_must_fill(true)
-        .background(theme::BACKGROUND)
+    Scroll::new(BlockEditor::new()).content_must_fill(true)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -52,14 +43,24 @@ fn get_test_string(name: &'static str) -> String {
 pub(crate) mod vscode {
     use druid::Selector;
 
-    pub const UPDATE_TEXT_SELECTOR: Selector<String> = Selector::new("UNUSED");
+    use crate::block_editor::{
+        diagnostics::{Diagnostic, VSCodeCommand},
+        text_range::TextEdit,
+    };
+
+    pub const SET_TEXT_SELECTOR: Selector<String> = Selector::new("UNUSED");
+    pub const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("UNUSED");
     pub const COPY_SELECTOR: Selector<()> = Selector::new("UNUSED");
     pub const CUT_SELECTOR: Selector<()> = Selector::new("UNUSED");
     pub const PASTE_SELECTOR: Selector<String> = Selector::new("UNUSED");
+    pub const DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> = Selector::new("UNUSED");
+    pub const QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("UNUSED");
 
     // pub fn started() {}
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
     pub fn set_clipboard(_: String) {}
+    pub fn request_quick_fixes(_: usize, _: usize) {}
+    pub fn execute_command(_: String, _: wasm_bindgen::JsValue) {}
 }
 
-// pub(crate) use println as console_log;
+pub(crate) use println as console_log;

@@ -3,6 +3,7 @@ use druid::{
     FontFamily, PaintCtx, Point, RenderContext,
 };
 
+use super::FONT_SIZE;
 use crate::theme;
 
 pub fn draw_line_numbers(padding: &Vec<f64>, curr_line: usize, ctx: &mut PaintCtx) {
@@ -36,7 +37,7 @@ fn make_num_text(num: usize, curr: bool, ctx: &mut PaintCtx) -> PietTextLayout {
     };
     ctx.text()
         .new_text_layout(num.to_string())
-        .font(font_family, 15.0)
+        .font(font_family, FONT_SIZE)
         .text_color(color)
         .build()
         .unwrap()

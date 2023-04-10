@@ -12,10 +12,7 @@ impl BlockEditor {
             let total_pad: f64 = self.padding.iter().take(self.selection.end.y + 1).sum();
             let block = Rect::from_origin_size(
                 Point::new(
-                    super::OUTER_PAD
-                        + super::GUTTER_WIDTH
-                        + super::TEXT_L_PAD
-                        + (self.selection.end.x as f64) * FONT_WIDTH,
+                    super::TOTAL_TEXT_X_OFFSET + (self.selection.end.x as f64) * FONT_WIDTH,
                     super::OUTER_PAD + (self.selection.end.y as f64) * FONT_HEIGHT + total_pad,
                 ),
                 Size::new(2.0, FONT_HEIGHT),
@@ -100,10 +97,7 @@ impl BlockEditor {
 
         let block = Rect::from_origin_size(
             Point::new(
-                (x as f64 * FONT_WIDTH)
-                    + super::OUTER_PAD
-                    + super::GUTTER_WIDTH
-                    + super::TEXT_L_PAD,
+                (x as f64 * FONT_WIDTH) + super::TOTAL_TEXT_X_OFFSET,
                 (y as f64 * FONT_HEIGHT) + super::OUTER_PAD + total_pad,
             ),
             Size::new(

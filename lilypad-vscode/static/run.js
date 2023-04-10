@@ -1,4 +1,4 @@
-import init, { run_editor, update_text, copy_selection, cut_selection, insert_text } from "./lilypad_web.js";
+import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, insert_text, new_diagnostics, set_quick_fixes } from "./lilypad_web.js";
 
 async function run() {
   await init();
@@ -30,12 +30,33 @@ export function setClipboard(text) {
   });
 }
 
+export function requestQuickFixes(line, col) {
+  const requestID = Math.floor(Math.random() * 999999);
+  vscode.postMessage({
+    type: "get_quick_fixes",
+    requestID: requestID,
+    line: line,
+    col: col,
+  });
+}
+
+export function executeCommand(command, args) {
+  vscode.postMessage({
+    type: "execute_command",
+    command: command,
+    args: args,
+  });
+}
+
 // extension -> web view messages
 window.addEventListener("message", event => {
   const message = event.data;
   switch (message.type) {
-    case "update":
-      update_text(message.text);
+    case "set_text":
+      set_text(message.text);
+      break;
+    case "apply_edit":
+      apply_edit(message.edit);
       break;
     case "copy":
       copy_selection();
@@ -45,6 +66,12 @@ window.addEventListener("message", event => {
       break;
     case "paste":
       insert_text(message.text);
+      break;
+    case "new_diagnostics":
+      new_diagnostics(message.diagnostics);
+      break;
+    case "return_quick_fixes":
+      set_quick_fixes(message.actions);
       break;
   }
 });
