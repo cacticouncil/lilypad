@@ -229,7 +229,8 @@ impl Widget<EditorModel> for BlockEditor {
             self.padding = block_drawer::make_padding(&self.blocks, line_count);
 
             // layout text
-            self.text_drawer.layout(&data.source, ctx);
+            self.text_drawer
+                .layout(tree_manager.get_cursor().node(), &data.source, ctx);
 
             self.text_changed = false;
         }

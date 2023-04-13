@@ -94,7 +94,7 @@ checksum = "fdde5c9cd29ebd706ce1b35600920a33550e402fc998a2e53ad3b42c3c47a192"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.13",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -451,7 +451,7 @@ checksum = "89ca545a94061b6365f2c7355b4b32bd20df3ff95f02da9329b34ccc3bd6ee72"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.13",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -771,9 +771,9 @@ dependencies = [
 
 [[package]]
 name = "kurbo"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5174361704392c4a640258d5020e14ec820a8c1820d5ba67b2311962f411b52b"
+checksum = "28a2d0c1781729f69dbea30f968608cadfaeb6582e5ce903a167a5216b53cd0f"
 dependencies = [
  "arrayvec",
 ]
@@ -802,8 +802,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "tree-sitter-c2rust",
- "tree-sitter-highlight",
- "tree-sitter-python-wasm-compatible",
+ "tree-sitter-python",
  "wasm-bindgen",
 ]
 
@@ -1144,9 +1143,9 @@ checksum = "bebd363326d05ec3e2f532ab7660680f3b02130d780c299bca73469d521bc0ed"
 
 [[package]]
 name = "serde"
-version = "1.0.159"
+version = "1.0.160"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c04e8343c3daeec41f58990b9d77068df31209f2af111e059e9fe9646693065"
+checksum = "bb2f3770c8bce3bcda7e149193a069a0f4365bda1fa5cd88e03bca26afc1216c"
 dependencies = [
  "serde_derive",
 ]
@@ -1164,20 +1163,20 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.159"
+version = "1.0.160"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c614d17805b093df4b147b51339e7e44bf05ef59fba1e45d83500bcfb4d8585"
+checksum = "291a097c63d8497e00160b166a967a4a79c64f3facdd01cbd7502231688d77df"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.13",
+ "syn 2.0.15",
 ]
 
 [[package]]
 name = "serde_json"
-version = "1.0.95"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d721eca97ac802aa7777b701877c8004d950fc142651367300d21c1cc0194744"
+checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
  "itoa",
  "ryu",
@@ -1230,9 +1229,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.13"
+version = "2.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c9da457c5285ac1f936ebd076af6dac17a61cfe7826f2076b4d015cf47bc8ec"
+checksum = "a34fcf3e8b60f57e6a14301a2e916d323af98b0ea63c599441eec8558660c822"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1269,7 +1268,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.13",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -1398,36 +1397,19 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-c2rust"
-version = "0.20.9"
-source = "git+https://github.com/shadaj/tree-sitter-c2rust/#17992b7ee06c33f7818a2563044e78569d6449d3"
-dependencies = [
- "regex",
- "tree-sitter-c2rust-core",
-]
-
-[[package]]
-name = "tree-sitter-c2rust-core"
-version = "0.20.9"
-source = "git+https://github.com/shadaj/tree-sitter-c2rust/#17992b7ee06c33f7818a2563044e78569d6449d3"
+version = "0.20.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee40a4d9cf5a30c199935f346887588239daceae4d1418d81b789276fffb8d91"
 dependencies = [
  "c2rust-bitfields",
  "once_cell",
-]
-
-[[package]]
-name = "tree-sitter-highlight"
-version = "0.20.1"
-source = "git+https://github.com/shadaj/tree-sitter-c2rust/#17992b7ee06c33f7818a2563044e78569d6449d3"
-dependencies = [
  "regex",
- "thiserror",
- "tree-sitter-c2rust",
 ]
 
 [[package]]
-name = "tree-sitter-python-wasm-compatible"
+name = "tree-sitter-python"
 version = "0.20.2"
-source = "git+https://github.com/liamrosenfeld/tree-sitter-python-wasm-compatible#0542b90202cad6d3da1734817ab62afcc230e467"
+source = "git+https://github.com/liamrosenfeld/tree-sitter-python/?branch=wasm#f76e86658c0c5697c28b5905782ac6ba08d6e4a4"
 dependencies = [
  "bytemuck",
  "cc",

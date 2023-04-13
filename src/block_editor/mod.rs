@@ -14,6 +14,7 @@ mod selection_drawer;
 mod text_drawer;
 mod text_editing;
 pub mod text_range;
+mod highlighter;
 
 use diagnostics::Diagnostic;
 use text_drawer::*;

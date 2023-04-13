@@ -10,7 +10,7 @@ impl TreeManager {
     pub fn new(source: &str) -> TreeManager {
         // Create Parser
         let mut parser = Parser::new();
-        let language = tree_sitter_python_wasm_compatible::language();
+        let language = tree_sitter_python::language();
         parser.set_language(language).unwrap();
 
         // Parse initial source

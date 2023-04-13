@@ -2,13 +2,14 @@ use druid::{
     piet::{PietTextLayout, Text, TextLayoutBuilder},
     Color, FontFamily, PaintCtx, Point, RenderContext,
 };
-use tree_sitter_highlight::{Highlight, HighlightConfiguration, HighlightEvent, Highlighter};
+use tree_sitter_c2rust::Node;
 
 use std::{
     cmp::{max, min},
     ops::Range,
 };
 
+use super::highlighter::{Highlight, HighlightConfiguration, HighlightEvent};
 use super::{FONT_HEIGHT, FONT_SIZE};
 use crate::theme;
 
@@ -19,25 +20,21 @@ use druid::piet::TextLayout;
 use druid::piet::TextAttribute;
 
 pub struct TextDrawer {
-    highlighter: Highlighter,
     highlighter_config: HighlightConfiguration,
     cache: Vec<ColoredText>,
 }
 
 impl TextDrawer {
     pub fn new() -> Self {
-        let highlighter = Highlighter::new();
         let mut highlighter_config = HighlightConfiguration::new(
-            tree_sitter_python_wasm_compatible::language(),
-            tree_sitter_python_wasm_compatible::HIGHLIGHT_QUERY,
-            "",
+            tree_sitter_python::language(),
+            tree_sitter_python::HIGHLIGHT_QUERY,
             "",
         )
         .unwrap();
         highlighter_config.configure(HIGHLIGHT_NAMES);
 
         Self {
-            highlighter,
             highlighter_config,
             cache: vec![],
         }
@@ -55,16 +52,14 @@ impl TextDrawer {
         }
     }
 
-    pub fn layout(&mut self, source: &str, ctx: &mut PaintCtx) {
+    pub fn layout(&mut self, root_node: Node, source: &str, ctx: &mut PaintCtx) {
         // erase old values
         self.cache.clear();
 
         // get highlights
-        // TODO: use the existing tree instead of parsing again here
         let mut highlights = self
-            .highlighter
-            .highlight(&self.highlighter_config, source.as_bytes(), None, |_| None)
-            .unwrap()
+            .highlighter_config
+            .highlight(source.as_bytes(), &root_node)
             .peekable();
 
         let mut handled_up_to = 0;
@@ -79,7 +74,7 @@ impl TextDrawer {
             let end_of_line = start_of_line + line.len();
 
             while handled_up_to < end_of_line {
-                let Some(Ok(highlight)) = highlights.peek() else {
+                let Some(highlight) = highlights.peek() else {
                     break;
                 };
 
