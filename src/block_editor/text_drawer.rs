@@ -67,6 +67,8 @@ impl TextDrawer {
         let mut start_of_line = 0;
         let mut category_stack: Vec<Highlight> = vec![];
 
+        let linebreak_len = super::detect_linebreak(source).len();
+
         for line in source.lines() {
             let mut colored_text = ColoredTextBuilder::new(line);
 
@@ -122,9 +124,10 @@ impl TextDrawer {
                         );
                         handled_up_to = end;
 
-                        if handled_up_to < next_to_handle {
+                        if handled_up_to + linebreak_len < next_to_handle {
                             // category ends on future line
-                            // do not remove highlight end and keep it on the stack
+                            // do not remove highlight end (so it triggers again on next line)
+                            // and keep it on the stack (so it knows what type to use)
                             category_stack.push(cat);
                         } else {
                             highlights.next();
@@ -137,7 +140,7 @@ impl TextDrawer {
             self.cache.push(colored_text.build(ctx));
 
             // prepare for next
-            start_of_line = end_of_line + 1; // +1 for newline
+            start_of_line = end_of_line + linebreak_len;
         }
     }
 }

@@ -123,7 +123,7 @@ impl IntPoint {
                 break;
             }
 
-            offset += line.len() + os_linebreak().len(); // factor in the linebreak
+            offset += line.len() + super::detect_linebreak(string).len(); // factor in the linebreak
         }
         offset
     }
@@ -135,12 +135,4 @@ impl IntPoint {
 pub struct TextEdit {
     pub text: String,
     pub range: TextRange,
-}
-
-pub const fn os_linebreak() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "\r\n"
-    } else {
-        "\n"
-    }
 }

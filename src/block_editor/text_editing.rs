@@ -1,6 +1,6 @@
 use tree_sitter_c2rust::InputEdit;
 
-use super::{line_count, line_len, os_linebreak, text_range::TextEdit, BlockEditor, TextRange};
+use super::{detect_linebreak, line_count, line_len, text_range::TextEdit, BlockEditor, TextRange};
 use crate::vscode;
 
 impl BlockEditor {
@@ -74,8 +74,9 @@ impl BlockEditor {
         let old_selection = self.selection.ordered();
 
         // update source
+        let linebreak = detect_linebreak(&source);
         let offsets = old_selection.ordered().offset_in(source);
-        source.replace_range(offsets.clone(), os_linebreak());
+        source.replace_range(offsets.clone(), linebreak);
 
         // move cursor
         self.selection = TextRange::new_cursor(0, old_selection.start.y + 1);
@@ -84,7 +85,7 @@ impl BlockEditor {
         let edits = InputEdit {
             start_byte: offsets.start,
             old_end_byte: offsets.end,
-            new_end_byte: offsets.start + os_linebreak().len(),
+            new_end_byte: offsets.start + linebreak.len(),
             start_position: old_selection.start.as_tree_sitter(),
             old_end_position: old_selection.end.as_tree_sitter(),
             new_end_position: self.selection.end.as_tree_sitter(),
@@ -92,7 +93,7 @@ impl BlockEditor {
         self.tree_manager.borrow_mut().update(source, edits);
 
         // update vscode
-        Self::send_vscode_edit(os_linebreak(), old_selection);
+        Self::send_vscode_edit(linebreak, old_selection);
 
         // will need to redraw because of edits
         self.text_changed = true;

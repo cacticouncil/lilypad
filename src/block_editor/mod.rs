@@ -8,13 +8,13 @@ use crate::parse::TreeManager;
 mod block_drawer;
 pub mod diagnostics;
 mod gutter_drawer;
+mod highlighter;
 mod lifecycle;
 mod selection_changing;
 mod selection_drawer;
 mod text_drawer;
 mod text_editing;
 pub mod text_range;
-mod highlighter;
 
 use diagnostics::Diagnostic;
 use text_drawer::*;
@@ -90,4 +90,21 @@ fn line_len(row: usize, source: &str) -> usize {
 fn line_count(source: &str) -> usize {
     // add one if the last line is a newline (because the lines method does not include that)
     source.lines().count() + if source.ends_with('\n') { 1 } else { 0 }
+}
+
+// currently not cached because vscode can it change at any time
+// if a bottleneck, could possibly be cached and updated when vscode sends a change
+fn detect_linebreak(text: &str) -> &'static str {
+    if text.contains("\r\n") {
+        "\r\n"
+    } else if text.contains("\n") {
+        "\n"
+    } else {
+        // if no line breaks, default to platform default
+        if cfg!(target_os = "windows") {
+            "\r\n"
+        } else {
+            "\n"
+        }
+    }
 }
