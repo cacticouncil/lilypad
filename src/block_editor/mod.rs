@@ -97,7 +97,7 @@ fn line_count(source: &str) -> usize {
 fn detect_linebreak(text: &str) -> &'static str {
     if text.contains("\r\n") {
         "\r\n"
-    } else if text.contains("\n") {
+    } else if text.contains('\n') {
         "\n"
     } else {
         // if no line breaks, default to platform default

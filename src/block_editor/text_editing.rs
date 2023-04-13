@@ -74,7 +74,7 @@ impl BlockEditor {
         let old_selection = self.selection.ordered();
 
         // update source
-        let linebreak = detect_linebreak(&source);
+        let linebreak = detect_linebreak(source);
         let offsets = old_selection.ordered().offset_in(source);
         source.replace_range(offsets.clone(), linebreak);
 

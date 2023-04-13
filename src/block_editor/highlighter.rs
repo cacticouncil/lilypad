@@ -113,9 +113,7 @@ impl HighlightConfiguration {
         for i in 0..(query.pattern_count()) {
             let pattern_offset = query.start_byte_for_pattern(i);
             if pattern_offset < highlights_query_offset {
-                if pattern_offset < highlights_query_offset {
-                    highlights_pattern_index += 1;
-                }
+                highlights_pattern_index += 1;
             }
         }
 
@@ -186,7 +184,7 @@ impl HighlightConfiguration {
 
                 let mut best_index = None;
                 let mut best_match_len = 0;
-                for (i, recognized_name) in recognized_names.into_iter().enumerate() {
+                for (i, recognized_name) in recognized_names.iter().enumerate() {
                     let mut len = 0;
                     let mut matches = true;
                     for part in recognized_name.as_ref().split('.') {
@@ -234,7 +232,7 @@ impl<'a> HighlightIter<'a> {
         event: Option<HighlightEvent>,
     ) -> Option<HighlightEvent> {
         let result;
-        return if self.byte_offset < offset {
+        if self.byte_offset < offset {
             result = Some(HighlightEvent::Source {
                 start: self.byte_offset,
                 end: offset,
@@ -244,7 +242,7 @@ impl<'a> HighlightIter<'a> {
             result
         } else {
             event
-        };
+        }
     }
 }
 
@@ -311,12 +309,9 @@ impl<'a> Iterator for HighlightIter<'a> {
                         .query
                         .property_settings(match_.pattern_index)
                     {
-                        match prop.key.as_ref() {
-                            "local.scope-inherits" => {
-                                scope.inherits =
-                                    prop.value.as_ref().map_or(true, |r| r.as_ref() == "true");
-                            }
-                            _ => {}
+                        if prop.key.as_ref() == "local.scope-inherits" {
+                            scope.inherits =
+                                prop.value.as_ref().map_or(true, |r| r.as_ref() == "true");
                         }
                     }
                     self.layer.scope_stack.push(scope);
@@ -347,26 +342,24 @@ impl<'a> Iterator for HighlightIter<'a> {
                 }
                 // If the node represents a reference, then try to find the corresponding
                 // definition in the scope stack.
-                else if Some(capture.index) == self.layer.config.local_ref_capture_index {
-                    if definition_highlight.is_none() {
-                        definition_highlight = None;
-                        if let Ok(name) = str::from_utf8(&self.source[range.clone()]) {
-                            for scope in self.layer.scope_stack.iter().rev() {
-                                if let Some(highlight) =
-                                    scope.local_defs.iter().rev().find_map(|def| {
-                                        if def.name == name && range.start >= def.value_range.end {
-                                            Some(def.highlight)
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                {
-                                    reference_highlight = highlight;
-                                    break;
+                else if Some(capture.index) == self.layer.config.local_ref_capture_index
+                    && definition_highlight.is_none()
+                {
+                    definition_highlight = None;
+                    if let Ok(name) = str::from_utf8(&self.source[range.clone()]) {
+                        for scope in self.layer.scope_stack.iter().rev() {
+                            if let Some(highlight) = scope.local_defs.iter().rev().find_map(|def| {
+                                if def.name == name && range.start >= def.value_range.end {
+                                    Some(def.highlight)
+                                } else {
+                                    None
                                 }
-                                if !scope.inherits {
-                                    break;
-                                }
+                            }) {
+                                reference_highlight = highlight;
+                                break;
+                            }
+                            if !scope.inherits {
+                                break;
                             }
                         }
                     }
