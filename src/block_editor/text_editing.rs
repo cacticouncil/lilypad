@@ -68,18 +68,34 @@ impl BlockEditor {
         // will need to redraw because of edits
         self.text_changed = true;
     }
-
+    
     pub fn insert_newline(&mut self, source: &mut String) {
-        // TODO: maintain indent level
+        // find previous indent level and set new line to that many spaces
         let old_selection = self.selection.ordered();
+        let old_line = old_selection.start.y;
+        // indent_level is the number of spaces to be added to the new line
+        let mut indent_level = 0;
+        let mut count = 0;
+        for line in source.lines(){
+            if count == old_line {
+                indent_level = count_whitespace_at_start(line);
+                // adds extra indent level if the previous line ends in a ':'
+                if line.chars().last().unwrap() == ':'{
+                    indent_level = indent_level + 4;
+                }
+                break;
+            }
+            count = count + 1;
+        }
 
         // update source
-        let linebreak = detect_linebreak(source);
+        let indent: &str = &" ".repeat(indent_level);
+        let linebreak = &(detect_linebreak(source).to_owned() + &indent.to_owned());
         let offsets = old_selection.ordered().offset_in(source);
         source.replace_range(offsets.clone(), linebreak);
-
+        
         // move cursor
-        self.selection = TextRange::new_cursor(0, old_selection.start.y + 1);
+        self.selection = TextRange::new_cursor(indent_level, old_selection.start.y + 1);
 
         // update tree
         let edits = InputEdit {
@@ -186,4 +202,11 @@ impl BlockEditor {
     fn send_vscode_edit(text: &str, range: TextRange) {
         vscode::edited(text, range.start.y, range.start.x, range.end.y, range.end.x)
     }
+}
+
+fn count_whitespace_at_start(input: &str) -> usize {
+    input
+    .chars()
+    .take_while(|ch| ch.is_whitespace() && *ch != '\n')
+    .count()
 }
