@@ -23,9 +23,11 @@ A next generation dual modal code editor
 
 1. `just wasm-vscode`
 2. Open `lilypad-vscode/` in [VSCode Insiders](https://code.visualstudio.com/insiders/)
-3. Run using VSCode
+3. `npm install`
+4. Run using VSCode
 
 ### In Browser
 
 1. `just wasm-web`
-2. `http`
+2. `cd lilypad-web`
+3. `http`
