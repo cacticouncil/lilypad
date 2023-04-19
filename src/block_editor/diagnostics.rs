@@ -73,6 +73,7 @@ impl Diagnostic {
         crate::vscode::request_quick_fixes(self.range.start.y, self.range.start.x);
     }
 
+    #[allow(dead_code)]
     pub fn example() -> Diagnostic {
         Diagnostic {
             message: "example diagnostic".to_string(),

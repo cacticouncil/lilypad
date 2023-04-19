@@ -1,6 +1,10 @@
 use tree_sitter_c2rust::InputEdit;
 
-use super::{detect_linebreak, line_count, line_len, text_range::TextEdit, BlockEditor, TextRange};
+use super::{
+    detect_linebreak, line_count, line_len,
+    text_range::{IntPoint, TextEdit},
+    BlockEditor, TextRange,
+};
 use crate::vscode;
 
 impl BlockEditor {
@@ -68,34 +72,25 @@ impl BlockEditor {
         // will need to redraw because of edits
         self.text_changed = true;
     }
-    
+
     pub fn insert_newline(&mut self, source: &mut String) {
         // find previous indent level and set new line to that many spaces
         let old_selection = self.selection.ordered();
-        let old_line = old_selection.start.y;
-        // indent_level is the number of spaces to be added to the new line
-        let mut indent_level = 0;
-        let mut count = 0;
-        for line in source.lines(){
-            if count == old_line {
-                indent_level = count_whitespace_at_start(line);
-                // adds extra indent level if the previous line ends in a ':'
-                if line.chars().last().unwrap() == ':'{
-                    indent_level = indent_level + 4;
-                }
-                break;
-            }
-            count = count + 1;
-        }
+
+        // find the indent level of the next line
+        // (same as current line & increase if current line ends in colon)
+        let curr_line = source.lines().nth(old_selection.start.y).unwrap_or("");
+        let indent_inc = if curr_line.ends_with(':') { 4 } else { 0 };
+        let next_indent = whitespace_at_start(curr_line) + indent_inc;
 
         // update source
-        let indent: &str = &" ".repeat(indent_level);
-        let linebreak = &(detect_linebreak(source).to_owned() + &indent.to_owned());
+        let indent: &str = &" ".repeat(next_indent);
+        let linebreak = &(detect_linebreak(source).to_owned() + indent);
         let offsets = old_selection.ordered().offset_in(source);
         source.replace_range(offsets.clone(), linebreak);
-        
+
         // move cursor
-        self.selection = TextRange::new_cursor(indent_level, old_selection.start.y + 1);
+        self.selection = TextRange::new_cursor(next_indent, old_selection.start.y + 1);
 
         // update tree
         let edits = InputEdit {
@@ -118,82 +113,59 @@ impl BlockEditor {
     pub fn backspace(&mut self, source: &mut String) {
         let old_selection = self.selection.ordered();
 
-        // for normal cursor, delete preceding character
-        if old_selection.is_cursor() {
-            // move cursor
+        let delete_selection = if old_selection.is_cursor() {
+            // if a cursor, delete the preceding character
             if old_selection.start.x == 0 {
                 // abort if in position (0,0)
                 if old_selection.start.y == 0 {
                     return;
                 }
 
-                // Move to the end of the line above.
-                // Done before string modified so if a newline is deleted,
-                // the cursor is sandwiched between the two newly joined lines.
+                // delete up to the end of the above line
                 let above = old_selection.start.y - 1;
-                self.selection = TextRange::new_cursor(line_len(above, source), above);
-
-                // update vscode
-                vscode::edited(
-                    "",
-                    old_selection.start.y - 1,
-                    line_len(above, source),
-                    old_selection.start.y,
-                    old_selection.start.x,
+                TextRange::new(
+                    IntPoint::new(line_len(above, source), above),
+                    old_selection.start,
                 )
             } else {
-                // just move back one char
-                self.selection =
-                    TextRange::new_cursor(old_selection.start.x - 1, old_selection.start.y);
+                let mut delete_amount = 1;
 
-                // update vscode
-                vscode::edited(
-                    "",
-                    old_selection.start.y,
-                    old_selection.start.x - 1,
-                    old_selection.start.y,
-                    old_selection.start.x,
+                // de-indent if at start of line
+                let line_indent = indent_of_line(source, old_selection.start.y);
+                if old_selection.start.x == line_indent {
+                    delete_amount = 4;
+                }
+
+                TextRange::new(
+                    IntPoint::new(old_selection.start.x - delete_amount, old_selection.start.y),
+                    old_selection.start,
                 )
             }
+        } else {
+            // if a selection, delete the whole selection
+            old_selection
+        };
 
-            // update source
-            let offset = old_selection.start.offset_in(source);
-            let removed = source.remove(offset - 1);
+        // set cursor to start of what is being deleted
+        self.selection = TextRange::new(delete_selection.start, delete_selection.start);
 
-            // update tree
-            let edits = InputEdit {
-                start_byte: offset,
-                old_end_byte: offset,
-                new_end_byte: offset - removed.len_utf8(),
-                start_position: old_selection.start.as_tree_sitter(),
-                old_end_position: old_selection.start.as_tree_sitter(),
-                new_end_position: self.selection.start.as_tree_sitter(),
-            };
-            self.tree_manager.borrow_mut().update(source, edits);
-        }
-        // for selection, delete text inside
-        else {
-            // set cursor to start of selection
-            self.selection = TextRange::new_cursor(old_selection.start.x, old_selection.start.y);
+        // remove everything in range
+        let delete_offsets = delete_selection.offset_in(source);
+        source.replace_range(delete_offsets.clone(), "");
 
-            // remove everything in range
-            let offsets = old_selection.offset_in(source);
-            source.replace_range(offsets.clone(), "");
+        // update tree
+        let edits = InputEdit {
+            start_byte: delete_offsets.start,
+            old_end_byte: delete_offsets.end,
+            new_end_byte: delete_offsets.start,
+            start_position: delete_selection.start.as_tree_sitter(),
+            old_end_position: delete_selection.end.as_tree_sitter(),
+            new_end_position: delete_selection.start.as_tree_sitter(),
+        };
+        self.tree_manager.borrow_mut().update(source, edits);
 
-            // update tree
-            let edits = InputEdit {
-                start_byte: offsets.start,
-                old_end_byte: offsets.end,
-                new_end_byte: offsets.start,
-                start_position: old_selection.start.as_tree_sitter(),
-                old_end_position: old_selection.end.as_tree_sitter(),
-                new_end_position: old_selection.start.as_tree_sitter(),
-            };
-            self.tree_manager.borrow_mut().update(source, edits);
-
-            // update vscode
-            Self::send_vscode_edit("", old_selection);
-        }
+        // update vscode
+        Self::send_vscode_edit("", delete_selection);
 
         // will need to redraw because of edits
         self.text_changed = true;
@@ -204,9 +176,13 @@ impl BlockEditor {
     }
 }
 
-fn count_whitespace_at_start(input: &str) -> usize {
+fn indent_of_line(source: &str, line: usize) -> usize {
+    whitespace_at_start(source.lines().nth(line).unwrap_or(""))
+}
+
+fn whitespace_at_start(input: &str) -> usize {
     input
-    .chars()
-    .take_while(|ch| ch.is_whitespace() && *ch != '\n')
-    .count()
+        .chars()
+        .take_while(|ch| ch.is_whitespace() && *ch != '\n')
+        .count()
 }

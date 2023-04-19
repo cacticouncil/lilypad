@@ -16,7 +16,7 @@ fn main() -> Result<(), PlatformError> {
     let source = get_test_string("test3.py");
     let data = EditorModel {
         source,
-        diagnostics: vec![block_editor::diagnostics::Diagnostic::example()],
+        diagnostics: vec![],
         diagnostic_selection: None,
     };
     // launch
