@@ -19,6 +19,7 @@ impl BlockEditor {
         let last_line_len = edit.text.lines().last().unwrap_or("").chars().count();
 
         // move cursor
+        // TODO: fix vscode undo/redo positioning
         self.selection = TextRange::new_cursor(
             if line_count == 0 {
                 old_selection.start.x
@@ -41,13 +42,15 @@ impl BlockEditor {
 
         // will need to redraw because of edits
         self.text_changed = true;
+
+        self.input_ignore_stack.clear();
+        self.paired_delete_stack.clear();
     }
 
     pub fn insert_str(&mut self, source: &mut String, add: &str) {
         // update source
         let old_selection = self.selection.ordered();
         let offsets = old_selection.offset_in(source);
-        source.replace_range(offsets.clone(), add);
 
         // move cursor
         self.selection = TextRange::new_cursor(
@@ -55,19 +58,85 @@ impl BlockEditor {
             old_selection.start.y,
         );
 
+        // don't insert if previously automatically inserted
+        // this is cleared whenever the cursor is manually moved
+        if Some(add) == self.input_ignore_stack.last().copied() {
+            self.input_ignore_stack.pop();
+            self.paired_delete_stack.clear();
+            return;
+        }
+
+        // (what is added, full insertion, string)
+        let pair_completion = match add {
+            "'" => Some(("'", "''", true)),
+            "\"" => Some(("\"", "\"\"", true)),
+            "(" => Some((")", "()", false)),
+            "[" => Some(("]", "[]", false)),
+            "{" => Some(("}", "{}", false)),
+            _ => None,
+        };
+
+        let actual_add = if let Some((additional, full_add, for_string)) = pair_completion {
+            // only insert if the previous and next characters meet the conditions
+            // (different conditions for string or not)
+            let mut chars = source.chars();
+            let prior_char = if offsets.start > 0 {
+                chars.nth(offsets.start - 1).unwrap_or('\0')
+            } else {
+                '\0'
+            };
+            let next_char = chars.next().unwrap_or('\0');
+
+            let should_insert = if for_string {
+                let add_char = add.chars().next().unwrap();
+                // if there is a character before, they probably want that to be inside (& allow f strings)
+                !(prior_char.is_alphanumeric() && prior_char != 'f')
+                    // if there is a character following, they probably want that to be inside
+                    && !next_char.is_alphanumeric()
+                    // multiline strings are 3 long, this prevents jumping to 4
+                    && prior_char != add_char
+                    && next_char != add_char
+            } else {
+                // only care about next character because parenthesis and brackets
+                // can be attached to the character before
+                !next_char.is_alphanumeric()
+            };
+
+            if should_insert {
+                self.input_ignore_stack.push(additional);
+                self.paired_delete_stack.push(true);
+                full_add
+            } else {
+                if !self.paired_delete_stack.is_empty() {
+                    self.paired_delete_stack.push(false);
+                }
+                add
+            }
+        } else {
+            if !self.paired_delete_stack.is_empty() {
+                self.paired_delete_stack.push(false);
+            }
+            add
+        };
+
+        source.replace_range(offsets.clone(), actual_add);
+
         // update tree
         let edits = InputEdit {
             start_byte: offsets.start,
             old_end_byte: offsets.end,
-            new_end_byte: offsets.start + add.len(),
+            new_end_byte: offsets.start + actual_add.len(),
             start_position: old_selection.start.as_tree_sitter(),
             old_end_position: old_selection.end.as_tree_sitter(),
-            new_end_position: self.selection.end.as_tree_sitter(),
+            new_end_position: tree_sitter_c2rust::Point::new(
+                old_selection.start.y,
+                old_selection.start.x + actual_add.chars().count(),
+            ),
         };
         self.tree_manager.borrow_mut().update(source, edits);
 
         // update vscode
-        Self::send_vscode_edit(add, old_selection);
+        Self::send_vscode_edit(actual_add, old_selection);
 
         // will need to redraw because of edits
         self.text_changed = true;
@@ -128,17 +197,29 @@ impl BlockEditor {
                     old_selection.start,
                 )
             } else {
-                let mut delete_amount = 1;
-
                 // de-indent if at start of line
                 let line_indent = indent_of_line(source, old_selection.start.y);
-                if old_selection.start.x == line_indent {
-                    delete_amount = 4;
-                }
+                let at_start = old_selection.start.x == line_indent;
+                let before_delete_amount = if at_start { 4 } else { 1 };
+
+                let paired = self.paired_delete_stack.pop().unwrap_or(false);
+                let after_delete_amount = if paired {
+                    // pop from ignore stack because we're going to delete the relevant character
+                    self.input_ignore_stack.pop();
+                    1
+                } else {
+                    0
+                };
 
                 TextRange::new(
-                    IntPoint::new(old_selection.start.x - delete_amount, old_selection.start.y),
-                    old_selection.start,
+                    IntPoint::new(
+                        old_selection.start.x - before_delete_amount,
+                        old_selection.start.y,
+                    ),
+                    IntPoint::new(
+                        old_selection.start.x + after_delete_amount,
+                        old_selection.start.y,
+                    ),
                 )
             }
         } else {

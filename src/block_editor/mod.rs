@@ -38,22 +38,55 @@ pub const FONT_WIDTH: f64 = 9.0;
 pub const FONT_HEIGHT: f64 = 20.0;
 pub const FONT_SIZE: f64 = 15.0;
 
+/// padding around edges of entire editor
 const OUTER_PAD: f64 = 16.0;
+
+/// left padding on text (to position it nicer within the blocks)
 const TEXT_L_PAD: f64 = 2.0;
+
+/// width for the line number gutter
 const GUTTER_WIDTH: f64 = 30.0;
+
+/// convenience constant for all the padding that impacts text layout
 const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 
 pub struct BlockEditor {
+    /// generates syntax tree from source code
     tree_manager: Arc<RefCell<TreeManager>>,
+
+    /// the currently selected text
     selection: TextRange,
+
+    /// if the left mouse button is currently pressed
     mouse_pressed: bool,
-    timer_id: TimerToken,
+
+    /// the timer that toggles the cursor
+    cursor_timer: TimerToken,
+
+    /// if the blinking cursor is visible
     cursor_visible: bool,
+
+    /// object to calculate text views
     text_drawer: TextDrawer,
+
+    /// if the blocks and text need to be re-rendered
     text_changed: bool,
+
+    /// blocks to draw
     blocks: Vec<block_drawer::Block>,
+
+    /// padding between each line
     padding: Vec<f64>,
+
+    /// overlay view for diagnostics
     diagnostic_popup: WidgetPod<EditorModel, DiagnosticPopup>,
+
+    /// pairs that were inserted and should be ignored on the next input
+    input_ignore_stack: Vec<&'static str>,
+
+    /// tracking which characters had pairs inserted with them, and should take
+    /// the pair down with them if they are deleted
+    paired_delete_stack: Vec<bool>,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -71,13 +104,15 @@ impl BlockEditor {
             tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
             selection: TextRange::ZERO,
             mouse_pressed: false,
-            timer_id: TimerToken::INVALID,
+            cursor_timer: TimerToken::INVALID,
             cursor_visible: true,
             text_drawer: TextDrawer::new(),
             text_changed: true,
             blocks: vec![],
             padding: vec![],
             diagnostic_popup: WidgetPod::new(DiagnosticPopup::new()),
+            input_ignore_stack: vec![],
+            paired_delete_stack: vec![],
         }
     }
 }

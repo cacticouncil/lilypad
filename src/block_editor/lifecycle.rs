@@ -25,15 +25,15 @@ impl Widget<EditorModel> for BlockEditor {
         match event {
             Event::WindowConnected => {
                 //starts initial timer
-                self.timer_id = ctx.request_timer(TIMER_INTERVAL);
+                self.cursor_timer = ctx.request_timer(TIMER_INTERVAL);
             }
             Event::Timer(id) => {
-                if *id == self.timer_id {
+                if *id == self.cursor_timer {
                     //make cursor blink and then reset timer
                     //println!("timer done");
                     self.cursor_visible = !self.cursor_visible;
                     ctx.request_paint();
-                    self.timer_id = ctx.request_timer(TIMER_INTERVAL);
+                    self.cursor_timer = ctx.request_timer(TIMER_INTERVAL);
                 }
             }
             Event::MouseDown(mouse) if mouse.button == MouseButton::Left => {

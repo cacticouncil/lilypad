@@ -18,7 +18,11 @@ impl BlockEditor {
                 clamp_col(cursor_pos.y - 1, cursor_pos.x, source),
                 cursor_pos.y - 1,
             )
-        }
+        };
+
+        // clear input ignore stack
+        self.input_ignore_stack.clear();
+        self.paired_delete_stack.clear();
     }
 
     pub fn cursor_down(&mut self, source: &str) {
@@ -37,7 +41,11 @@ impl BlockEditor {
         } else {
             // same memory thing as above applies here
             TextRange::new_cursor(clamp_col(next_line, cursor_pos.x, source), next_line)
-        }
+        };
+
+        // clear input ignore stack
+        self.input_ignore_stack.clear();
+        self.paired_delete_stack.clear();
     }
 
     pub fn cursor_left(&mut self, source: &str) {
@@ -58,6 +66,10 @@ impl BlockEditor {
             let start = self.selection.ordered().start;
             self.selection = TextRange::new_cursor(start.x, start.y);
         }
+
+        // clear input ignore stack
+        self.input_ignore_stack.clear();
+        self.paired_delete_stack.clear();
     }
 
     pub fn cursor_right(&mut self, source: &str) {
@@ -80,6 +92,10 @@ impl BlockEditor {
             let end = self.selection.ordered().end;
             self.selection = TextRange::new_cursor(end.x, end.y);
         }
+
+        // clear input ignore stack
+        self.input_ignore_stack.clear();
+        self.paired_delete_stack.clear();
     }
 
     pub fn cursor_to_line_start(&mut self, source: &str) {
@@ -89,6 +105,9 @@ impl BlockEditor {
         let line = source.lines().nth(cursor_pos.y).unwrap_or("");
         let start_idx = line.len() - line.trim_start().len();
         self.selection = TextRange::new_cursor(start_idx, cursor_pos.y);
+
+        // clear input ignore stack
+        self.input_ignore_stack.clear();
     }
 
     pub fn cursor_to_line_end(&mut self, source: &str) {
@@ -96,6 +115,10 @@ impl BlockEditor {
         let cursor_pos = self.selection.end;
 
         self.selection = TextRange::new_cursor(line_len(cursor_pos.y, source), cursor_pos.y);
+
+        // clear input ignore stack
+        self.input_ignore_stack.clear();
+        self.paired_delete_stack.clear();
     }
 
     /* ------------------------------ Mouse Clicks ------------------------------ */
@@ -104,6 +127,10 @@ impl BlockEditor {
         let loc = self.mouse_to_coord(mouse, source);
         self.selection.start = loc;
         self.selection.end = loc;
+
+        // clear input ignore stack
+        self.input_ignore_stack.clear();
+        self.paired_delete_stack.clear();
 
         // request keyboard focus if not already focused
         if !ctx.is_focused() {
