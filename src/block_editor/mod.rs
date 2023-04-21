@@ -1,6 +1,5 @@
 use druid::{widget::Scroll, Data, TimerToken, Widget, WidgetPod};
-use std::cell::RefCell;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::parse::TreeManager;
@@ -56,7 +55,7 @@ pub fn widget() -> impl Widget<EditorModel> {
 
 struct BlockEditor {
     /// generates syntax tree from source code
-    tree_manager: Arc<RefCell<TreeManager>>,
+    tree_manager: TreeManager,
 
     /// the currently selected text
     selection: TextRange,
@@ -95,7 +94,7 @@ struct BlockEditor {
 
 #[derive(Clone, Data)]
 pub struct EditorModel {
-    pub source: String,
+    pub source: Arc<Mutex<String>>,
     #[data(eq)]
     pub diagnostics: Vec<Diagnostic>,
     #[data(eq)]
@@ -105,7 +104,7 @@ pub struct EditorModel {
 impl BlockEditor {
     fn new() -> Self {
         BlockEditor {
-            tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
+            tree_manager: TreeManager::new(""),
             selection: TextRange::ZERO,
             mouse_pressed: false,
             cursor_timer: TimerToken::INVALID,

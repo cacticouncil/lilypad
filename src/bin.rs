@@ -9,6 +9,7 @@ use druid::{
     WindowDesc,
 };
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use block_editor::EditorModel;
 
@@ -18,7 +19,7 @@ pub struct AppModel {
     pub dir: Option<PathBuf>,
     pub file: Option<String>,
 
-    pub source: String,
+    pub source: Arc<Mutex<String>>,
     #[data(eq)]
     pub diagnostics: Vec<block_editor::diagnostics::Diagnostic>,
     #[data(eq)]
@@ -54,7 +55,7 @@ fn main() -> Result<(), PlatformError> {
     let data = AppModel {
         dir: None,
         file: None,
-        source: String::new(),
+        source: Arc::new(Mutex::new(String::new())),
         diagnostics: vec![],
         diagnostic_selection: None,
     };

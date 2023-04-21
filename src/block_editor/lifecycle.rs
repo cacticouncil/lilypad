@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use druid::{
     Event, KbKey, LifeCycle, Modifiers, MouseButton, PaintCtx, Point, Rect, RenderContext, Size,
     Widget,
@@ -38,7 +40,7 @@ impl Widget<EditorModel> for BlockEditor {
                 }
             }
             Event::MouseDown(mouse) if mouse.button == MouseButton::Left => {
-                self.mouse_clicked(mouse, &data.source, ctx);
+                self.mouse_clicked(mouse, &data.source.lock().unwrap(), ctx);
                 self.mouse_pressed = true;
                 ctx.set_handled();
             }
@@ -51,7 +53,7 @@ impl Widget<EditorModel> for BlockEditor {
                 // TODO: change to a hover??
                 // TODO: multiple diagnostics displayed at once
                 if self.selection.is_cursor() {
-                    let coord = self.mouse_to_coord(mouse, &data.source);
+                    let coord = self.mouse_to_coord(mouse, &data.source.lock().unwrap());
                     data.diagnostic_selection = None;
                     for diagnostic in &data.diagnostics {
                         if diagnostic.range.contains(coord) {
@@ -68,7 +70,7 @@ impl Widget<EditorModel> for BlockEditor {
 
             Event::MouseMove(mouse) => {
                 if self.mouse_pressed {
-                    self.mouse_dragged(mouse, &data.source, ctx);
+                    self.mouse_dragged(mouse, &data.source.lock().unwrap(), ctx);
                     ctx.request_paint();
                     ctx.set_handled();
                 }
@@ -85,20 +87,22 @@ impl Widget<EditorModel> for BlockEditor {
 
                 match &key_event.key {
                     // Text Inputs
-                    KbKey::Backspace => self.backspace(&mut data.source),
-                    KbKey::Enter => self.insert_newline(&mut data.source),
-                    KbKey::Tab => self.insert_str(&mut data.source, "    "),
-                    KbKey::Character(char) => self.insert_str(&mut data.source, char),
+                    KbKey::Backspace => self.backspace(&mut data.source.lock().unwrap()),
+                    KbKey::Enter => self.insert_newline(&mut data.source.lock().unwrap()),
+                    KbKey::Tab => self.insert_str(&mut data.source.lock().unwrap(), "    "),
+                    KbKey::Character(char) => {
+                        self.insert_str(&mut data.source.lock().unwrap(), char)
+                    }
 
                     // Arrow Keys
-                    KbKey::ArrowUp => self.cursor_up(&data.source),
-                    KbKey::ArrowDown => self.cursor_down(&data.source),
-                    KbKey::ArrowLeft => self.cursor_left(&data.source),
-                    KbKey::ArrowRight => self.cursor_right(&data.source),
+                    KbKey::ArrowUp => self.cursor_up(&data.source.lock().unwrap()),
+                    KbKey::ArrowDown => self.cursor_down(&data.source.lock().unwrap()),
+                    KbKey::ArrowLeft => self.cursor_left(&data.source.lock().unwrap()),
+                    KbKey::ArrowRight => self.cursor_right(&data.source.lock().unwrap()),
 
                     // Home and End buttons
-                    KbKey::Home => self.cursor_to_line_start(&data.source),
-                    KbKey::End => self.cursor_to_line_end(&data.source),
+                    KbKey::Home => self.cursor_to_line_start(&data.source.lock().unwrap()),
+                    KbKey::End => self.cursor_to_line_end(&data.source.lock().unwrap()),
 
                     _ => {}
                 }
@@ -118,8 +122,8 @@ impl Widget<EditorModel> for BlockEditor {
                 // VSCode new text
                 if let Some(new_text) = command.get(vscode::SET_TEXT_SELECTOR) {
                     // update state and tree
-                    data.source = new_text.clone();
-                    self.tree_manager.borrow_mut().replace(&data.source);
+                    data.source = Arc::new(Mutex::new(new_text.clone()));
+                    self.tree_manager.replace(new_text);
 
                     // reset cursor
                     self.selection = TextRange::ZERO;
@@ -132,30 +136,32 @@ impl Widget<EditorModel> for BlockEditor {
 
                     ctx.set_handled();
                 } else if let Some(edit) = command.get(vscode::APPLY_EDIT_SELECTOR) {
-                    self.apply_edit(&mut data.source, edit);
+                    self.apply_edit(&mut data.source.lock().unwrap(), edit);
                     ctx.set_handled();
                 }
                 // VSCode Copy/Cut/Paste
                 else if command.get(vscode::COPY_SELECTOR).is_some() {
-                    let selection = self.selection.ordered().offset_in(&data.source);
-                    let selected_text = data.source[selection.start..selection.end].to_string();
+                    let source = data.source.lock().unwrap();
+                    let selection = self.selection.ordered().offset_in(&source);
+                    let selected_text = source[selection.start..selection.end].to_string();
                     vscode::set_clipboard(selected_text);
 
                     ctx.set_handled();
                 } else if command.get(vscode::CUT_SELECTOR).is_some() {
                     // get selection
-                    let selection = self.selection.ordered().offset_in(&data.source);
-                    let selected_text = data.source[selection.start..selection.end].to_string();
+                    let mut source = data.source.lock().unwrap();
+                    let selection = self.selection.ordered().offset_in(&source);
+                    let selected_text = source[selection.start..selection.end].to_string();
 
                     // remove selection
-                    self.insert_str(&mut data.source, "");
+                    self.insert_str(&mut source, "");
 
                     // return selection
                     vscode::set_clipboard(selected_text);
 
                     ctx.set_handled()
                 } else if let Some(text) = command.get(vscode::PASTE_SELECTOR) {
-                    self.insert_str(&mut data.source, text);
+                    self.insert_str(&mut data.source.lock().unwrap(), text);
                     ctx.set_handled();
                 }
                 // VSCode Diagnostics
@@ -192,12 +198,8 @@ impl Widget<EditorModel> for BlockEditor {
         env: &druid::Env,
     ) -> Size {
         // width is max between text and window
-        let max_chars = data
-            .source
-            .lines()
-            .map(|l| l.chars().count())
-            .max()
-            .unwrap_or(0);
+        let source = data.source.lock().unwrap();
+        let max_chars = source.lines().map(|l| l.chars().count()).max().unwrap_or(0);
         let width = max_chars as f64 * FONT_WIDTH
             + super::OUTER_PAD
             + super::GUTTER_WIDTH
@@ -205,7 +207,7 @@ impl Widget<EditorModel> for BlockEditor {
             + 40.0; // extra space for nesting blocks
 
         // height is just height of text
-        let height = super::line_count(&data.source) as f64 * FONT_HEIGHT
+        let height = super::line_count(&source) as f64 * FONT_HEIGHT
             + super::OUTER_PAD
             + self.padding.iter().sum::<f64>();
 
@@ -222,18 +224,19 @@ impl Widget<EditorModel> for BlockEditor {
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, env: &druid::Env) {
         // recompute cached objects if text changed
         if self.text_changed {
+            let source = data.source.lock().unwrap();
+
             // get blocks
-            let tree_manager = self.tree_manager.borrow();
-            let mut cursor = tree_manager.get_cursor();
+            let mut cursor = self.tree_manager.get_cursor();
             self.blocks = block_drawer::blocks_for_tree(&mut cursor);
 
             // get padding
-            let line_count = super::line_count(&data.source);
+            let line_count = super::line_count(&source);
             self.padding = block_drawer::make_padding(&self.blocks, line_count);
 
             // layout text
             self.text_drawer
-                .layout(tree_manager.get_cursor().node(), &data.source, ctx);
+                .layout(self.tree_manager.get_cursor().node(), &source, ctx);
 
             self.text_changed = false;
         }
@@ -244,7 +247,7 @@ impl Widget<EditorModel> for BlockEditor {
 
         // draw selection under text and blocks
         if !self.selection.is_cursor() {
-            self.draw_selection(&data.source, ctx);
+            self.draw_selection(&data.source.lock().unwrap(), ctx);
         }
 
         // draw content
@@ -276,7 +279,7 @@ impl Widget<EditorModel> for BlockEditor {
     ) {
         // replace the tree with a tree for the initial source
         if let LifeCycle::WidgetAdded = event {
-            self.tree_manager.borrow_mut().replace(&data.source)
+            self.tree_manager.replace(&data.source.lock().unwrap())
         }
 
         // add diagnostic popup child

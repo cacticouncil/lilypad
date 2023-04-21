@@ -38,7 +38,7 @@ impl BlockEditor {
             old_end_position: old_selection.end.as_tree_sitter(),
             new_end_position: self.selection.end.as_tree_sitter(),
         };
-        self.tree_manager.borrow_mut().update(source, edits);
+        self.tree_manager.update(source, edits);
 
         // will need to redraw because of edits
         self.text_changed = true;
@@ -133,7 +133,7 @@ impl BlockEditor {
                 old_selection.start.x + actual_add.chars().count(),
             ),
         };
-        self.tree_manager.borrow_mut().update(source, edits);
+        self.tree_manager.update(source, edits);
 
         // update vscode
         Self::send_vscode_edit(actual_add, old_selection);
@@ -170,7 +170,7 @@ impl BlockEditor {
             old_end_position: old_selection.end.as_tree_sitter(),
             new_end_position: self.selection.end.as_tree_sitter(),
         };
-        self.tree_manager.borrow_mut().update(source, edits);
+        self.tree_manager.update(source, edits);
 
         // update vscode
         Self::send_vscode_edit(linebreak, old_selection);
@@ -243,7 +243,7 @@ impl BlockEditor {
             old_end_position: delete_selection.end.as_tree_sitter(),
             new_end_position: delete_selection.start.as_tree_sitter(),
         };
-        self.tree_manager.borrow_mut().update(source, edits);
+        self.tree_manager.update(source, edits);
 
         // update vscode
         Self::send_vscode_edit("", delete_selection);

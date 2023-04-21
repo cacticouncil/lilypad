@@ -4,7 +4,7 @@ mod theme;
 
 use druid::{AppLauncher, ExtEventSink, PlatformError, Target, WindowDesc};
 use once_cell::sync::OnceCell;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::*;
 
 use block_editor::{
@@ -154,7 +154,7 @@ static EVENT_SINK: OnceCell<Arc<ExtEventSink>> = OnceCell::new();
 fn main() -> Result<(), PlatformError> {
     // start with empty string
     let data = EditorModel {
-        source: String::new(),
+        source: Arc::new(Mutex::new(String::new())),
         diagnostics: vec![],
         diagnostic_selection: None,
     };
