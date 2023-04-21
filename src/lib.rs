@@ -2,8 +2,7 @@ mod block_editor;
 mod parse;
 mod theme;
 
-use druid::widget::Scroll;
-use druid::{AppLauncher, ExtEventSink, PlatformError, Target, Widget, WindowDesc};
+use druid::{AppLauncher, ExtEventSink, PlatformError, Target, WindowDesc};
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
@@ -11,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use block_editor::{
     diagnostics::{Diagnostic, VSCodeCommand},
     text_range::TextEdit,
-    BlockEditor, EditorModel,
+    EditorModel,
 };
 
 #[wasm_bindgen]
@@ -161,7 +160,7 @@ fn main() -> Result<(), PlatformError> {
     };
 
     // create main window
-    let main_window = WindowDesc::new(ui_builder()).title("Lilypad Editor");
+    let main_window = WindowDesc::new(block_editor::widget()).title("Lilypad Editor");
     let launcher = AppLauncher::with_window(main_window);
 
     // get event sink for launcher
@@ -171,8 +170,4 @@ fn main() -> Result<(), PlatformError> {
 
     // start app
     launcher.launch(data)
-}
-
-fn ui_builder() -> impl Widget<EditorModel> {
-    Scroll::new(BlockEditor::new()).content_must_fill(true)
 }

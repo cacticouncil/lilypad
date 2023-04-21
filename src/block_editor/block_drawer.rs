@@ -238,6 +238,12 @@ pub fn make_padding(blocks: &Vec<Block>, line_count: usize) -> Vec<f64> {
 }
 
 fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
+    // do not calculate padding for empty file
+    // (there will still be one block for an empty file)
+    if padding.is_empty() {
+        return;
+    }
+
     for block in blocks {
         if block.syntax_type != BlockType::Divider {
             padding[block.line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;

@@ -15,7 +15,6 @@ impl TextRange {
         end: IntPoint::ZERO,
     };
 
-    #[allow(dead_code)] // will be used later
     pub fn new(start: IntPoint, end: IntPoint) -> Self {
         TextRange { start, end }
     }

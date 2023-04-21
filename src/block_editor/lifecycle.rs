@@ -4,7 +4,8 @@ use druid::{
 };
 
 use super::{
-    block_drawer, gutter_drawer, BlockEditor, EditorModel, FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL,
+    block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel, FONT_HEIGHT,
+    FONT_WIDTH, TIMER_INTERVAL,
 };
 use crate::{theme, vscode};
 
@@ -120,11 +121,14 @@ impl Widget<EditorModel> for BlockEditor {
                     data.source = new_text.clone();
                     self.tree_manager.borrow_mut().replace(&data.source);
 
+                    // reset cursor
+                    self.selection = TextRange::ZERO;
+
                     // mark new text layout
                     self.text_changed = true;
 
-                    ctx.set_handled();
                     ctx.request_layout();
+                    ctx.request_paint();
 
                     ctx.set_handled();
                 } else if let Some(edit) = command.get(vscode::APPLY_EDIT_SELECTOR) {
@@ -194,18 +198,17 @@ impl Widget<EditorModel> for BlockEditor {
             .map(|l| l.chars().count())
             .max()
             .unwrap_or(0);
-        let text_width = max_chars as f64 * FONT_WIDTH
+        let width = max_chars as f64 * FONT_WIDTH
             + super::OUTER_PAD
             + super::GUTTER_WIDTH
             + super::TEXT_L_PAD
             + 40.0; // extra space for nesting blocks
-        let window_width = ctx.window().get_size().width;
-        let width = f64::max(text_width, window_width);
 
         // height is just height of text
         let height = super::line_count(&data.source) as f64 * FONT_HEIGHT
             + super::OUTER_PAD
             + self.padding.iter().sum::<f64>();
+
         let desired = Size { width, height };
 
         // add hover child

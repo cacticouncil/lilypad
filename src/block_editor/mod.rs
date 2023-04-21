@@ -1,4 +1,4 @@
-use druid::{Data, Lens, TimerToken, WidgetPod};
+use druid::{widget::Scroll, Data, TimerToken, Widget, WidgetPod};
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::time::Duration;
@@ -50,7 +50,11 @@ const GUTTER_WIDTH: f64 = 30.0;
 /// convenience constant for all the padding that impacts text layout
 const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 
-pub struct BlockEditor {
+pub fn widget() -> impl Widget<EditorModel> {
+    Scroll::new(BlockEditor::new()).content_must_fill(true)
+}
+
+struct BlockEditor {
     /// generates syntax tree from source code
     tree_manager: Arc<RefCell<TreeManager>>,
 
@@ -89,7 +93,7 @@ pub struct BlockEditor {
     paired_delete_stack: Vec<bool>,
 }
 
-#[derive(Clone, Data, Lens)]
+#[derive(Clone, Data)]
 pub struct EditorModel {
     pub source: String,
     #[data(eq)]
@@ -99,7 +103,7 @@ pub struct EditorModel {
 }
 
 impl BlockEditor {
-    pub fn new() -> Self {
+    fn new() -> Self {
         BlockEditor {
             tree_manager: Arc::new(RefCell::new(TreeManager::new(""))),
             selection: TextRange::ZERO,

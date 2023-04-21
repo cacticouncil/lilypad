@@ -31,7 +31,7 @@ pub fn draw_line_numbers(padding: &Vec<f64>, curr_line: usize, ctx: &mut PaintCt
 fn make_num_text(num: usize, curr: bool, ctx: &mut PaintCtx) -> PietTextLayout {
     let font_family = FontFamily::new_unchecked("Roboto Mono");
     let color = if curr {
-        theme::syntax::DEFAULT
+        theme::INTERFACE_TEXT
     } else {
         theme::LINE_NUMBERS
     };
