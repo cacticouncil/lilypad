@@ -69,6 +69,7 @@ impl Widget<AppModel> for FilePicker {
                     .unwrap()
                     .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
                     .collect::<Vec<_>>();
+                self.files.sort_unstable();
             } else {
                 self.files.clear();
             }
@@ -122,7 +123,12 @@ impl Widget<AppModel> for FilePicker {
 }
 
 fn make_text_layout(text: &str, ctx: &mut PaintCtx) -> PietTextLayout {
-    let font_family = FontFamily::new_unchecked("SF Pro Text");
+    let font_family = if cfg!(target_os = "macos") {
+        FontFamily::new_unchecked("SF Pro Text")
+    } else {
+        FontFamily::new_unchecked("San Serif")
+    };
+
     ctx.text()
         .new_text_layout(text.to_string())
         .font(font_family, 15.0)

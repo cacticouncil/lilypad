@@ -49,6 +49,7 @@ pub const INTERFACE_TEXT: Color = one_dark::WHITE;
 pub const BACKGROUND: Color = one_dark::BLACK;
 pub const CURSOR: Color = Color::rgb8(0x52, 0x8B, 0xFF);
 pub const SELECTION: Color = Color::rgb8(0x3D, 0x45, 0x55);
+pub const PSEUDO_SELECTION: Color = Color::rgba8(0xA0, 0x1C, 0x08, 0x40);
 pub const POPUP_BACKGROUND: Color = Color::rgb8(0x1E, 0x22, 0x27);
 pub const LINE_NUMBERS: Color = one_dark::GUTTER_GREY;
 

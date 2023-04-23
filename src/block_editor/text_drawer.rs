@@ -10,6 +10,7 @@ use std::{
 };
 
 use super::highlighter::{Highlight, HighlightConfiguration, HighlightEvent};
+use super::text_util::detect_linebreak;
 use super::{FONT_HEIGHT, FONT_SIZE};
 use crate::theme;
 
@@ -67,7 +68,7 @@ impl TextDrawer {
         let mut start_of_line = 0;
         let mut category_stack: Vec<Highlight> = vec![];
 
-        let linebreak_len = super::detect_linebreak(source).len();
+        let linebreak_len = detect_linebreak(source).len();
 
         for line in source.lines() {
             let mut colored_text = ColoredTextBuilder::new(line);

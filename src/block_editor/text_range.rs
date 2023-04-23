@@ -1,28 +1,30 @@
 use serde::{Deserialize, Deserializer};
 use std::ops::Range;
 
+use super::text_util::detect_linebreak;
+
 /* ------------------------------- Text Range ------------------------------- */
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct TextRange {
-    pub start: IntPoint,
-    pub end: IntPoint,
+    pub start: TextPoint,
+    pub end: TextPoint,
 }
 
 impl TextRange {
     pub const ZERO: Self = TextRange {
-        start: IntPoint::ZERO,
-        end: IntPoint::ZERO,
+        start: TextPoint::ZERO,
+        end: TextPoint::ZERO,
     };
 
-    pub fn new(start: IntPoint, end: IntPoint) -> Self {
+    pub fn new(start: TextPoint, end: TextPoint) -> Self {
         TextRange { start, end }
     }
 
     pub fn new_cursor(x: usize, y: usize) -> Self {
         TextRange {
-            start: IntPoint::new(x, y),
-            end: IntPoint::new(x, y),
+            start: TextPoint::new(x, y),
+            end: TextPoint::new(x, y),
         }
     }
 
@@ -31,17 +33,17 @@ impl TextRange {
     }
 
     pub fn ordered(&self) -> TextRange {
-        if self.start.y < self.end.y {
+        if self.start.row < self.end.row {
             TextRange {
                 start: self.start,
                 end: self.end,
             }
-        } else if self.start.y > self.end.y {
+        } else if self.start.row > self.end.row {
             TextRange {
                 start: self.end,
                 end: self.start,
             }
-        } else if self.start.x < self.end.x {
+        } else if self.start.col < self.end.col {
             TextRange {
                 start: self.start,
                 end: self.end,
@@ -58,12 +60,12 @@ impl TextRange {
         self.start.offset_in(string)..self.end.offset_in(string)
     }
 
-    pub fn contains(&self, point: IntPoint) -> bool {
+    pub fn contains(&self, point: TextPoint) -> bool {
         // TODO: multiline
-        point.y >= self.start.y
-            && point.y <= self.end.y
-            && point.x >= self.start.x
-            && point.x <= self.end.x
+        point.row >= self.start.row
+            && point.row <= self.end.row
+            && point.col >= self.start.col
+            && point.col <= self.end.col
     }
 }
 
@@ -76,11 +78,11 @@ impl<'de> Deserialize<'de> for TextRange {
         let json = serde_json::Value::deserialize(deserializer)?;
         let arr = json.as_array().unwrap();
         Ok(TextRange::new(
-            IntPoint::new(
+            TextPoint::new(
                 arr[0].get("character").unwrap().as_u64().unwrap() as usize,
                 arr[0].get("line").unwrap().as_u64().unwrap() as usize,
             ),
-            IntPoint::new(
+            TextPoint::new(
                 arr[1].get("character").unwrap().as_u64().unwrap() as usize,
                 arr[1].get("line").unwrap().as_u64().unwrap() as usize,
             ),
@@ -91,40 +93,55 @@ impl<'de> Deserialize<'de> for TextRange {
 /* -------------------------------- Int Point ------------------------------- */
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub struct IntPoint {
-    pub x: usize,
-    pub y: usize,
+pub struct TextPoint {
+    // TODO: flip these
+    pub col: usize,
+    pub row: usize,
 }
 
-impl IntPoint {
-    pub const ZERO: Self = IntPoint { x: 0, y: 0 };
+impl TextPoint {
+    pub const ZERO: Self = TextPoint { col: 0, row: 0 };
 
-    pub fn new(x: usize, y: usize) -> IntPoint {
-        IntPoint { x, y }
-    }
-
-    pub fn as_tree_sitter(&self) -> tree_sitter_c2rust::Point {
-        tree_sitter_c2rust::Point::new(self.x, self.y)
+    pub fn new(col: usize, row: usize) -> TextPoint {
+        TextPoint { col, row }
     }
 
     pub fn offset_in(&self, string: &str) -> usize {
         let mut offset: usize = 0;
         for (num, line) in string.lines().enumerate() {
-            if num == self.y {
+            if num == self.row {
                 // position in the current line
                 // gets the byte offset of the cursor within the current line
                 // (supports utf-8 characters)
                 offset += line
                     .char_indices()
-                    .nth(self.x)
+                    .nth(self.col)
                     .map(|x| x.0)
                     .unwrap_or(line.len());
                 break;
             }
 
-            offset += line.len() + super::detect_linebreak(string).len(); // factor in the linebreak
+            offset += line.len() + detect_linebreak(string).len(); // factor in the linebreak
         }
         offset
+    }
+}
+
+impl From<tree_sitter_c2rust::Point> for TextPoint {
+    fn from(ts_pt: tree_sitter_c2rust::Point) -> Self {
+        TextPoint {
+            col: ts_pt.column,
+            row: ts_pt.row,
+        }
+    }
+}
+
+impl Into<tree_sitter_c2rust::Point> for TextPoint {
+    fn into(self) -> tree_sitter_c2rust::Point {
+        tree_sitter_c2rust::Point {
+            row: self.row,
+            column: self.col,
+        }
     }
 }
 

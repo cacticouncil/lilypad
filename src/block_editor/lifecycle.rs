@@ -5,6 +5,7 @@ use druid::{
     Widget,
 };
 
+use super::text_util::line_count;
 use super::{
     block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel, FONT_HEIGHT,
     FONT_WIDTH, TIMER_INTERVAL,
@@ -125,8 +126,11 @@ impl Widget<EditorModel> for BlockEditor {
                     data.source = Arc::new(Mutex::new(new_text.clone()));
                     self.tree_manager.replace(new_text);
 
-                    // reset cursor
+                    // reset view properties
                     self.selection = TextRange::ZERO;
+                    self.pseudo_selection = None;
+                    self.input_ignore_stack.clear();
+                    self.paired_delete_stack.clear();
 
                     // mark new text layout
                     self.text_changed = true;
@@ -207,9 +211,10 @@ impl Widget<EditorModel> for BlockEditor {
             + 40.0; // extra space for nesting blocks
 
         // height is just height of text
-        let height = super::line_count(&source) as f64 * FONT_HEIGHT
+        let height = line_count(&source) as f64 * FONT_HEIGHT
             + super::OUTER_PAD
-            + self.padding.iter().sum::<f64>();
+            + self.padding.iter().sum::<f64>()
+            + 200.0; // extra space for over-scroll
 
         let desired = Size { width, height };
 
@@ -222,16 +227,16 @@ impl Widget<EditorModel> for BlockEditor {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, env: &druid::Env) {
+        let source = data.source.lock().unwrap();
+
         // recompute cached objects if text changed
         if self.text_changed {
-            let source = data.source.lock().unwrap();
-
             // get blocks
             let mut cursor = self.tree_manager.get_cursor();
             self.blocks = block_drawer::blocks_for_tree(&mut cursor);
 
             // get padding
-            let line_count = super::line_count(&source);
+            let line_count = line_count(&source);
             self.padding = block_drawer::make_padding(&self.blocks, line_count);
 
             // layout text
@@ -246,9 +251,8 @@ impl Widget<EditorModel> for BlockEditor {
         ctx.fill(bg_rect, &theme::BACKGROUND);
 
         // draw selection under text and blocks
-        if !self.selection.is_cursor() {
-            self.draw_selection(&data.source.lock().unwrap(), ctx);
-        }
+        self.draw_pseudo_selection(&source, ctx);
+        self.draw_selection(&source, ctx);
 
         // draw content
         block_drawer::draw_blocks(&self.blocks, ctx);
@@ -264,7 +268,7 @@ impl Widget<EditorModel> for BlockEditor {
         self.diagnostic_popup.paint(ctx, data, env);
 
         // draw gutter
-        gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.y, ctx);
+        gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.row, ctx);
 
         // draw cursor and selection
         self.draw_cursor(ctx);

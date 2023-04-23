@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{theme, vscode};
 
 use super::{
-    text_range::{IntPoint, TextRange},
+    text_range::{TextPoint, TextRange},
     EditorModel, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH,
 };
 
@@ -57,12 +57,13 @@ impl Diagnostic {
         // could probably share the same logic as selections
 
         // find bottom of current line
-        let total_padding: f64 = padding.iter().take(self.range.start.y + 1).sum();
-        let y = total_padding + ((self.range.start.y + 1) as f64 * FONT_HEIGHT) + super::OUTER_PAD;
+        let total_padding: f64 = padding.iter().take(self.range.start.row + 1).sum();
+        let y =
+            total_padding + ((self.range.start.row + 1) as f64 * FONT_HEIGHT) + super::OUTER_PAD;
 
         // find the start and end of the line
-        let x = super::TOTAL_TEXT_X_OFFSET + (self.range.start.x as f64 * FONT_WIDTH);
-        let width = (self.range.end.x - self.range.start.x) as f64 * FONT_WIDTH;
+        let x = super::TOTAL_TEXT_X_OFFSET + (self.range.start.col as f64 * FONT_WIDTH);
+        let width = (self.range.end.col - self.range.start.col) as f64 * FONT_WIDTH;
 
         // draw
         let line = druid::kurbo::Line::new((x, y), (x + width, y));
@@ -70,14 +71,14 @@ impl Diagnostic {
     }
 
     pub fn request_fixes(&self) {
-        crate::vscode::request_quick_fixes(self.range.start.y, self.range.start.x);
+        crate::vscode::request_quick_fixes(self.range.start.row, self.range.start.col);
     }
 
     #[allow(dead_code)]
     pub fn example() -> Diagnostic {
         Diagnostic {
             message: "example diagnostic".to_string(),
-            range: TextRange::new(IntPoint::new(18, 2), IntPoint::new(25, 2)),
+            range: TextRange::new(TextPoint::new(18, 2), TextPoint::new(25, 2)),
             severity: DiagnosticSeverity::Error,
             source: "example".to_string(),
             id: rand_u64(),
@@ -142,12 +143,13 @@ impl DiagnosticPopup {
         }
 
         // find the vertical start by finding top of line and then subtracting box size
-        let total_padding: f64 = padding.iter().take(diagnostic.range.start.y + 1).sum();
-        let y = total_padding + (diagnostic.range.start.y as f64 * FONT_HEIGHT) + super::OUTER_PAD
-            - height;
+        let total_padding: f64 = padding.iter().take(diagnostic.range.start.row + 1).sum();
+        let y =
+            total_padding + (diagnostic.range.start.row as f64 * FONT_HEIGHT) + super::OUTER_PAD
+                - height;
 
         // find the horizontal start
-        let x = super::TOTAL_TEXT_X_OFFSET + (diagnostic.range.start.x as f64 * FONT_WIDTH);
+        let x = super::TOTAL_TEXT_X_OFFSET + (diagnostic.range.start.col as f64 * FONT_WIDTH);
 
         Point::new(x, y)
     }

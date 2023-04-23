@@ -14,6 +14,7 @@ mod selection_drawer;
 mod text_drawer;
 mod text_editing;
 pub mod text_range;
+mod text_util;
 
 use diagnostics::Diagnostic;
 use text_drawer::*;
@@ -59,6 +60,9 @@ struct BlockEditor {
 
     /// the currently selected text
     selection: TextRange,
+
+    /// the frame that hitting backspace would delete
+    pseudo_selection: Option<TextRange>,
 
     /// if the left mouse button is currently pressed
     mouse_pressed: bool,
@@ -106,6 +110,7 @@ impl BlockEditor {
         BlockEditor {
             tree_manager: TreeManager::new(""),
             selection: TextRange::ZERO,
+            pseudo_selection: None,
             mouse_pressed: false,
             cursor_timer: TimerToken::INVALID,
             cursor_visible: true,
@@ -116,33 +121,6 @@ impl BlockEditor {
             diagnostic_popup: WidgetPod::new(DiagnosticPopup::new()),
             input_ignore_stack: vec![],
             paired_delete_stack: vec![],
-        }
-    }
-}
-
-/// the number of characters in line of source
-fn line_len(row: usize, source: &str) -> usize {
-    source.lines().nth(row).unwrap_or("").chars().count()
-}
-
-fn line_count(source: &str) -> usize {
-    // add one if the last line is a newline (because the lines method does not include that)
-    source.lines().count() + if source.ends_with('\n') { 1 } else { 0 }
-}
-
-// currently not cached because vscode can it change at any time
-// if a bottleneck, could possibly be cached and updated when vscode sends a change
-fn detect_linebreak(text: &str) -> &'static str {
-    if text.contains("\r\n") {
-        "\r\n"
-    } else if text.contains('\n') {
-        "\n"
-    } else {
-        // if no line breaks, default to platform default
-        if cfg!(target_os = "windows") {
-            "\r\n"
-        } else {
-            "\n"
         }
     }
 }
