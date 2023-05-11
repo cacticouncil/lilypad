@@ -10,7 +10,7 @@ pub mod syntax {
     pub const KEYWORD: Color = MAGENTA;
     pub const OPERATOR: Color = WHITE;
     pub const PROPERTY: Color = DARK_RED;
-    pub const INTERPOLATION: Color = LIGHT_YELLOW;
+    pub const INTERPOLATION_SURROUNDING: Color = LIGHT_YELLOW;
     pub const STRING: Color = GREEN;
     pub const TYPE: Color = LIGHT_YELLOW;
     pub const VARIABLE: Color = DARK_RED;

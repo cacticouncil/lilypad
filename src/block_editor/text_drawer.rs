@@ -72,11 +72,11 @@ impl TextDrawer {
 
         for line in source.lines() {
             let mut colored_text = ColoredTextBuilder::new(line);
-
-            // apply highlight attributes
             let end_of_line = start_of_line + line.len();
 
-            while handled_up_to < end_of_line {
+            // apply highlight attributes
+            loop {
+                // break when out of highlights
                 let Some(highlight) = highlights.peek() else {
                     break;
                 };
@@ -88,6 +88,11 @@ impl TextDrawer {
                         highlights.next();
                     }
                     HighlightEvent::HighlightStart(cat) => {
+                        // if starting beyond end of line, go to the next line
+                        if handled_up_to >= end_of_line {
+                            break;
+                        }
+
                         // if there was a gap since the last,
                         // it should be handled as the category it falls into
                         if next_to_handle != handled_up_to {
@@ -116,20 +121,23 @@ impl TextDrawer {
                         let cat = category_stack.pop().unwrap();
 
                         // limit ranges to line
-                        let start = max(handled_up_to, start_of_line);
-                        let end = min(next_to_handle, end_of_line);
+                        let range_start = max(handled_up_to, start_of_line);
+                        let range_end = min(next_to_handle, end_of_line);
 
                         colored_text.add_color(
                             get_text_color(cat),
-                            (start - start_of_line)..(end - start_of_line),
+                            (range_start - start_of_line)..(range_end - start_of_line),
                         );
-                        handled_up_to = end;
+                        handled_up_to = range_end;
 
-                        if handled_up_to + linebreak_len < next_to_handle {
-                            // category ends on future line
-                            // do not remove highlight end (so it triggers again on next line)
-                            // and keep it on the stack (so it knows what type to use)
+                        // if category ends on future line,
+                        // do not remove highlight end (so it triggers again on next line)
+                        // and keep category on the stack (so it knows when triggered again)
+                        if end_of_line < next_to_handle {
                             category_stack.push(cat);
+
+                            // passed end of line so can just end here
+                            break;
                         } else {
                             highlights.next();
                         }
@@ -175,7 +183,7 @@ fn get_text_color(highlight: Highlight) -> Color {
         2 => KEYWORD,
         3 => OPERATOR,
         4 => PROPERTY,
-        5 => INTERPOLATION,
+        5 => INTERPOLATION_SURROUNDING,
         6 => STRING,
         7 => TYPE,
         8 => VARIABLE,
