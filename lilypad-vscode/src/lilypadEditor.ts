@@ -26,26 +26,6 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         };
         webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
 
-        // Override Clipboard actions
-        vscode.commands.registerCommand("editor.action.clipboardCopyAction", _ => {
-            webviewPanel.webview.postMessage({
-                type: "copy",
-            });
-        });
-        vscode.commands.registerCommand("editor.action.clipboardCutAction", _ => {
-            webviewPanel.webview.postMessage({
-                type: "cut",
-            });
-        });
-        vscode.commands.registerCommand("editor.action.clipboardPasteAction", _ => {
-            vscode.env.clipboard.readText().then(clipboard => {
-                webviewPanel.webview.postMessage({
-                    type: "paste",
-                    text: clipboard
-                });
-            });
-        });
-
         // Sync our editor to external changes
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
             if (e.document.uri.toString() === document.uri.toString()) {

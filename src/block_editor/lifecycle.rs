@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use druid::{
-    Event, KbKey, LifeCycle, Modifiers, MouseButton, PaintCtx, Point, Rect, RenderContext, Size,
-    Widget,
+    Event, KbKey, LifeCycle, Menu, Modifiers, MouseButton, PaintCtx, Point, Rect, RenderContext,
+    Size, Widget,
 };
 
 use super::text_util::line_count;
@@ -10,7 +10,7 @@ use super::{
     block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel, FONT_HEIGHT,
     FONT_WIDTH, TIMER_INTERVAL,
 };
-use crate::{theme, vscode};
+use crate::{theme, vscode, GlobalModel};
 
 impl Widget<EditorModel> for BlockEditor {
     fn event(
@@ -33,16 +33,39 @@ impl Widget<EditorModel> for BlockEditor {
             }
             Event::Timer(id) => {
                 if *id == self.cursor_timer {
-                    //make cursor blink and then reset timer
-                    //println!("timer done");
+                    // blink cursor and set new timer
                     self.cursor_visible = !self.cursor_visible;
                     ctx.request_paint();
                     self.cursor_timer = ctx.request_timer(TIMER_INTERVAL);
+                    ctx.set_handled();
                 }
             }
-            Event::MouseDown(mouse) if mouse.button == MouseButton::Left => {
-                self.mouse_clicked(mouse, &data.source.lock().unwrap(), ctx);
-                self.mouse_pressed = true;
+            Event::MouseDown(mouse) => {
+                match mouse.button {
+                    MouseButton::Left => {
+                        self.mouse_clicked(mouse, &data.source.lock().unwrap(), ctx);
+                        self.mouse_pressed = true;
+                    }
+                    MouseButton::Right => {
+                        // move mouse to right click if not a selection
+                        // TODO: also check if the click was inside of the selection
+                        if self.selection.is_cursor() {
+                            self.mouse_clicked(mouse, &data.source.lock().unwrap(), ctx);
+                        }
+
+                        // custom menus do not work for druid on web
+                        // need to do them via javascript externally
+                        if cfg!(not(target_family = "wasm")) {
+                            let menu = Menu::<GlobalModel>::empty()
+                                .entry(druid::platform_menus::common::cut())
+                                .entry(druid::platform_menus::common::copy())
+                                .entry(druid::platform_menus::common::paste());
+                            ctx.show_context_menu(menu, mouse.pos);
+                        }
+                    }
+                    _ => {}
+                };
+
                 ctx.set_handled();
             }
 
@@ -78,8 +101,7 @@ impl Widget<EditorModel> for BlockEditor {
             }
 
             Event::KeyDown(key_event) => {
-                // let VSCode handle hotkeys
-                // TODO: hotkeys on native
+                // ignore hotkeys (handled by menu on native and vscode in vscode)
                 if key_event.mods.contains(Modifiers::META)
                     || key_event.mods.contains(Modifiers::CONTROL)
                 {
@@ -143,15 +165,24 @@ impl Widget<EditorModel> for BlockEditor {
                     self.apply_edit(&mut data.source.lock().unwrap(), edit);
                     ctx.set_handled();
                 }
-                // VSCode Copy/Cut/Paste
-                else if command.get(vscode::COPY_SELECTOR).is_some() {
+                // Copy, Cut, & (VSCode) Paste
+                else if command.get(druid::commands::COPY).is_some() {
+                    // get selected text
                     let source = data.source.lock().unwrap();
                     let selection = self.selection.ordered().offset_in(&source);
                     let selected_text = source[selection.start..selection.end].to_string();
-                    vscode::set_clipboard(selected_text);
+
+                    // set to platform's clipboard
+                    if cfg!(target_family = "wasm") {
+                        vscode::set_clipboard(selected_text);
+                    } else {
+                        druid::Application::global()
+                            .clipboard()
+                            .put_string(selected_text);
+                    }
 
                     ctx.set_handled();
-                } else if command.get(vscode::CUT_SELECTOR).is_some() {
+                } else if command.get(druid::commands::CUT).is_some() {
                     // get selection
                     let mut source = data.source.lock().unwrap();
                     let selection = self.selection.ordered().offset_in(&source);
@@ -160,12 +191,19 @@ impl Widget<EditorModel> for BlockEditor {
                     // remove selection
                     self.insert_str(&mut source, "");
 
-                    // return selection
-                    vscode::set_clipboard(selected_text);
+                    // set to platform's clipboard
+                    if cfg!(target_family = "wasm") {
+                        vscode::set_clipboard(selected_text);
+                    } else {
+                        druid::Application::global()
+                            .clipboard()
+                            .put_string(selected_text);
+                    }
 
                     ctx.set_handled()
-                } else if let Some(text) = command.get(vscode::PASTE_SELECTOR) {
-                    self.insert_str(&mut data.source.lock().unwrap(), text);
+                } else if let Some(clip_text) = command.get(vscode::PASTE_SELECTOR) {
+                    // paste from vscode provides string
+                    self.insert_str(&mut data.source.lock().unwrap(), clip_text);
                     ctx.set_handled();
                 }
                 // VSCode Diagnostics
@@ -178,6 +216,12 @@ impl Widget<EditorModel> for BlockEditor {
 
                     ctx.set_handled()
                 }
+            }
+
+            Event::Paste(clipboard) => {
+                let clip_text = clipboard.get_string().unwrap_or_else(|| "".to_string());
+                self.insert_str(&mut data.source.lock().unwrap(), &clip_text);
+                ctx.set_handled();
             }
 
             _ => (),

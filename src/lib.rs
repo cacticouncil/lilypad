@@ -57,7 +57,7 @@ pub fn apply_edit(json: JsValue) {
 #[wasm_bindgen]
 pub fn copy_selection() {
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::COPY_SELECTOR, (), Target::Global)
+        sink.submit_command(druid::commands::COPY, (), Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -67,7 +67,7 @@ pub fn copy_selection() {
 #[wasm_bindgen]
 pub fn cut_selection() {
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::CUT_SELECTOR, (), Target::Global)
+        sink.submit_command(druid::commands::CUT, (), Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -122,8 +122,6 @@ pub mod vscode {
 
     pub const SET_TEXT_SELECTOR: Selector<String> = Selector::new("set_text");
     pub const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_edit");
-    pub const COPY_SELECTOR: Selector<()> = Selector::new("copy");
-    pub const CUT_SELECTOR: Selector<()> = Selector::new("cut");
     pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
     pub const DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> = Selector::new("diagnostics");
     pub const QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("quick_fix");
@@ -150,6 +148,8 @@ pub mod vscode {
 /* ----- Interface ----- */
 
 static EVENT_SINK: OnceCell<Arc<ExtEventSink>> = OnceCell::new();
+
+pub type GlobalModel = EditorModel;
 
 fn main() -> Result<(), PlatformError> {
     // start with empty string

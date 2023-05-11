@@ -4,7 +4,6 @@ async function run() {
   await init();
   run_editor();
 }
-
 // web view -> extension messages
 const vscode = acquireVsCodeApi();
 
@@ -58,15 +57,6 @@ window.addEventListener("message", event => {
     case "apply_edit":
       apply_edit(message.edit);
       break;
-    case "copy":
-      copy_selection();
-      break;
-    case "cut":
-      cut_selection();
-      break;
-    case "paste":
-      insert_text(message.text);
-      break;
     case "new_diagnostics":
       new_diagnostics(message.diagnostics);
       break;
@@ -76,4 +66,22 @@ window.addEventListener("message", event => {
   }
 });
 
+// handle clipboard actions
+document.addEventListener("copy", function(e) {
+  copy_selection();
+  e.preventDefault();
+});
+
+document.addEventListener("cut", function(e) {
+  cut_selection();
+  e.preventDefault();
+});
+
+document.addEventListener("paste", function(e) {
+  let text = e.clipboardData.getData("text/plain");
+  insert_text(text);
+  e.preventDefault();
+});
+
+// start the editor
 run();

@@ -5,8 +5,8 @@ mod theme;
 
 use druid::widget::{Button, Either, Flex};
 use druid::{
-    AppDelegate, AppLauncher, Data, FileDialogOptions, Lens, PlatformError, Widget, WidgetExt,
-    WindowDesc,
+    AppDelegate, AppLauncher, Data, Env, FileDialogOptions, Lens, Menu, MenuItem, PlatformError,
+    SysMods, Widget, WidgetExt, WindowDesc, WindowId,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -25,6 +25,8 @@ pub struct AppModel {
     #[data(eq)]
     pub diagnostic_selection: Option<u64>,
 }
+
+pub type GlobalModel = AppModel;
 
 struct EditorLens;
 
@@ -60,7 +62,9 @@ fn main() -> Result<(), PlatformError> {
         diagnostic_selection: None,
     };
     // launch
-    let main_window = WindowDesc::new(app_widget()).title("Lilypad Editor");
+    let main_window = WindowDesc::new(app_widget())
+        .title("Lilypad Editor")
+        .menu(make_menu);
     AppLauncher::with_window(main_window)
         .delegate(LilypadAppDelegate {})
         .launch(data)
@@ -82,6 +86,38 @@ fn app_widget() -> impl Widget<AppModel> {
             .must_fill_main_axis(true),
         dir_picker,
     )
+}
+
+fn make_menu(_window: Option<WindowId>, _data: &AppModel, _env: &Env) -> Menu<AppModel> {
+    use druid::platform_menus::*;
+
+    let open_folder = MenuItem::new("Open folder…")
+        .command(
+            druid::commands::SHOW_OPEN_PANEL.with(FileDialogOptions::new().select_directories()),
+        )
+        .hotkey(SysMods::Cmd, "o"); // SysMods::Cmd is command on mac, control otherwise
+
+    let file_menu = Menu::new("File")
+        .entry(mac::file::new_file().enabled_if(|data: &AppModel, _| data.dir.is_some()))
+        .entry(open_folder)
+        .separator()
+        .entry(mac::file::save().enabled_if(|data: &AppModel, _| data.file.is_some()));
+
+    let edit_menu = Menu::new("Edit")
+        .entry(common::undo())
+        .entry(common::redo())
+        .separator()
+        .entry(common::cut())
+        .entry(common::copy())
+        .entry(common::paste());
+
+    // only macOS has an applications menu
+    let mut menu = Menu::empty();
+    if cfg!(target_os = "macos") {
+        menu = menu.entry(mac::application::default())
+    }
+
+    menu.entry(file_menu).entry(edit_menu)
 }
 
 struct LilypadAppDelegate;
@@ -113,8 +149,6 @@ pub(crate) mod vscode {
 
     pub const SET_TEXT_SELECTOR: Selector<String> = Selector::new("set_text");
     pub const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_edit");
-    pub const COPY_SELECTOR: Selector<()> = Selector::new("copy");
-    pub const CUT_SELECTOR: Selector<()> = Selector::new("cut");
     pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
     pub const DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> = Selector::new("diagnostics");
     pub const QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("quick_fix");
