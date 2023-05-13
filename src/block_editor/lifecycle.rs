@@ -4,8 +4,8 @@ use druid::{
     Event, KbKey, LifeCycle, Menu, Modifiers, MouseButton, PaintCtx, Point, Rect, RenderContext,
     Size, Widget,
 };
+use ropey::Rope;
 
-use super::text_util::line_count;
 use super::{
     block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel, FONT_HEIGHT,
     FONT_WIDTH, TIMER_INTERVAL,
@@ -145,8 +145,9 @@ impl Widget<EditorModel> for BlockEditor {
                 // VSCode new text
                 if let Some(new_text) = command.get(vscode::SET_TEXT_SELECTOR) {
                     // update state and tree
-                    data.source = Arc::new(Mutex::new(new_text.clone()));
-                    self.tree_manager.replace(new_text);
+                    let rope = Rope::from_str(new_text);
+                    data.source = Arc::new(Mutex::new(rope));
+                    self.tree_manager.replace(&data.source.lock().unwrap());
 
                     // reset view properties
                     self.selection = TextRange::ZERO;
@@ -162,15 +163,15 @@ impl Widget<EditorModel> for BlockEditor {
 
                     ctx.set_handled();
                 } else if let Some(edit) = command.get(vscode::APPLY_EDIT_SELECTOR) {
-                    self.apply_edit(&mut data.source.lock().unwrap(), edit);
+                    self.apply_vscode_edit(&mut data.source.lock().unwrap(), edit);
                     ctx.set_handled();
                 }
                 // Copy, Cut, & (VSCode) Paste
                 else if command.get(druid::commands::COPY).is_some() {
                     // get selected text
                     let source = data.source.lock().unwrap();
-                    let selection = self.selection.ordered().offset_in(&source);
-                    let selected_text = source[selection.start..selection.end].to_string();
+                    let selection = self.selection.ordered().char_range_in(&source);
+                    let selected_text = source.slice(selection).to_string();
 
                     // set to platform's clipboard
                     if cfg!(target_family = "wasm") {
@@ -185,10 +186,10 @@ impl Widget<EditorModel> for BlockEditor {
                 } else if command.get(druid::commands::CUT).is_some() {
                     // get selection
                     let mut source = data.source.lock().unwrap();
-                    let selection = self.selection.ordered().offset_in(&source);
-                    let selected_text = source[selection.start..selection.end].to_string();
+                    let selection = self.selection.ordered().char_range_in(&source);
+                    let selected_text = source.slice(selection).to_string();
 
-                    // remove selection
+                    // delete current selection
                     self.insert_str(&mut source, "");
 
                     // set to platform's clipboard
@@ -219,7 +220,7 @@ impl Widget<EditorModel> for BlockEditor {
             }
 
             Event::Paste(clipboard) => {
-                let clip_text = clipboard.get_string().unwrap_or_else(|| "".to_string());
+                let clip_text = clipboard.get_string().unwrap_or_default();
                 self.insert_str(&mut data.source.lock().unwrap(), &clip_text);
                 ctx.set_handled();
             }
@@ -255,7 +256,7 @@ impl Widget<EditorModel> for BlockEditor {
             + 40.0; // extra space for nesting blocks
 
         // height is just height of text
-        let height = line_count(&source) as f64 * FONT_HEIGHT
+        let height = source.len_lines() as f64 * FONT_HEIGHT
             + super::OUTER_PAD
             + self.padding.iter().sum::<f64>()
             + 200.0; // extra space for over-scroll
@@ -280,7 +281,7 @@ impl Widget<EditorModel> for BlockEditor {
             self.blocks = block_drawer::blocks_for_tree(&mut cursor);
 
             // get padding
-            let line_count = line_count(&source);
+            let line_count = source.len_lines();
             self.padding = block_drawer::make_padding(&self.blocks, line_count);
 
             // layout text

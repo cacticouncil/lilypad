@@ -154,7 +154,7 @@ pub type GlobalModel = EditorModel;
 fn main() -> Result<(), PlatformError> {
     // start with empty string
     let data = EditorModel {
-        source: Arc::new(Mutex::new(String::new())),
+        source: Arc::new(Mutex::new(ropey::Rope::new())),
         diagnostics: vec![],
         diagnostic_selection: None,
     };

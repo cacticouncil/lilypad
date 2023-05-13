@@ -1,4 +1,5 @@
-﻿use tree_sitter_c2rust::{InputEdit, Parser, Tree, TreeCursor};
+﻿use ropey::Rope;
+use tree_sitter_c2rust::{InputEdit, Parser, Tree, TreeCursor};
 
 pub struct TreeManager {
     tree: Tree,
@@ -7,14 +8,15 @@ pub struct TreeManager {
 
 /* ------- Parsing  ------- */
 impl TreeManager {
-    pub fn new(source: &str) -> TreeManager {
+    /// create empty tree
+    pub fn new() -> TreeManager {
         // Create Parser
         let mut parser = Parser::new();
         let language = tree_sitter_python::language();
         parser.set_language(language).unwrap();
 
         // Parse initial source
-        let tree = parser.parse(source, None).unwrap();
+        let tree = parser.parse("", None).unwrap();
 
         TreeManager { tree, parser }
     }
@@ -23,13 +25,31 @@ impl TreeManager {
         self.tree.walk()
     }
 
-    pub fn replace(&mut self, new_source: &str) {
-        self.tree = self.parser.parse(new_source, None).unwrap();
+    pub fn replace(&mut self, source: &Rope) {
+        self.parse(source, false);
     }
 
-    pub fn update(&mut self, new_source: &str, change: InputEdit) {
+    pub fn update(&mut self, source: &Rope, change: InputEdit) {
         self.tree.edit(&change);
-        self.tree = self.parser.parse(new_source, Some(&self.tree)).unwrap();
+        self.parse(source, true);
+    }
+
+    fn parse(&mut self, source: &Rope, use_old: bool) {
+        self.tree = self
+            .parser
+            .parse_with(
+                &mut |byte, _| {
+                    if byte <= source.len_bytes() {
+                        let (chunk, start_byte, _, _) = source.chunk_at_byte(byte);
+                        chunk[byte - start_byte..].as_bytes()
+                    } else {
+                        // out of range
+                        &[]
+                    }
+                },
+                if use_old { Some(&self.tree) } else { None },
+            )
+            .unwrap();
     }
 }
 

@@ -2,6 +2,7 @@ use druid::{
     piet::{PietTextLayout, Text, TextLayoutBuilder},
     Color, FontFamily, PaintCtx, Point, RenderContext,
 };
+use ropey::Rope;
 use tree_sitter_c2rust::Node;
 
 use std::{
@@ -10,7 +11,6 @@ use std::{
 };
 
 use super::highlighter::{Highlight, HighlightConfiguration, HighlightEvent};
-use super::text_util::detect_linebreak;
 use super::{FONT_HEIGHT, FONT_SIZE};
 use crate::theme;
 
@@ -53,14 +53,14 @@ impl TextDrawer {
         }
     }
 
-    pub fn layout(&mut self, root_node: Node, source: &str, ctx: &mut PaintCtx) {
+    pub fn layout(&mut self, root_node: Node, source: &Rope, ctx: &mut PaintCtx) {
         // erase old values
         self.cache.clear();
 
         // get highlights
         let mut highlights = self
             .highlighter_config
-            .highlight(source.as_bytes(), &root_node)
+            .highlight(source.slice(..), &root_node)
             .peekable();
 
         let mut handled_up_to = 0;
@@ -68,11 +68,9 @@ impl TextDrawer {
         let mut start_of_line = 0;
         let mut category_stack: Vec<Highlight> = vec![];
 
-        let linebreak_len = detect_linebreak(source).len();
-
         for line in source.lines() {
-            let mut colored_text = ColoredTextBuilder::new(line);
-            let end_of_line = start_of_line + line.len();
+            let mut colored_text = ColoredTextBuilder::new(line.as_str().unwrap_or(""));
+            let end_of_line = start_of_line + line.len_bytes();
 
             // apply highlight attributes
             loop {
@@ -149,7 +147,7 @@ impl TextDrawer {
             self.cache.push(colored_text.build(ctx));
 
             // prepare for next
-            start_of_line = end_of_line + linebreak_len;
+            start_of_line = end_of_line;
         }
     }
 }

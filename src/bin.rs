@@ -8,6 +8,7 @@ use druid::{
     AppDelegate, AppLauncher, Data, Env, FileDialogOptions, Lens, Menu, MenuItem, PlatformError,
     SysMods, Widget, WidgetExt, WindowDesc, WindowId,
 };
+use ropey::Rope;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +20,7 @@ pub struct AppModel {
     pub dir: Option<PathBuf>,
     pub file: Option<String>,
 
-    pub source: Arc<Mutex<String>>,
+    pub source: Arc<Mutex<Rope>>,
     #[data(eq)]
     pub diagnostics: Vec<block_editor::diagnostics::Diagnostic>,
     #[data(eq)]
@@ -57,7 +58,7 @@ fn main() -> Result<(), PlatformError> {
     let data = AppModel {
         dir: None,
         file: None,
-        source: Arc::new(Mutex::new(String::new())),
+        source: Arc::new(Mutex::new(Rope::new())),
         diagnostics: vec![],
         diagnostic_selection: None,
     };

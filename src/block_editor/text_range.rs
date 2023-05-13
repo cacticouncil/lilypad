@@ -1,7 +1,6 @@
+use ropey::Rope;
 use serde::{Deserialize, Deserializer};
 use std::ops::Range;
-
-use super::text_util::detect_linebreak;
 
 /* ------------------------------- Text Range ------------------------------- */
 
@@ -56,8 +55,12 @@ impl TextRange {
         }
     }
 
-    pub fn offset_in(&self, string: &str) -> Range<usize> {
-        self.start.offset_in(string)..self.end.offset_in(string)
+    pub fn byte_range_in(&self, source: &Rope) -> Range<usize> {
+        self.start.byte_idx_in(source)..self.end.byte_idx_in(source)
+    }
+
+    pub fn char_range_in(&self, source: &Rope) -> Range<usize> {
+        self.start.char_idx_in(source)..self.end.char_idx_in(source)
     }
 
     pub fn contains(&self, point: TextPoint) -> bool {
@@ -106,24 +109,13 @@ impl TextPoint {
         TextPoint { col, row }
     }
 
-    pub fn offset_in(&self, string: &str) -> usize {
-        let mut offset: usize = 0;
-        for (num, line) in string.lines().enumerate() {
-            if num == self.row {
-                // position in the current line
-                // gets the byte offset of the cursor within the current line
-                // (supports utf-8 characters)
-                offset += line
-                    .char_indices()
-                    .nth(self.col)
-                    .map(|x| x.0)
-                    .unwrap_or(line.len());
-                break;
-            }
+    pub fn byte_idx_in(&self, source: &Rope) -> usize {
+        let char_idx = source.line_to_char(self.row) + self.col;
+        source.char_to_byte(char_idx)
+    }
 
-            offset += line.len() + detect_linebreak(string).len(); // factor in the linebreak
-        }
-        offset
+    pub fn char_idx_in(&self, source: &Rope) -> usize {
+        source.line_to_char(self.row) + self.col
     }
 }
 
@@ -136,11 +128,11 @@ impl From<tree_sitter_c2rust::Point> for TextPoint {
     }
 }
 
-impl Into<tree_sitter_c2rust::Point> for TextPoint {
-    fn into(self) -> tree_sitter_c2rust::Point {
-        tree_sitter_c2rust::Point {
-            row: self.row,
-            column: self.col,
+impl From<TextPoint> for tree_sitter_c2rust::Point {
+    fn from(text_pt: TextPoint) -> Self {
+        Self {
+            row: text_pt.row,
+            column: text_pt.col,
         }
     }
 }

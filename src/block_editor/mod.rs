@@ -1,4 +1,5 @@
 use druid::{widget::Scroll, Data, TimerToken, Widget, WidgetPod};
+use ropey::Rope;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -9,12 +10,12 @@ pub mod diagnostics;
 mod gutter_drawer;
 mod highlighter;
 mod lifecycle;
+mod rope_ext;
 mod selection_changing;
 mod selection_drawer;
 mod text_drawer;
 mod text_editing;
 pub mod text_range;
-mod text_util;
 
 use diagnostics::Diagnostic;
 use text_drawer::*;
@@ -98,7 +99,7 @@ struct BlockEditor {
 
 #[derive(Clone, Data)]
 pub struct EditorModel {
-    pub source: Arc<Mutex<String>>,
+    pub source: Arc<Mutex<Rope>>,
     #[data(eq)]
     pub diagnostics: Vec<Diagnostic>,
     #[data(eq)]
@@ -108,7 +109,7 @@ pub struct EditorModel {
 impl BlockEditor {
     fn new() -> Self {
         BlockEditor {
-            tree_manager: TreeManager::new(""),
+            tree_manager: TreeManager::new(),
             selection: TextRange::ZERO,
             pseudo_selection: None,
             mouse_pressed: false,

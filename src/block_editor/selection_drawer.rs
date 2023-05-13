@@ -1,9 +1,10 @@
 use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
+use ropey::Rope;
 use std::cmp::{max, Ordering};
 
 use crate::theme;
 
-use super::{text_range::TextRange, text_util::line_len, BlockEditor, FONT_HEIGHT, FONT_WIDTH};
+use super::{rope_ext::RopeExt, text_range::TextRange, BlockEditor, FONT_HEIGHT, FONT_WIDTH};
 
 impl BlockEditor {
     pub fn draw_cursor(&self, ctx: &mut PaintCtx) {
@@ -22,13 +23,13 @@ impl BlockEditor {
         }
     }
 
-    pub fn draw_selection(&self, source: &str, ctx: &mut PaintCtx) {
+    pub fn draw_selection(&self, source: &Rope, ctx: &mut PaintCtx) {
         if !self.selection.is_cursor() {
             self.draw_selection_blocks(self.selection, source, &theme::SELECTION, ctx);
         }
     }
 
-    pub fn draw_pseudo_selection(&self, source: &str, ctx: &mut PaintCtx) {
+    pub fn draw_pseudo_selection(&self, source: &Rope, ctx: &mut PaintCtx) {
         if let Some(selection) = self.pseudo_selection {
             self.draw_selection_blocks(selection, source, &theme::PSEUDO_SELECTION, ctx);
         }
@@ -37,7 +38,7 @@ impl BlockEditor {
     fn draw_selection_blocks(
         &self,
         selection: TextRange,
-        source: &str,
+        source: &Rope,
         color: &Color,
         ctx: &mut PaintCtx,
     ) {
@@ -51,7 +52,7 @@ impl BlockEditor {
                 self.draw_selection_block(
                     selection.start.col,
                     selection.start.row,
-                    line_len(selection.start.row, source) - selection.start.col,
+                    source.len_char_for_line(selection.start.row) - selection.start.col,
                     false,
                     color,
                     ctx,
@@ -62,7 +63,7 @@ impl BlockEditor {
                     self.draw_selection_block(
                         0,
                         line,
-                        max(line_len(line, source), 1),
+                        max(source.len_char_for_line(line), 1),
                         true,
                         color,
                         ctx,
@@ -97,7 +98,7 @@ impl BlockEditor {
                     self.draw_selection_block(
                         0,
                         line,
-                        max(line_len(line, source), 1),
+                        max(source.len_char_for_line(line), 1),
                         true,
                         color,
                         ctx,
@@ -108,7 +109,7 @@ impl BlockEditor {
                 self.draw_selection_block(
                     selection.end.col,
                     selection.end.row,
-                    line_len(selection.end.row, source) - selection.end.col,
+                    source.len_char_for_line(selection.end.row) - selection.end.col,
                     false,
                     color,
                     ctx,

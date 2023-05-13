@@ -59,12 +59,12 @@ chooseStarterType("fire")
 chooseStarterType("any")
 
 #Testing python dictionaries
-# dict1 = {
-#     "fire": "Torchic",
-#     "water": "Mudkip",
-#     "grass": "Treecko"
-# }
-# print(dict1)
+dict1 = {
+    "fire": "Torchic",
+    "water": "Mudkip",
+    "grass": "Treecko"
+}
+print(dict1)
 
 #Testing try blocks
 try:

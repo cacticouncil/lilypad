@@ -1,12 +1,16 @@
-// minimal version of:
+// modified version of:
 // https://github.com/tree-sitter/tree-sitter/blob/master/highlight/src/lib.rs
 //
 // main changes:
 //   - remove all parsing (take in tree directly)
 //   - removed injections
+//   - support for ropey
 
+use ropey::RopeSlice;
 use std::{iter, mem, ops, str, usize};
-use tree_sitter_c2rust::{Language, Node, Query, QueryCaptures, QueryCursor, QueryError};
+use tree_sitter_c2rust::{
+    Language, Node, Query, QueryCaptures, QueryCursor, QueryError, TextProvider,
+};
 
 /// Indicates which highlight should be applied to a region of source code.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -50,7 +54,7 @@ struct LocalScope<'a> {
 }
 
 struct HighlightIter<'a> {
-    source: &'a [u8],
+    source: RopeSlice<'a>,
     byte_offset: usize,
     layer: HighlightIterLayer<'a>,
     next_event: Option<HighlightEvent>,
@@ -59,7 +63,7 @@ struct HighlightIter<'a> {
 
 struct HighlightIterLayer<'a> {
     _cursor: QueryCursor, // needed to keep in memory
-    captures: iter::Peekable<QueryCaptures<'a, 'a, &'a [u8]>>,
+    captures: iter::Peekable<QueryCaptures<'a, 'a, RopeProvider<'a>>>,
     config: &'a HighlightConfiguration,
     highlight_end_stack: Vec<usize>,
     scope_stack: Vec<LocalScope<'a>>,
@@ -70,10 +74,10 @@ impl HighlightConfiguration {
     /// Does not parse anything (and therefore does not support injections).
     pub fn highlight<'a>(
         &'a self,
-        source: &'a [u8],
+        source: RopeSlice<'a>,
         node: &'a Node,
     ) -> impl Iterator<Item = HighlightEvent> + 'a {
-        let layer = HighlightIterLayer::new_from_tree(source, node, self);
+        let layer = HighlightIterLayer::new_from_tree(RopeProvider(source), node, self);
         HighlightIter {
             source,
             byte_offset: 0,
@@ -205,7 +209,11 @@ impl HighlightConfiguration {
 }
 
 impl<'a> HighlightIterLayer<'a> {
-    fn new_from_tree(source: &'a [u8], node: &'a Node, config: &'a HighlightConfiguration) -> Self {
+    fn new_from_tree(
+        source: RopeProvider<'a>,
+        node: &'a Node,
+        config: &'a HighlightConfiguration,
+    ) -> Self {
         // QueryCursor is a pointer so it's okay to make a copy as long as we keep both in scope
         let mut cursor = QueryCursor::new();
         let cursor_ref = unsafe { mem::transmute::<_, &'static mut QueryCursor>(&mut cursor) };
@@ -278,7 +286,7 @@ impl<'a> Iterator for HighlightIter<'a> {
                 self.layer.highlight_end_stack.pop();
                 return self.emit_event(end_byte, Some(HighlightEvent::HighlightEnd));
             } else {
-                return self.emit_event(self.source.len(), None);
+                return self.emit_event(self.source.len_bytes(), None);
             };
 
             let (mut match_, capture_index) = self.layer.captures.next().unwrap();
@@ -320,7 +328,6 @@ impl<'a> Iterator for HighlightIter<'a> {
                 // local scope at the top of the scope stack.
                 else if Some(capture.index) == self.layer.config.local_def_capture_index {
                     reference_highlight = None;
-                    definition_highlight = None;
                     let scope = self.layer.scope_stack.last_mut().unwrap();
 
                     let mut value_range = 0..0;
@@ -330,15 +337,13 @@ impl<'a> Iterator for HighlightIter<'a> {
                         }
                     }
 
-                    if let Ok(name) = str::from_utf8(&self.source[range.clone()]) {
-                        scope.local_defs.push(LocalDef {
-                            name,
-                            value_range,
-                            highlight: None,
-                        });
-                        definition_highlight =
-                            scope.local_defs.last_mut().map(|s| &mut s.highlight);
-                    }
+                    let name = self.source.byte_slice(range.clone()).as_str().unwrap_or("");
+                    scope.local_defs.push(LocalDef {
+                        name,
+                        value_range,
+                        highlight: None,
+                    });
+                    definition_highlight = scope.local_defs.last_mut().map(|s| &mut s.highlight);
                 }
                 // If the node represents a reference, then try to find the corresponding
                 // definition in the scope stack.
@@ -346,21 +351,20 @@ impl<'a> Iterator for HighlightIter<'a> {
                     && definition_highlight.is_none()
                 {
                     definition_highlight = None;
-                    if let Ok(name) = str::from_utf8(&self.source[range.clone()]) {
-                        for scope in self.layer.scope_stack.iter().rev() {
-                            if let Some(highlight) = scope.local_defs.iter().rev().find_map(|def| {
-                                if def.name == name && range.start >= def.value_range.end {
-                                    Some(def.highlight)
-                                } else {
-                                    None
-                                }
-                            }) {
-                                reference_highlight = highlight;
-                                break;
+                    let name = self.source.byte_slice(range.clone());
+                    for scope in self.layer.scope_stack.iter().rev() {
+                        if let Some(highlight) = scope.local_defs.iter().rev().find_map(|def| {
+                            if def.name == name && range.start >= def.value_range.end {
+                                Some(def.highlight)
+                            } else {
+                                None
                             }
-                            if !scope.inherits {
-                                break;
-                            }
+                        }) {
+                            reference_highlight = highlight;
+                            break;
+                        }
+                        if !scope.inherits {
+                            break;
                         }
                     }
                 }
@@ -426,5 +430,32 @@ impl<'a> Iterator for HighlightIter<'a> {
                     .emit_event(range.start, Some(HighlightEvent::HighlightStart(highlight)));
             }
         }
+    }
+}
+
+/* ------- Rope + TS Text Provider  ------- */
+struct RopeProvider<'a>(pub RopeSlice<'a>);
+
+impl<'a> TextProvider<'a> for RopeProvider<'a> {
+    type I = ChunksBytes<'a>;
+
+    fn text(&mut self, node: Node) -> Self::I {
+        let fragment = self.0.byte_slice(node.start_byte()..node.end_byte());
+        ChunksBytes {
+            chunks: fragment.chunks(),
+        }
+    }
+}
+
+/// shim to convert rope chunks to bytes
+struct ChunksBytes<'a> {
+    chunks: ropey::iter::Chunks<'a>,
+}
+
+impl<'a> Iterator for ChunksBytes<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.chunks.next().map(str::as_bytes)
     }
 }

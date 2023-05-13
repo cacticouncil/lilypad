@@ -1,13 +1,14 @@
 use druid::{EventCtx, MouseEvent};
+use ropey::Rope;
 use tree_sitter_c2rust::{Node, Point, TreeCursor};
 
 use super::{
-    text_util::{line_count, line_len, surrounding_chars},
+    rope_ext::{RopeExt, RopeSliceExt},
     BlockEditor, TextPoint, TextRange, FONT_HEIGHT, FONT_WIDTH,
 };
 
 impl BlockEditor {
-    fn set_selection(&mut self, selection: TextRange, source: &str) {
+    fn set_selection(&mut self, selection: TextRange, source: &Rope) {
         self.selection = selection;
         self.find_pseudo_selection(source);
 
@@ -19,13 +20,13 @@ impl BlockEditor {
         self.paired_delete_stack.clear();
     }
 
-    pub fn find_pseudo_selection(&mut self, source: &str) {
+    pub fn find_pseudo_selection(&mut self, source: &Rope) {
         self.pseudo_selection = None;
         if self.selection.is_cursor() {
             // find if the cursor is after a quote
             let cursor = self.selection.start;
-            let cursor_offset = cursor.offset_in(source);
-            let (prev_char, _) = surrounding_chars(cursor_offset, source);
+            let cursor_offset = cursor.char_idx_in(source);
+            let (prev_char, _) = source.surrounding_chars(cursor_offset);
 
             if prev_char == '"' || prev_char == '\'' {
                 // find the node for the string
@@ -46,7 +47,7 @@ impl BlockEditor {
     }
 
     /* ----------------------------- Cursor Movement ---------------------------- */
-    pub fn cursor_up(&mut self, source: &str) {
+    pub fn cursor_up(&mut self, source: &Rope) {
         // when moving up, use top of selection
         let cursor_pos = self.selection.ordered().start;
 
@@ -64,7 +65,7 @@ impl BlockEditor {
         self.set_selection(selection, source);
     }
 
-    pub fn cursor_down(&mut self, source: &str) {
+    pub fn cursor_down(&mut self, source: &Rope) {
         // when moving down use bottom of selection
         let cursor_pos = self.selection.ordered().end;
 
@@ -74,7 +75,9 @@ impl BlockEditor {
         let selection = if cursor_pos.row == last_line {
             // if on last line, just move to end of line
             TextRange::new_cursor(
-                source.lines().last().unwrap_or("").chars().count(),
+                source
+                    .get_line(source.len_lines() - 1)
+                    .map_or(0, |line| line.len_chars()),
                 last_line,
             )
         } else {
@@ -84,14 +87,17 @@ impl BlockEditor {
         self.set_selection(selection, source);
     }
 
-    pub fn cursor_left(&mut self, source: &str) {
+    pub fn cursor_left(&mut self, source: &Rope) {
         let selection = if self.selection.is_cursor() {
             // actually move if cursor
             let cursor_pos = self.selection.start;
             if cursor_pos.col == 0 {
                 // if at start of line, move to end of line above
                 if cursor_pos.row != 0 {
-                    TextRange::new_cursor(line_len(cursor_pos.row - 1, source), cursor_pos.row - 1)
+                    TextRange::new_cursor(
+                        source.len_char_for_line(cursor_pos.row - 1),
+                        cursor_pos.row - 1,
+                    )
                 } else {
                     // already at top left
                     return;
@@ -107,15 +113,15 @@ impl BlockEditor {
         self.set_selection(selection, source);
     }
 
-    pub fn cursor_right(&mut self, source: &str) {
+    pub fn cursor_right(&mut self, source: &Rope) {
         let selection = if self.selection.is_cursor() {
             // actually move if cursor
             let cursor_pos = self.selection.start;
 
-            let curr_line_len = line_len(cursor_pos.row, source);
+            let curr_line_len = source.len_char_for_line(cursor_pos.row);
             if cursor_pos.col == curr_line_len {
                 // if at end of current line, go to next line
-                let last_line = line_count(source) - 1;
+                let last_line = source.len_lines() - 1;
                 if cursor_pos.row != last_line {
                     TextRange::new_cursor(0, cursor_pos.row + 1)
                 } else {
@@ -133,26 +139,26 @@ impl BlockEditor {
         self.set_selection(selection, source);
     }
 
-    pub fn cursor_to_line_start(&mut self, source: &str) {
+    pub fn cursor_to_line_start(&mut self, source: &Rope) {
         // go with whatever line the mouse was last on
         let cursor_pos = self.selection.end;
 
-        let line = source.lines().nth(cursor_pos.row).unwrap_or("");
-        let start_idx = line.len() - line.trim_start().len();
+        let start_idx = source.line(cursor_pos.row).whitespace_at_start();
         let selection = TextRange::new_cursor(start_idx, cursor_pos.row);
         self.set_selection(selection, source);
     }
 
-    pub fn cursor_to_line_end(&mut self, source: &str) {
+    pub fn cursor_to_line_end(&mut self, source: &Rope) {
         // go with whatever line the mouse was last on
         let cursor_pos = self.selection.end;
 
-        let selection = TextRange::new_cursor(line_len(cursor_pos.row, source), cursor_pos.row);
+        let selection =
+            TextRange::new_cursor(source.len_char_for_line(cursor_pos.row), cursor_pos.row);
         self.set_selection(selection, source);
     }
 
     /* ------------------------------ Mouse Clicks ------------------------------ */
-    pub fn mouse_clicked(&mut self, mouse: &MouseEvent, source: &str, ctx: &mut EventCtx) {
+    pub fn mouse_clicked(&mut self, mouse: &MouseEvent, source: &Rope, ctx: &mut EventCtx) {
         // move the cursor and get selection start position
         let loc = self.mouse_to_coord(mouse, source);
         let selection = TextRange::new(loc, loc);
@@ -164,15 +170,18 @@ impl BlockEditor {
         }
     }
 
-    pub fn mouse_dragged(&mut self, mouse: &MouseEvent, source: &str, _ctx: &mut EventCtx) {
+    pub fn mouse_dragged(&mut self, mouse: &MouseEvent, source: &Rope, _ctx: &mut EventCtx) {
         // set selection end position to dragged position
         self.selection.end = self.mouse_to_coord(mouse, source);
+
+        // clear pseudo selection
+        self.pseudo_selection = None;
 
         // show cursor
         self.cursor_visible = true;
     }
 
-    pub fn mouse_to_coord(&self, mouse: &MouseEvent, source: &str) -> TextPoint {
+    pub fn mouse_to_coord(&self, mouse: &MouseEvent, source: &Rope) -> TextPoint {
         // find the line clicked on by finding the next one and then going back one
         let mut y: usize = 0;
         let mut total_pad = 0.0;
@@ -198,8 +207,8 @@ impl BlockEditor {
     }
 }
 
-fn clamp_col(row: usize, col: usize, source: &str) -> usize {
-    std::cmp::min(col, line_len(row, source))
+fn clamp_col(row: usize, col: usize, source: &Rope) -> usize {
+    std::cmp::min(col, source.len_char_for_line(row))
 }
 
 fn lowest_non_err_named_node_for_point(mut cursor: TreeCursor, point: Point) -> Option<Node> {

@@ -156,7 +156,7 @@ pub fn blocks_for_tree(cursor: &mut TreeCursor) -> Vec<Block> {
 const OUTER_CORNER_RAD: f64 = 6.0;
 const MIN_CORNER_RAD: f64 = 1.5;
 
-const BLOCK_STROKE_WIDTH: f64 = 3.0;
+const BLOCK_STROKE_WIDTH: f64 = 2.0;
 const BLOCK_INNER_PAD: f64 = 2.0;
 const BLOCK_TOP_PAD: f64 = 1.0;
 
