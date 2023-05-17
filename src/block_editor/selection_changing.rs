@@ -1,6 +1,6 @@
-use druid::{EventCtx, MouseEvent};
+use druid::{text::Movement, EventCtx, MouseEvent};
 use ropey::Rope;
-use tree_sitter_c2rust::{Node, Point, TreeCursor};
+use tree_sitter_c2rust::{Point, TreeCursor};
 
 use super::{
     rope_ext::{RopeExt, RopeSliceExt},
@@ -12,7 +12,7 @@ impl BlockEditor {
         self.selection = selection;
         self.find_pseudo_selection(source);
 
-        // make cursor visible whenver moved
+        // make cursor visible whenever moved
         self.cursor_visible = true;
 
         // clear input ignore stack
@@ -24,57 +24,99 @@ impl BlockEditor {
         self.pseudo_selection = None;
         if self.selection.is_cursor() {
             // find if the cursor is after a quote
-            let cursor = self.selection.start;
-            let cursor_offset = cursor.char_idx_in(source);
+            let cursor_loc = self.selection.start;
+            let cursor_offset = cursor_loc.char_idx_in(source);
             let (prev_char, _) = source.surrounding_chars(cursor_offset);
 
             if prev_char == '"' || prev_char == '\'' {
-                // find the node for the string
-                // string will always be the lowest level
-                // don't set if error (bc that would make things go wonky when unpaired)
-                let Some(node) = lowest_non_err_named_node_for_point(
+                self.pseudo_selection = string_pseudo_selection_range(
                     self.tree_manager.get_cursor(),
-                    cursor.into(),
-                ) else { return };
-
-                // set pseudo selection to node
-                self.pseudo_selection = Some(TextRange::new(
-                    node.start_position().into(),
-                    node.end_position().into(),
-                ));
+                    cursor_loc.into(),
+                );
             }
         }
     }
 
     /* ----------------------------- Cursor Movement ---------------------------- */
-    pub fn cursor_up(&mut self, source: &Rope) {
+    pub fn move_cursor(&mut self, movement: Movement, source: &Rope) {
+        let new_cursor = self.find_movement_result(movement, source, false);
+        self.set_selection(TextRange::new_cursor(new_cursor), source);
+    }
+
+    pub fn move_selecting(&mut self, movement: Movement, source: &Rope) {
+        let new_sel = self.expand_selection_by(movement, source);
+        self.set_selection(new_sel, source);
+    }
+
+    pub fn expand_selection_by(&self, movement: Movement, source: &Rope) -> TextRange {
+        let new_cursor = self.find_movement_result(movement, source, true);
+        TextRange::new(self.selection.start, new_cursor)
+    }
+
+    pub fn find_movement_result(
+        &self,
+        movement: Movement,
+        source: &Rope,
+        expanding: bool,
+    ) -> TextPoint {
+        use druid::text::{Direction::*, Movement::*, VerticalMovement::*};
+        match movement {
+            Grapheme(dir) => match dir {
+                Left | Upstream => self.cursor_left(source, expanding),
+                Right | Downstream => self.cursor_right(source, expanding),
+            },
+            Word(dir) => match dir {
+                Left | Upstream => self.cursor_to_prev_word_start(source),
+                Right | Downstream => self.cursor_to_next_word_end(source),
+            },
+            Line(dir) => match dir {
+                Left | Upstream => self.cursor_to_line_start(source),
+                Right | Downstream => self.cursor_to_line_end(source),
+            },
+            Vertical(dir) => match dir {
+                LineUp => self.cursor_up(source),
+                LineDown => self.cursor_down(source),
+                DocumentStart => TextPoint::ZERO,
+                DocumentEnd => self.cursor_to_doc_end(source),
+                _ => {
+                    println!("unimplemented vertical move: {:?}", dir);
+                    self.selection.start
+                }
+            },
+            _ => {
+                println!("unimplemented movement: {:?}", movement);
+                self.selection.start
+            }
+        }
+    }
+
+    fn cursor_up(&self, source: &Rope) -> TextPoint {
         // when moving up, use top of selection
         let cursor_pos = self.selection.ordered().start;
 
-        let selection = if cursor_pos.row == 0 {
-            TextRange::ZERO
+        if cursor_pos.row == 0 {
+            TextPoint::ZERO
         } else {
             // TODO: the normal text editor experience has a "memory" of how far right
             // the cursor started during a chain for arrow up/down (and then it snaps back there).
             // if that memory is implemented, it can replace self.cursor_pos.x
-            TextRange::new_cursor(
+            TextPoint::new(
                 clamp_col(cursor_pos.row - 1, cursor_pos.col, source),
                 cursor_pos.row - 1,
             )
-        };
-        self.set_selection(selection, source);
+        }
     }
 
-    pub fn cursor_down(&mut self, source: &Rope) {
+    fn cursor_down(&self, source: &Rope) -> TextPoint {
         // when moving down use bottom of selection
         let cursor_pos = self.selection.ordered().end;
 
         let last_line = source.lines().count() - 1;
         let next_line = std::cmp::min(cursor_pos.row + 1, last_line);
 
-        let selection = if cursor_pos.row == last_line {
+        if cursor_pos.row == last_line {
             // if on last line, just move to end of line
-            TextRange::new_cursor(
+            TextPoint::new(
                 source
                     .get_line(source.len_lines() - 1)
                     .map_or(0, |line| line.len_chars()),
@@ -82,86 +124,168 @@ impl BlockEditor {
             )
         } else {
             // same memory thing as above applies here
-            TextRange::new_cursor(clamp_col(next_line, cursor_pos.col, source), next_line)
-        };
-        self.set_selection(selection, source);
+            TextPoint::new(clamp_col(next_line, cursor_pos.col, source), next_line)
+        }
     }
 
-    pub fn cursor_left(&mut self, source: &Rope) {
-        let selection = if self.selection.is_cursor() {
+    fn cursor_left(&self, source: &Rope, expanding: bool) -> TextPoint {
+        if self.selection.is_cursor() || expanding {
             // actually move if cursor
-            let cursor_pos = self.selection.start;
+            let cursor_pos = self.selection.end;
             if cursor_pos.col == 0 {
                 // if at start of line, move to end of line above
                 if cursor_pos.row != 0 {
-                    TextRange::new_cursor(
-                        source.len_char_for_line(cursor_pos.row - 1),
+                    TextPoint::new(
+                        source.line(cursor_pos.row - 1).len_chars_no_linebreak(),
                         cursor_pos.row - 1,
                     )
                 } else {
                     // already at top left
-                    return;
+                    self.selection.start
                 }
             } else {
-                TextRange::new_cursor(cursor_pos.col - 1, cursor_pos.row)
+                TextPoint::new(cursor_pos.col - 1, cursor_pos.row)
             }
         } else {
             // just move cursor to start of selection
             let start = self.selection.ordered().start;
-            TextRange::new_cursor(start.col, start.row)
-        };
-        self.set_selection(selection, source);
+            TextPoint::new(start.col, start.row)
+        }
     }
 
-    pub fn cursor_right(&mut self, source: &Rope) {
-        let selection = if self.selection.is_cursor() {
+    fn cursor_right(&self, source: &Rope, expanding: bool) -> TextPoint {
+        if self.selection.is_cursor() || expanding {
             // actually move if cursor
-            let cursor_pos = self.selection.start;
-
-            let curr_line_len = source.len_char_for_line(cursor_pos.row);
+            let cursor_pos = self.selection.end;
+            let curr_line_len = source.line(cursor_pos.row).len_chars_no_linebreak();
             if cursor_pos.col == curr_line_len {
                 // if at end of current line, go to next line
                 let last_line = source.len_lines() - 1;
                 if cursor_pos.row != last_line {
-                    TextRange::new_cursor(0, cursor_pos.row + 1)
+                    TextPoint::new(0, cursor_pos.row + 1)
                 } else {
                     // already at end
-                    return;
+                    self.selection.start
                 }
             } else {
-                TextRange::new_cursor(cursor_pos.col + 1, cursor_pos.row)
+                TextPoint::new(cursor_pos.col + 1, cursor_pos.row)
             }
         } else {
             // just move cursor to end of selection
             let end = self.selection.ordered().end;
-            TextRange::new_cursor(end.col, end.row)
-        };
-        self.set_selection(selection, source);
+            TextPoint::new(end.col, end.row)
+        }
     }
 
-    pub fn cursor_to_line_start(&mut self, source: &Rope) {
-        // go with whatever line the mouse was last on
-        let cursor_pos = self.selection.end;
+    fn cursor_to_prev_word_start(&self, source: &Rope) -> TextPoint {
+        let mut cursor_pos = self.selection.end;
 
-        let start_idx = source.line(cursor_pos.row).whitespace_at_start();
-        let selection = TextRange::new_cursor(start_idx, cursor_pos.row);
-        self.set_selection(selection, source);
+        // move to line above if at start of line
+        let at_start = cursor_pos.col == 0;
+        if at_start {
+            cursor_pos.row -= 1;
+        }
+        let line = source.line(cursor_pos.row);
+        if at_start {
+            cursor_pos.col = line.len_chars_no_linebreak();
+        }
+
+        let mut chars = line.chars_at(cursor_pos.col);
+
+        // find end of word (if not already in one)
+        while let Some(c) = chars.prev() {
+            // always shift bc we are consuming chars here
+            cursor_pos.col -= 1;
+
+            // break if we hit a word
+            if c.is_alphanumeric() {
+                break;
+            }
+        }
+
+        // find start of word
+        while let Some(c) = chars.prev() {
+            if c.is_alphanumeric() {
+                cursor_pos.col -= 1;
+            } else {
+                break;
+            }
+        }
+
+        cursor_pos
     }
 
-    pub fn cursor_to_line_end(&mut self, source: &Rope) {
-        // go with whatever line the mouse was last on
-        let cursor_pos = self.selection.end;
+    fn cursor_to_next_word_end(&self, source: &Rope) -> TextPoint {
+        // TODO: handle special characters more like vscode
 
-        let selection =
-            TextRange::new_cursor(source.len_char_for_line(cursor_pos.row), cursor_pos.row);
-        self.set_selection(selection, source);
+        let mut cursor_pos = self.selection.end;
+        let line = source.line(cursor_pos.row);
+        let mut chars = line.chars_at(cursor_pos.col);
+
+        // find start of word (if not already in one)
+        while let Some(c) = chars.next() {
+            if c == '\n' || c == '\r' {
+                // move to the next line if we hit it
+                cursor_pos.row += 1;
+                cursor_pos.col = 0;
+
+                let line = source.line(cursor_pos.row);
+                chars = line.chars_at(cursor_pos.col);
+            } else {
+                // always shift bc we are consuming chars here
+                cursor_pos.col += 1;
+            }
+
+            // break if we hit a word
+            if c.is_alphanumeric() {
+                break;
+            }
+        }
+
+        // find end of word
+        for c in chars {
+            if c.is_alphanumeric() {
+                cursor_pos.col += 1;
+            } else {
+                break;
+            }
+        }
+
+        cursor_pos
+    }
+
+    fn cursor_to_line_start(&self, source: &Rope) -> TextPoint {
+        let cursor_pos = self.selection.end;
+        let indent = source.line(cursor_pos.row).whitespace_at_start();
+
+        if cursor_pos.col > indent {
+            // move to indented start
+            TextPoint::new(indent, cursor_pos.row)
+        } else {
+            // already at indented start, so move to true start
+            TextPoint::new(0, cursor_pos.row)
+        }
+    }
+
+    fn cursor_to_line_end(&self, source: &Rope) -> TextPoint {
+        let cursor_pos = self.selection.end;
+        TextPoint::new(
+            source.line(cursor_pos.row).len_chars_no_linebreak(),
+            cursor_pos.row,
+        )
+    }
+
+    fn cursor_to_doc_end(&self, source: &Rope) -> TextPoint {
+        let last_line = source.len_lines() - 1;
+        let last_line_len = source.line(last_line).len_chars_no_linebreak();
+        TextPoint::new(last_line_len, last_line)
     }
 
     /* ------------------------------ Mouse Clicks ------------------------------ */
     pub fn mouse_clicked(&mut self, mouse: &MouseEvent, source: &Rope, ctx: &mut EventCtx) {
         // move the cursor and get selection start position
         let loc = self.mouse_to_coord(mouse, source);
-        let selection = TextRange::new(loc, loc);
+        let selection = TextRange::new_cursor(loc);
         self.set_selection(selection, source);
 
         // request keyboard focus if not already focused
@@ -208,10 +332,14 @@ impl BlockEditor {
 }
 
 fn clamp_col(row: usize, col: usize, source: &Rope) -> usize {
-    std::cmp::min(col, source.len_char_for_line(row))
+    std::cmp::min(col, source.line(row).len_chars_no_linebreak())
 }
 
-fn lowest_non_err_named_node_for_point(mut cursor: TreeCursor, point: Point) -> Option<Node> {
+fn string_pseudo_selection_range(mut cursor: TreeCursor, point: Point) -> Option<TextRange> {
+    // string will always be the lowest named node for the provided point
+    // don't set if error (bc that would make things go wonky when unpaired)
+    // TODO: also don't set if comment
+
     // go to lowest node for point
     while cursor.goto_first_child_for_point(point).is_some() {
         if cursor.node().is_error() {
@@ -222,5 +350,7 @@ fn lowest_non_err_named_node_for_point(mut cursor: TreeCursor, point: Point) -> 
     // if landed on a unnamed node, find first named parent
     while !cursor.node().is_named() && cursor.goto_parent() {}
 
-    Some(cursor.node())
+    let node = cursor.node();
+    let range = TextRange::new(node.start_position().into(), node.end_position().into());
+    Some(range)
 }

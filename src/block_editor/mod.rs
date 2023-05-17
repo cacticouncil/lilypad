@@ -9,6 +9,7 @@ mod block_drawer;
 pub mod diagnostics;
 mod gutter_drawer;
 mod highlighter;
+mod ime;
 mod lifecycle;
 mod rope_ext;
 mod selection_changing;
@@ -22,6 +23,7 @@ use text_drawer::*;
 use text_range::*;
 
 use self::diagnostics::DiagnosticPopup;
+use self::ime::ImeComponent;
 
 //controls cursor blinking speed
 pub const TIMER_INTERVAL: Duration = Duration::from_millis(700);
@@ -95,6 +97,8 @@ struct BlockEditor {
     /// tracking which characters had pairs inserted with them, and should take
     /// the pair down with them if they are deleted
     paired_delete_stack: Vec<bool>,
+
+    ime: ImeComponent,
 }
 
 #[derive(Clone, Data)]
@@ -122,6 +126,7 @@ impl BlockEditor {
             diagnostic_popup: WidgetPod::new(DiagnosticPopup::new()),
             input_ignore_stack: vec![],
             paired_delete_stack: vec![],
+            ime: ImeComponent::default(),
         }
     }
 }

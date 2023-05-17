@@ -29,6 +29,8 @@ impl Widget<AppModel> for FilePicker {
         _env: &druid::Env,
     ) {
         if let Event::MouseDown(mouse) = event {
+            ctx.request_focus();
+
             if mouse.button == MouseButton::Left {
                 let file_num = (mouse.pos.y / ROW_HEIGHT) as usize;
                 if file_num < self.files.len() {
@@ -104,6 +106,11 @@ impl Widget<AppModel> for FilePicker {
     }
 
     fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &AppModel, _env: &druid::Env) {
+        if ctx.has_focus() {
+            let outline = Rect::from_origin_size(Point::ORIGIN, ctx.size());
+            ctx.stroke(outline, &theme::SELECTION, 2.0);
+        }
+
         for (num, file) in self.files.iter().enumerate() {
             let layout = make_text_layout(file, ctx);
 

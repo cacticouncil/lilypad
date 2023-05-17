@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use druid::{
-    Event, KbKey, LifeCycle, Menu, Modifiers, MouseButton, PaintCtx, Point, Rect, RenderContext,
+    text::TextAction, Event, LifeCycle, Menu, MouseButton, PaintCtx, Point, Rect, RenderContext,
     Size, Widget,
 };
 use ropey::Rope;
@@ -35,8 +35,8 @@ impl Widget<EditorModel> for BlockEditor {
                 if *id == self.cursor_timer {
                     // blink cursor and set new timer
                     self.cursor_visible = !self.cursor_visible;
-                    ctx.request_paint();
                     self.cursor_timer = ctx.request_timer(TIMER_INTERVAL);
+                    ctx.request_paint();
                     ctx.set_handled();
                 }
             }
@@ -98,43 +98,39 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.request_paint();
                     ctx.set_handled();
                 }
+
+                // when cursor is inside of editor, have it be in text edit mode
+                ctx.set_cursor(&druid::Cursor::IBeam);
             }
 
-            Event::KeyDown(key_event) => {
-                // ignore hotkeys (handled by menu on native and vscode in vscode)
-                if key_event.mods.contains(Modifiers::META)
-                    || key_event.mods.contains(Modifiers::CONTROL)
-                {
-                    return;
+            Event::ImeStateChange => {
+                let mut source = data.source.lock().unwrap();
+
+                // apply action
+                let action = self.ime.borrow_mut().take_external_action();
+                if let Some(action) = action {
+                    match action {
+                        TextAction::InsertNewLine { .. } => self.insert_newline(&mut source),
+                        TextAction::InsertTab { .. } => self.indent(&mut source),
+                        TextAction::InsertBacktab => self.unindent(&mut source),
+                        TextAction::Delete(mov) => self.backspace(&mut source, mov),
+                        TextAction::Move(mov) => self.move_cursor(mov, &source),
+                        TextAction::MoveSelecting(mov) => self.move_selecting(mov, &source),
+                        _ => crate::console_log!("unexpected external action '{:?}'", action),
+                    };
                 }
 
-                match &key_event.key {
-                    // Text Inputs
-                    KbKey::Backspace => self.backspace(&mut data.source.lock().unwrap()),
-                    KbKey::Enter => self.insert_newline(&mut data.source.lock().unwrap()),
-                    KbKey::Tab => self.insert_str(&mut data.source.lock().unwrap(), "    "),
-                    KbKey::Character(char) => {
-                        self.insert_str(&mut data.source.lock().unwrap(), char)
-                    }
-
-                    // Arrow Keys
-                    KbKey::ArrowUp => self.cursor_up(&data.source.lock().unwrap()),
-                    KbKey::ArrowDown => self.cursor_down(&data.source.lock().unwrap()),
-                    KbKey::ArrowLeft => self.cursor_left(&data.source.lock().unwrap()),
-                    KbKey::ArrowRight => self.cursor_right(&data.source.lock().unwrap()),
-
-                    // Home and End buttons
-                    KbKey::Home => self.cursor_to_line_start(&data.source.lock().unwrap()),
-                    KbKey::End => self.cursor_to_line_end(&data.source.lock().unwrap()),
-
-                    _ => {}
+                // apply text change
+                let text_change = self.ime.borrow_mut().take_external_text_change();
+                if let Some(text_change) = text_change {
+                    self.insert_str(&mut source, &text_change);
                 }
 
-                // close any open popups
+                // cursor has moved, so close diagnostics popup
                 data.diagnostic_selection = None;
 
                 // redraw
-                ctx.request_layout(); // probably should only conditionally do this
+                ctx.request_layout();
                 ctx.request_paint();
 
                 // prevent another widget from also responding
@@ -315,8 +311,10 @@ impl Widget<EditorModel> for BlockEditor {
         // draw gutter
         gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.row, ctx);
 
-        // draw cursor and selection
-        self.draw_cursor(ctx);
+        // draw cursor
+        if ctx.has_focus() {
+            self.draw_cursor(ctx);
+        }
     }
 
     fn lifecycle(
@@ -326,12 +324,19 @@ impl Widget<EditorModel> for BlockEditor {
         data: &EditorModel,
         env: &druid::Env,
     ) {
-        // replace the tree with a tree for the initial source
-        if let LifeCycle::WidgetAdded = event {
-            self.tree_manager.replace(&data.source.lock().unwrap())
+        match event {
+            LifeCycle::WidgetAdded => {
+                // register as text input
+                ctx.register_text_input(self.ime.ime_handler());
+            }
+            LifeCycle::BuildFocusChain => {
+                // make the view a focus target
+                ctx.register_for_focus();
+            }
+            _ => {}
         }
 
-        // add diagnostic popup child
+        // pass lifecycle events to child
         self.diagnostic_popup.lifecycle(ctx, event, data, env);
     }
 }

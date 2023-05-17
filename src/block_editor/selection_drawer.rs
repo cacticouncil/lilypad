@@ -4,7 +4,7 @@ use std::cmp::{max, Ordering};
 
 use crate::theme;
 
-use super::{rope_ext::RopeExt, text_range::TextRange, BlockEditor, FONT_HEIGHT, FONT_WIDTH};
+use super::{rope_ext::RopeSliceExt, text_range::TextRange, BlockEditor, FONT_HEIGHT, FONT_WIDTH};
 
 impl BlockEditor {
     pub fn draw_cursor(&self, ctx: &mut PaintCtx) {
@@ -52,7 +52,7 @@ impl BlockEditor {
                 self.draw_selection_block(
                     selection.start.col,
                     selection.start.row,
-                    source.len_char_for_line(selection.start.row) - selection.start.col,
+                    source.line(selection.start.row).len_chars_no_linebreak() - selection.start.col,
                     false,
                     color,
                     ctx,
@@ -63,7 +63,7 @@ impl BlockEditor {
                     self.draw_selection_block(
                         0,
                         line,
-                        max(source.len_char_for_line(line), 1),
+                        max(source.line(line).len_chars_no_linebreak(), 1),
                         true,
                         color,
                         ctx,
@@ -98,7 +98,7 @@ impl BlockEditor {
                     self.draw_selection_block(
                         0,
                         line,
-                        max(source.len_char_for_line(line), 1),
+                        max(source.line(line).len_chars_no_linebreak(), 1),
                         true,
                         color,
                         ctx,
@@ -109,7 +109,7 @@ impl BlockEditor {
                 self.draw_selection_block(
                     selection.end.col,
                     selection.end.row,
-                    source.len_char_for_line(selection.end.row) - selection.end.col,
+                    source.line(selection.end.row).len_chars_no_linebreak() - selection.end.col,
                     false,
                     color,
                     ctx,

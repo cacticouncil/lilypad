@@ -20,7 +20,7 @@ odds = []
 for count1 in range(count2):
     numbers += [count1]
     #Testing multiple if else statements
-    if count1%2 == 0:
+    if count1 % 2 == 0:
         evens += [count1]
     else:
         odds += [count1]

@@ -20,11 +20,8 @@ impl TextRange {
         TextRange { start, end }
     }
 
-    pub fn new_cursor(x: usize, y: usize) -> Self {
-        TextRange {
-            start: TextPoint::new(x, y),
-            end: TextPoint::new(x, y),
-        }
+    pub fn new_cursor(pt: TextPoint) -> Self {
+        TextRange { start: pt, end: pt }
     }
 
     pub fn is_cursor(&self) -> bool {
