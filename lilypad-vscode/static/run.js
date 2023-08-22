@@ -2,7 +2,8 @@ import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, 
 
 async function run() {
   await init();
-  run_editor();
+  // fontFamily, and fontSize are set in another script tag
+  run_editor(fontFamily, fontSize);
 }
 // web view -> extension messages
 const vscode = acquireVsCodeApi();

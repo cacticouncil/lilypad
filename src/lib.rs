@@ -3,8 +3,7 @@ mod parse;
 mod theme;
 
 use druid::{AppLauncher, ExtEventSink, PlatformError, Target, WindowDesc};
-use once_cell::sync::OnceCell;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use wasm_bindgen::prelude::*;
 
 use block_editor::{
@@ -27,10 +26,10 @@ pub(crate) use console_log;
 
 /* ----- Javascript -> WASM ----- */
 #[wasm_bindgen]
-pub fn run_editor() {
+pub fn run_editor(font_name: String, font_size: f64) {
     // This hook is necessary to get panic messages in the console
     console_error_panic_hook::set_once();
-    main().expect("could not launch")
+    main(font_name, font_size).expect("could not launch")
 }
 
 #[wasm_bindgen]
@@ -147,11 +146,13 @@ pub mod vscode {
 
 /* ----- Interface ----- */
 
-static EVENT_SINK: OnceCell<Arc<ExtEventSink>> = OnceCell::new();
+static EVENT_SINK: OnceLock<Arc<ExtEventSink>> = OnceLock::new();
 
 pub type GlobalModel = EditorModel;
 
-fn main() -> Result<(), PlatformError> {
+fn main(font_name: String, font_size: f64) -> Result<(), PlatformError> {
+    block_editor::configure_font(font_name, font_size);
+
     // start with empty string
     let data = EditorModel {
         source: Arc::new(Mutex::new(ropey::Rope::new())),

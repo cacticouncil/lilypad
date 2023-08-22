@@ -55,6 +55,13 @@ impl Lens<AppModel, EditorModel> for EditorLens {
 }
 
 fn main() -> Result<(), PlatformError> {
+    // SF Mono on macOS, Roboto Mono elsewhere
+    if cfg!(target_os = "macos") {
+        block_editor::configure_font("SF Mono".to_string(), 14.0);
+    } else {
+        block_editor::configure_font("Roboto Mono".to_string(), 14.0);
+    }
+
     let data = AppModel {
         dir: None,
         file: None,

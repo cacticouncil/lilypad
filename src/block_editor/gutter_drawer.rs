@@ -1,9 +1,9 @@
 use druid::{
     piet::{PietTextLayout, Text, TextLayout, TextLayoutBuilder},
-    FontFamily, PaintCtx, Point, RenderContext,
+    PaintCtx, Point, RenderContext,
 };
 
-use super::FONT_SIZE;
+use super::{FONT_FAMILY, FONT_SIZE};
 use crate::theme;
 
 pub fn draw_line_numbers(padding: &Vec<f64>, curr_line: usize, ctx: &mut PaintCtx) {
@@ -24,12 +24,11 @@ pub fn draw_line_numbers(padding: &Vec<f64>, curr_line: usize, ctx: &mut PaintCt
             y_pos,
         );
         ctx.draw_text(&text, pos);
-        y_pos += super::FONT_HEIGHT;
+        y_pos += super::FONT_HEIGHT.get().unwrap();
     }
 }
 
 fn make_num_text(num: usize, curr: bool, ctx: &mut PaintCtx) -> PietTextLayout {
-    let font_family = FontFamily::new_unchecked("Roboto Mono");
     let color = if curr {
         theme::INTERFACE_TEXT
     } else {
@@ -37,7 +36,10 @@ fn make_num_text(num: usize, curr: bool, ctx: &mut PaintCtx) -> PietTextLayout {
     };
     ctx.text()
         .new_text_layout(num.to_string())
-        .font(font_family, FONT_SIZE)
+        .font(
+            FONT_FAMILY.get().unwrap().clone(),
+            *FONT_SIZE.get().unwrap(),
+        )
         .text_color(color)
         .build()
         .unwrap()

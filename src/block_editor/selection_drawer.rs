@@ -13,10 +13,13 @@ impl BlockEditor {
             let total_pad: f64 = self.padding.iter().take(self.selection.end.row + 1).sum();
             let block = Rect::from_origin_size(
                 Point::new(
-                    super::TOTAL_TEXT_X_OFFSET + (self.selection.end.col as f64) * FONT_WIDTH,
-                    super::OUTER_PAD + (self.selection.end.row as f64) * FONT_HEIGHT + total_pad,
+                    super::TOTAL_TEXT_X_OFFSET
+                        + (self.selection.end.col as f64) * FONT_WIDTH.get().unwrap(),
+                    super::OUTER_PAD
+                        + (self.selection.end.row as f64) * FONT_HEIGHT.get().unwrap()
+                        + total_pad,
                 ),
-                Size::new(2.0, FONT_HEIGHT),
+                Size::new(2.0, *FONT_HEIGHT.get().unwrap()),
             );
 
             ctx.fill(block, &theme::CURSOR);
@@ -150,14 +153,17 @@ impl BlockEditor {
             .take(if chained_below { y } else { y + 1 })
             .sum();
 
+        let font_width = *FONT_WIDTH.get().unwrap();
+        let font_height = *FONT_HEIGHT.get().unwrap();
+
         let block = Rect::from_origin_size(
             Point::new(
-                (x as f64 * FONT_WIDTH) + super::TOTAL_TEXT_X_OFFSET,
-                (y as f64 * FONT_HEIGHT) + super::OUTER_PAD + total_pad,
+                (x as f64 * font_width) + super::TOTAL_TEXT_X_OFFSET,
+                (y as f64 * font_height) + super::OUTER_PAD + total_pad,
             ),
             Size::new(
-                width as f64 * FONT_WIDTH,
-                FONT_HEIGHT + if chained_below { self.padding[y] } else { 0.0 },
+                width as f64 * font_width,
+                font_height + if chained_below { self.padding[y] } else { 0.0 },
             ),
         );
         ctx.fill(block, color);

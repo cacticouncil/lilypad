@@ -203,9 +203,12 @@ fn draw_block(
         None => return,
     };
 
+    let font_width = *FONT_WIDTH.get().unwrap();
+    let font_height = *FONT_HEIGHT.get().unwrap();
+
     let start_pt = Point::new(
-        (block.col as f64) * FONT_WIDTH + OUTER_PAD + GUTTER_WIDTH - (BLOCK_STROKE_WIDTH / 2.0),
-        (block.line as f64) * FONT_HEIGHT + OUTER_PAD - (BLOCK_STROKE_WIDTH / 2.0) + padding_above,
+        (block.col as f64) * font_width + OUTER_PAD + GUTTER_WIDTH - (BLOCK_STROKE_WIDTH / 2.0),
+        (block.line as f64) * font_height + OUTER_PAD - (BLOCK_STROKE_WIDTH / 2.0) + padding_above,
     );
 
     // determine the margin based on level
@@ -215,7 +218,7 @@ fn draw_block(
     // get the size of the rectangle to draw
     let size = Size::new(
         (ctx.size().width) - margin,
-        ((block.height as f64) * FONT_HEIGHT) + (BLOCK_INNER_PAD * 2.0) + padding_inside,
+        ((block.height as f64) * font_height) + (BLOCK_INNER_PAD * 2.0) + padding_inside,
     );
 
     // nested corner radii should be r_inner = r_outer - distance

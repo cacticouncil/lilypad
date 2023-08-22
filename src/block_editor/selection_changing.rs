@@ -311,7 +311,7 @@ impl BlockEditor {
         let mut total_pad = 0.0;
         for row_pad in &self.padding {
             total_pad += row_pad;
-            let curr_line_start = total_pad + (y as f64 * FONT_HEIGHT);
+            let curr_line_start = total_pad + (y as f64 * FONT_HEIGHT.get().unwrap());
             let raw_y = mouse.pos.y - super::OUTER_PAD;
             if raw_y <= curr_line_start {
                 break;
@@ -323,8 +323,8 @@ impl BlockEditor {
         // TODO: if past last line, move to end of last line
 
         let x_raw = ((mouse.pos.x - super::OUTER_PAD - super::GUTTER_WIDTH - super::TEXT_L_PAD)
-            / FONT_WIDTH)
-            .round() as usize;
+            / FONT_WIDTH.get().unwrap())
+        .round() as usize;
         let x_bound = clamp_col(y, x_raw, source);
 
         TextPoint::new(x_bound, y)

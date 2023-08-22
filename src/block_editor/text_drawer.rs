@@ -1,6 +1,6 @@
 use druid::{
     piet::{PietTextLayout, Text, TextLayoutBuilder},
-    Color, FontFamily, PaintCtx, Point, RenderContext,
+    Color, PaintCtx, Point, RenderContext,
 };
 use ropey::Rope;
 use tree_sitter_c2rust::Node;
@@ -11,7 +11,7 @@ use std::{
 };
 
 use super::highlighter::{Highlight, HighlightConfiguration, HighlightEvent};
-use super::{FONT_HEIGHT, FONT_SIZE};
+use super::{FONT_FAMILY, FONT_HEIGHT, FONT_SIZE};
 use crate::theme;
 
 #[cfg(target_family = "wasm")]
@@ -47,7 +47,7 @@ impl TextDrawer {
             total_padding += padding[num];
             let pos = Point {
                 x: super::TOTAL_TEXT_X_OFFSET,
-                y: ((num as f64) * FONT_HEIGHT) + total_padding + super::OUTER_PAD,
+                y: ((num as f64) * FONT_HEIGHT.get().unwrap()) + total_padding + super::OUTER_PAD,
             };
             layout.draw(pos, ctx);
         }
@@ -231,12 +231,13 @@ impl<'a> ColoredTextBuilder<'a> {
 
     #[cfg(not(target_family = "wasm"))]
     fn build(self, ctx: &mut PaintCtx) -> ColoredText {
-        let font_family = FontFamily::new_unchecked("Roboto Mono");
-
         let mut layout = ctx
             .text()
             .new_text_layout(self.text.to_string())
-            .font(font_family, FONT_SIZE)
+            .font(
+                FONT_FAMILY.get().unwrap().clone(),
+                *FONT_SIZE.get().unwrap(),
+            )
             .default_attribute(TextAttribute::TextColor(theme::syntax::DEFAULT));
 
         // apply colors
@@ -255,10 +256,12 @@ impl<'a> ColoredTextBuilder<'a> {
     #[cfg(target_family = "wasm")]
     fn build(self, ctx: &mut PaintCtx) -> ColoredText {
         fn make_text_layout(text: &str, color: Color, ctx: &mut PaintCtx) -> PietTextLayout {
-            let font_family = FontFamily::new_unchecked("Roboto Mono");
             ctx.text()
                 .new_text_layout(text.to_string())
-                .font(font_family, FONT_SIZE)
+                .font(
+                    FONT_FAMILY.get().unwrap().clone(),
+                    *FONT_SIZE.get().unwrap(),
+                )
                 .text_color(color)
                 .build()
                 .unwrap()

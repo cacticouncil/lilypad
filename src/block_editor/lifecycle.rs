@@ -245,14 +245,14 @@ impl Widget<EditorModel> for BlockEditor {
         // width is max between text and window
         let source = data.source.lock().unwrap();
         let max_chars = source.lines().map(|l| l.chars().count()).max().unwrap_or(0);
-        let width = max_chars as f64 * FONT_WIDTH
+        let width = max_chars as f64 * FONT_WIDTH.get().unwrap()
             + super::OUTER_PAD
             + super::GUTTER_WIDTH
             + super::TEXT_L_PAD
             + 40.0; // extra space for nesting blocks
 
         // height is just height of text
-        let height = source.len_lines() as f64 * FONT_HEIGHT
+        let height = source.len_lines() as f64 * FONT_HEIGHT.get().unwrap()
             + super::OUTER_PAD
             + self.padding.iter().sum::<f64>()
             + 200.0; // extra space for over-scroll
@@ -328,6 +328,11 @@ impl Widget<EditorModel> for BlockEditor {
             LifeCycle::WidgetAdded => {
                 // register as text input
                 ctx.register_text_input(self.ime.ime_handler());
+
+                // find font dimensions if not already found
+                if FONT_WIDTH.get().is_none() {
+                    super::find_font_dimensions(ctx, env);
+                }
             }
             LifeCycle::BuildFocusChain => {
                 // make the view a focus target

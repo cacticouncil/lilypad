@@ -1,5 +1,6 @@
 {
   "name": "lilypad-vscode",
+  "publisher": "org.cacticouncil",
   "displayName": "lilypad-vscode",
   "description": "Lilypad editor for VSCode",
   "version": "0.0.1",

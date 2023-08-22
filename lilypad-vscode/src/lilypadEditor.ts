@@ -126,6 +126,12 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(
             this.context.extensionUri, "static", "run.js"));
 
+        // get the font settings for vscode
+        // TODO: support fallback fonts instead of only sending the first
+        const editorConfig = vscode.workspace.getConfiguration("editor");
+        const fontFamily = (editorConfig.get("fontFamily") as string).split(',')[0];
+        const fontSize = editorConfig.get("fontSize");
+
         return `
         <!DOCTYPE html>
         <html lang="en">
@@ -148,7 +154,16 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                 <div style="text-align: center; margin: 0px; padding: 0px;">
                     <canvas id="canvas"></canvas>
                 </div>
-                <script type="module" src="${scriptUri}" type="application/javascript"></script>
+                <script>
+                    /* this is a hacky way to send the font info to run.js */
+                    var fontFamily = "${fontFamily}"
+                    var fontSize = ${fontSize}
+                </script>
+                <script
+                    type="module"
+                    src="${scriptUri}"
+                    type="application/javascript"
+                ></script>
             </body>
         </html>
         `;

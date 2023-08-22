@@ -6,7 +6,9 @@ A next generation dual modal code editor
 
 - Both
     - [Rust](https://rustup.rs/)
-    - [Roboto Mono Font](https://fonts.google.com/specimen/Roboto+Mono)
+- Default Native Fonts
+    - macOS: [SF Mono](https://developer.apple.com/fonts/)
+    - Windows: [Roboto Mono Font](https://fonts.google.com/specimen/Roboto+Mono)
 - Web
     - [wasm-pack](https://rustwasm.github.io/wasm-pack/)
     - LLVM (`tree-sitter-python-wasm-compatible` requires `llvm-ar`) 

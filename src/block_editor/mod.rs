@@ -1,6 +1,6 @@
 use druid::{widget::Scroll, Data, TimerToken, Widget, WidgetPod};
 use ropey::Rope;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use crate::parse::TreeManager;
@@ -28,18 +28,29 @@ use self::ime::ImeComponent;
 //controls cursor blinking speed
 pub const TIMER_INTERVAL: Duration = Duration::from_millis(700);
 
-/*
-Got these values by running:
-    let font = FontDescriptor::new(FontFamily::new_unchecked("Roboto Mono")).with_size(15.0);
-    let mut layout = TextLayout::<String>::from_text("A".to_string());
+static FONT_FAMILY: OnceLock<druid::FontFamily> = OnceLock::new();
+static FONT_SIZE: OnceLock<f64> = OnceLock::new();
+static FONT_WIDTH: OnceLock<f64> = OnceLock::new();
+static FONT_HEIGHT: OnceLock<f64> = OnceLock::new();
+
+pub fn configure_font(name: String, size: f64) {
+    let family = druid::FontFamily::new_unchecked(name);
+    FONT_FAMILY.set(family).unwrap();
+    FONT_SIZE.set(size).unwrap();
+}
+
+pub fn find_font_dimensions(ctx: &mut druid::LifeCycleCtx, env: &druid::Env) {
+    // find the size of a single character
+    let font = druid::FontDescriptor::new(FONT_FAMILY.get().unwrap().clone())
+        .with_size(*FONT_SIZE.get().unwrap());
+    let mut layout = druid::TextLayout::<String>::from_text("A");
     layout.set_font(font);
     layout.rebuild_if_needed(ctx.text(), env);
-    let size = layout.size();
-    println!("{:}", size);
-*/
-pub const FONT_WIDTH: f64 = 9.0;
-pub const FONT_HEIGHT: f64 = 20.0;
-pub const FONT_SIZE: f64 = 15.0;
+    let dimensions = layout.size();
+
+    FONT_WIDTH.set(dimensions.width).unwrap();
+    FONT_HEIGHT.set(dimensions.height).unwrap();
+}
 
 /// padding around edges of entire editor
 const OUTER_PAD: f64 = 16.0;
