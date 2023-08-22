@@ -1,6 +1,6 @@
 use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
 use ropey::Rope;
-use std::cmp::{max, Ordering};
+use std::cmp::Ordering;
 
 use crate::theme;
 
@@ -42,28 +42,30 @@ impl BlockEditor {
         color: &Color,
         ctx: &mut PaintCtx,
     ) {
-        let start_y = selection.start.row;
-        let end_y = selection.end.row;
+        let start_row = selection.start.row;
+        let end_row = selection.end.row;
 
-        match end_y.cmp(&start_y) {
+        match end_row.cmp(&start_row) {
             Ordering::Greater => {
                 // Forward selection, multiple lines
                 // Fill first line from cursor to end
+                // 1 is added to the width to include the newline
                 self.draw_selection_block(
                     selection.start.col,
                     selection.start.row,
-                    source.line(selection.start.row).len_chars_no_linebreak() - selection.start.col,
+                    source.line(start_row).len_chars_no_linebreak() - selection.start.col + 1,
                     false,
                     color,
                     ctx,
                 );
 
                 // fill in any in between lines
-                for line in (start_y + 1)..end_y {
+                // 1 is added to the width to include the newline
+                for line in (start_row + 1)..end_row {
                     self.draw_selection_block(
                         0,
                         line,
-                        max(source.line(line).len_chars_no_linebreak(), 1),
+                        source.line(line).len_chars_no_linebreak() + 1,
                         true,
                         color,
                         ctx,
@@ -94,11 +96,12 @@ impl BlockEditor {
                 );
 
                 // fill in between lines
-                for line in (end_y + 1)..start_y {
+                // 1 is added to the width to include the newline
+                for line in (end_row + 1)..start_row {
                     self.draw_selection_block(
                         0,
                         line,
-                        max(source.line(line).len_chars_no_linebreak(), 1),
+                        source.line(line).len_chars_no_linebreak() + 1,
                         true,
                         color,
                         ctx,
@@ -106,10 +109,11 @@ impl BlockEditor {
                 }
 
                 // Fill last line from the right until cursor
+                // 1 is added to the width to include the newline
                 self.draw_selection_block(
                     selection.end.col,
                     selection.end.row,
-                    source.line(selection.end.row).len_chars_no_linebreak() - selection.end.col,
+                    source.line(selection.end.row).len_chars_no_linebreak() - selection.end.col + 1,
                     false,
                     color,
                     ctx,
