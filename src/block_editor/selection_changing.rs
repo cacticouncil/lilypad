@@ -336,21 +336,29 @@ fn clamp_col(row: usize, col: usize, source: &Rope) -> usize {
 }
 
 fn string_pseudo_selection_range(mut cursor: TreeCursor, point: Point) -> Option<TextRange> {
-    // string will always be the lowest named node for the provided point
-    // don't set if error (bc that would make things go wonky when unpaired)
-    // TODO: also don't set if comment
-
     // go to lowest node for point
+    // don't set if error (bc that would make things go wonky when unpaired)
     while cursor.goto_first_child_for_point(point).is_some() {
         if cursor.node().is_error() {
             return None;
         }
     }
 
-    // if landed on a unnamed node, find first named parent
-    while !cursor.node().is_named() && cursor.goto_parent() {}
+    // verify that our current point is the start (104) or end (107) of a string (not an escape sequence)
+    let current_kind = cursor.node().kind_id();
+    if current_kind != 104 && current_kind != 107 {
+        return None;
+    }
 
-    let node = cursor.node();
-    let range = TextRange::new(node.start_position().into(), node.end_position().into());
-    Some(range)
+    // go up until we hit the string (node of id 230)
+    while cursor.goto_parent() {
+        let node = cursor.node();
+        if node.kind_id() == 230 {
+            let range = TextRange::new(node.start_position().into(), node.end_position().into());
+            return Some(range);
+        }
+    }
+
+    // we hit the top without finding a string, just return none
+    None
 }

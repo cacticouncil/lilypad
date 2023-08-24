@@ -2,7 +2,7 @@ import init, { run_editor } from "./lilypad_web.js";
 
 async function run() {
   await init();
-  run_editor();
+  run_editor("Roboto Mono", 14);
 }
 
 // Functions that the editor calls to communicate
