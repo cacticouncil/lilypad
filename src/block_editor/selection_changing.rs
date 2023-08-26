@@ -320,6 +320,13 @@ impl BlockEditor {
         }
         y = y.saturating_sub(1);
 
+        // double check that we are in bounds
+        // (clicking and deleting at the same time can cause the padding to not be updated yet)
+        let line_count = source.len_lines();
+        if y >= line_count {
+            y = line_count - 1;
+        }
+
         // TODO: if past last line, move to end of last line
 
         let x_raw = ((mouse.pos.x - super::OUTER_PAD - super::GUTTER_WIDTH - super::TEXT_L_PAD)
