@@ -7,7 +7,7 @@
 //   - support for ropey
 
 use ropey::RopeSlice;
-use std::{iter, mem, ops, str, usize};
+use std::{borrow::Cow, iter, mem, ops, str, usize};
 use tree_sitter_c2rust::{
     Language, Node, Query, QueryCaptures, QueryCursor, QueryError, TextProvider,
 };
@@ -41,7 +41,7 @@ pub struct HighlightConfiguration {
 
 #[derive(Debug)]
 struct LocalDef<'a> {
-    name: &'a str,
+    name: Cow<'a, str>,
     value_range: ops::Range<usize>,
     highlight: Option<Highlight>,
 }
@@ -337,7 +337,7 @@ impl<'a> Iterator for HighlightIter<'a> {
                         }
                     }
 
-                    let name = self.source.byte_slice(range.clone()).as_str().unwrap_or("");
+                    let name = Cow::from(self.source.byte_slice(range.clone()));
                     scope.local_defs.push(LocalDef {
                         name,
                         value_range,

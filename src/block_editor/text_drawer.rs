@@ -6,6 +6,7 @@ use ropey::Rope;
 use tree_sitter_c2rust::Node;
 
 use std::{
+    borrow::Cow,
     cmp::{max, min},
     ops::Range,
 };
@@ -69,7 +70,9 @@ impl TextDrawer {
         let mut category_stack: Vec<Highlight> = vec![];
 
         for line in source.lines() {
-            let mut colored_text = ColoredTextBuilder::new(line.as_str().unwrap_or(""));
+            // Cow::from uses a reference in most cases (since lines are usually short)
+            // but if it crosses a chunk boundary, it will allocate a new string
+            let mut colored_text = ColoredTextBuilder::new(Cow::from(line));
             let end_of_line = start_of_line + line.len_bytes();
 
             // apply highlight attributes
@@ -202,7 +205,7 @@ struct ColorRange {
 }
 
 struct ColoredTextBuilder<'a> {
-    text: &'a str,
+    text: Cow<'a, str>,
     color_ranges: Vec<ColorRange>,
 }
 
@@ -218,7 +221,7 @@ struct ColoredText {
 }
 
 impl<'a> ColoredTextBuilder<'a> {
-    fn new(text: &'a str) -> Self {
+    fn new(text: Cow<'a, str>) -> Self {
         Self {
             text,
             color_ranges: vec![],
@@ -233,7 +236,7 @@ impl<'a> ColoredTextBuilder<'a> {
     fn build(self, ctx: &mut PaintCtx) -> ColoredText {
         let mut layout = ctx
             .text()
-            .new_text_layout(self.text.to_string())
+            .new_text_layout(self.text.into_owned())
             .font(
                 FONT_FAMILY.get().unwrap().clone(),
                 *FONT_SIZE.get().unwrap(),
