@@ -298,8 +298,10 @@ impl BlockEditor {
         // set selection end position to dragged position
         self.selection.end = self.mouse_to_coord(mouse, source);
 
-        // clear pseudo selection
-        self.pseudo_selection = None;
+        // clear pseudo selection if making a selection
+        if !self.selection.is_cursor() {
+            self.pseudo_selection = None;
+        }
 
         // show cursor
         self.cursor_visible = true;
