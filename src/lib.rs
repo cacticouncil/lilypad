@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use wasm_bindgen::prelude::*;
 
 use block_editor::{
+    completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCommand},
     text_range::TextEdit,
     EditorModel,
@@ -89,8 +90,12 @@ pub fn new_diagnostics(json: JsValue) {
         serde_wasm_bindgen::from_value(json).expect("Could not deserialize diagnostics");
 
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::DIAGNOSTICS_SELECTOR, diagnostics, Target::Global)
-            .unwrap();
+        sink.submit_command(
+            vscode::SET_DIAGNOSTICS_SELECTOR,
+            diagnostics,
+            Target::Global,
+        )
+        .unwrap();
     } else {
         console_log!("could not get sink");
     }
@@ -102,7 +107,20 @@ pub fn set_quick_fixes(json: JsValue) {
         serde_wasm_bindgen::from_value(json).expect("Could not deserialize quick fixes");
 
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::QUICK_FIX_SELECTOR, fixes, Target::Global)
+        sink.submit_command(vscode::SET_QUICK_FIX_SELECTOR, fixes, Target::Global)
+            .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
+#[wasm_bindgen]
+pub fn set_completions(json: JsValue) {
+    let fixes: Vec<VSCodeCompletionItem> =
+        serde_wasm_bindgen::from_value(json).expect("Could not deserialize quick fixes");
+
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(vscode::SET_COMPLETIONS_SELECTOR, fixes, Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -115,6 +133,7 @@ pub mod vscode {
     use wasm_bindgen::prelude::*;
 
     use crate::block_editor::{
+        completion::VSCodeCompletionItem,
         diagnostics::{Diagnostic, VSCodeCommand},
         text_range::TextEdit,
     };
@@ -122,8 +141,11 @@ pub mod vscode {
     pub const SET_TEXT_SELECTOR: Selector<String> = Selector::new("set_text");
     pub const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_edit");
     pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
-    pub const DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> = Selector::new("diagnostics");
-    pub const QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("quick_fix");
+    pub const SET_DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> =
+        Selector::new("set_diagnostics");
+    pub const SET_QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("set_quick_fix");
+    pub const SET_COMPLETIONS_SELECTOR: Selector<Vec<VSCodeCompletionItem>> =
+        Selector::new("set_completions");
 
     #[wasm_bindgen(raw_module = "./run.js")]
     extern "C" {
@@ -139,6 +161,8 @@ pub mod vscode {
         pub fn set_clipboard(text: String);
         #[wasm_bindgen(js_name = requestQuickFixes)]
         pub fn request_quick_fixes(line: usize, col: usize);
+        #[wasm_bindgen(js_name = requestCompletions)]
+        pub fn request_completions(line: usize, col: usize);
         #[wasm_bindgen(js_name = executeCommand)]
         pub fn execute_command(command: String, args: JsValue);
     }

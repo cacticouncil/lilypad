@@ -219,9 +219,12 @@ impl Widget<EditorModel> for DiagnosticPopup {
             Event::MouseUp(mouse) if mouse.button == MouseButton::Left => {
                 ctx.set_handled();
             }
+            Event::MouseMove(_) => {
+                ctx.set_handled();
+            }
 
             Event::Command(command) => {
-                if let Some(fixes) = command.get(vscode::QUICK_FIX_SELECTOR) {
+                if let Some(fixes) = command.get(vscode::SET_QUICK_FIX_SELECTOR) {
                     // TODO: verify id matches
                     self.fixes = Some(fixes.clone());
 

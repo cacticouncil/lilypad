@@ -6,6 +6,7 @@ use std::time::Duration;
 use crate::parse::TreeManager;
 
 mod block_drawer;
+pub mod completion;
 pub mod diagnostics;
 mod gutter_drawer;
 mod highlighter;
@@ -18,6 +19,7 @@ mod text_drawer;
 mod text_editing;
 pub mod text_range;
 
+use completion::CompletionPopup;
 use diagnostics::Diagnostic;
 use text_drawer::*;
 use text_range::*;
@@ -64,6 +66,8 @@ const GUTTER_WIDTH: f64 = 30.0;
 /// convenience constant for all the padding that impacts text layout
 const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 
+const SHOW_ERROR_BLOCK_OUTLINES: bool = false;
+
 pub fn widget() -> impl Widget<EditorModel> {
     Scroll::new(BlockEditor::new()).content_must_fill(true)
 }
@@ -102,6 +106,9 @@ struct BlockEditor {
     /// overlay view for diagnostics
     diagnostic_popup: WidgetPod<EditorModel, DiagnosticPopup>,
 
+    /// overlay view for completions
+    completion_popup: WidgetPod<EditorModel, CompletionPopup>,
+
     /// pairs that were inserted and should be ignored on the next input
     input_ignore_stack: Vec<&'static str>,
 
@@ -135,6 +142,7 @@ impl BlockEditor {
             blocks: vec![],
             padding: vec![],
             diagnostic_popup: WidgetPod::new(DiagnosticPopup::new()),
+            completion_popup: WidgetPod::new(CompletionPopup::new()),
             input_ignore_stack: vec![],
             paired_delete_stack: vec![],
             ime: ImeComponent::default(),

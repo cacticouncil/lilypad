@@ -71,13 +71,14 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         // Receive message from the webview.
         webviewPanel.webview.onDidReceiveMessage(message => {
             switch (message.type) {
-                case "started":
+                case "started": {
                     webviewPanel.webview.postMessage({
                         type: "set_text",
                         text: document.getText(),
                     });
                     break;
-                case "edited":
+                }
+                case "edited": {
                     const editedRange = new vscode.Range(
                         message.range.startLine,
                         message.range.startCol,
@@ -86,27 +87,44 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     );
                     this.updateTextDocument(document, message.text, editedRange);
                     break;
-                case "set_clipboard":
+                }
+                case "set_clipboard": {
                     vscode.env.clipboard.writeText(message.text);
                     break;
-                case "get_quick_fixes":
+                }
+                case "get_quick_fixes": {
                     const cursor = new vscode.Range(message.line, message.col,
                                                     message.line, message.col);
-                    vscode.commands.executeCommand(
+                    vscode.commands.executeCommand<vscode.CodeAction[]>(
                         "vscode.executeCodeActionProvider",
                         document.uri,
                         cursor,
-                        vscode.CodeActionKind.QuickFix.value,
-                        5 // limit to receive
-                    ).then((actions: any) => {
+                        vscode.CodeActionKind.QuickFix.value
+                    ).then((actions) => {
                         webviewPanel.webview.postMessage({
                             type: "return_quick_fixes",
                             actions: actions.map((action: any) => action.command)
                         });
                     });
                     break;
-                case "execute_command":
+                }
+                case "get_completions": {
+                    const cursor = new vscode.Position(message.line, message.col);
+                    vscode.commands.executeCommand<vscode.CompletionList>(
+                        "vscode.executeCompletionItemProvider",
+                        document.uri,
+                        cursor
+                    ).then((completions) => {
+                        webviewPanel.webview.postMessage({
+                            type: "return_completions",
+                            completions: completions.items
+                        });
+                    });
+                    break;
+                }
+                case "execute_command": {
                     vscode.commands.executeCommand(message.command, ...message.args);
+                }
             }
         });
     }

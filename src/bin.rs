@@ -151,6 +151,7 @@ pub(crate) mod vscode {
     use druid::Selector;
 
     use crate::block_editor::{
+        completion::VSCodeCompletionItem,
         diagnostics::{Diagnostic, VSCodeCommand},
         text_range::TextEdit,
     };
@@ -158,13 +159,17 @@ pub(crate) mod vscode {
     pub const SET_TEXT_SELECTOR: Selector<String> = Selector::new("set_text");
     pub const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_edit");
     pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
-    pub const DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> = Selector::new("diagnostics");
-    pub const QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("quick_fix");
+    pub const SET_DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> =
+        Selector::new("set_diagnostics");
+    pub const SET_QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("set_quick_fix");
+    pub const SET_COMPLETIONS_SELECTOR: Selector<Vec<VSCodeCompletionItem>> =
+        Selector::new("set_completions");
 
     // pub fn started() {}
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
     pub fn set_clipboard(_: String) {}
     pub fn request_quick_fixes(_: usize, _: usize) {}
+    pub fn request_completions(_: usize, _: usize) {}
     pub fn execute_command(_: String, _: wasm_bindgen::JsValue) {}
 }
 

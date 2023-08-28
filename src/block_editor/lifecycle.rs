@@ -7,8 +7,8 @@ use druid::{
 use ropey::Rope;
 
 use super::{
-    block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel, FONT_HEIGHT,
-    FONT_WIDTH, TIMER_INTERVAL,
+    block_drawer, completion, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel,
+    FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL,
 };
 use crate::{theme, vscode, GlobalModel};
 
@@ -20,8 +20,9 @@ impl Widget<EditorModel> for BlockEditor {
         data: &mut EditorModel,
         env: &druid::Env,
     ) {
-        // first see if child handled it
+        // first see if a child handled it
         self.diagnostic_popup.event(ctx, event, data, env);
+        self.completion_popup.event(ctx, event, data, env);
         if ctx.is_handled() {
             return;
         }
@@ -66,29 +67,14 @@ impl Widget<EditorModel> for BlockEditor {
                     _ => {}
                 };
 
+                // clear any current completion
+                self.completion_popup.widget_mut().clear();
+
                 ctx.set_handled();
             }
-
             Event::MouseUp(mouse) if mouse.button == MouseButton::Left => {
                 self.mouse_pressed = false;
                 ctx.request_paint();
-
-                // diagnostic selection
-                // TODO: change to a hover??
-                // TODO: multiple diagnostics displayed at once
-                if self.selection.is_cursor() {
-                    let coord = self.mouse_to_coord(mouse, &data.source.lock().unwrap());
-                    data.diagnostic_selection = None;
-                    for diagnostic in &data.diagnostics {
-                        if diagnostic.range.contains(coord) {
-                            data.diagnostic_selection = Some(diagnostic.id);
-                            break;
-                        }
-                    }
-                } else {
-                    data.diagnostic_selection = None
-                }
-
                 ctx.set_handled();
             }
 
@@ -97,14 +83,40 @@ impl Widget<EditorModel> for BlockEditor {
                     self.mouse_dragged(mouse, &data.source.lock().unwrap(), ctx);
                     ctx.request_paint();
                     ctx.set_handled();
+                } else {
+                    // diagnostic selection
+                    // TODO: delay to pop up
+                    // TODO: multiple diagnostics displayed at once
+                    if self.selection.is_cursor() {
+                        let coord = self.mouse_to_raw_coord(mouse.pos);
+                        data.diagnostic_selection = None;
+                        for diagnostic in &data.diagnostics {
+                            if diagnostic.range.contains(coord) {
+                                data.diagnostic_selection = Some(diagnostic.id);
+                                break;
+                            }
+                        }
+                    } else {
+                        data.diagnostic_selection = None
+                    }
                 }
 
                 // when cursor is inside of editor, have it be in text edit mode
                 ctx.set_cursor(&druid::Cursor::IBeam);
             }
 
+            Event::KeyDown(_) => {
+                // manually pass key events to completion popup so it can intercept them before ime
+                self.completion_popup
+                    .widget_mut()
+                    .event(ctx, event, data, env);
+            }
+
             Event::ImeStateChange => {
                 let mut source = data.source.lock().unwrap();
+
+                // clear any current completion
+                self.completion_popup.widget_mut().clear();
 
                 // apply action
                 let action = self.ime.borrow_mut().take_external_action();
@@ -113,7 +125,13 @@ impl Widget<EditorModel> for BlockEditor {
                         TextAction::InsertNewLine { .. } => self.insert_newline(&mut source),
                         TextAction::InsertTab { .. } => self.indent(&mut source),
                         TextAction::InsertBacktab => self.unindent(&mut source),
-                        TextAction::Delete(mov) => self.backspace(&mut source, mov),
+                        TextAction::Delete(mov) => {
+                            self.backspace(&mut source, mov);
+                            vscode::request_completions(
+                                self.selection.end.row,
+                                self.selection.end.col,
+                            );
+                        }
                         TextAction::Move(mov) => self.move_cursor(mov, &source),
                         TextAction::MoveSelecting(mov) => self.move_selecting(mov, &source),
                         _ => crate::console_log!("unexpected external action '{:?}'", action),
@@ -124,6 +142,7 @@ impl Widget<EditorModel> for BlockEditor {
                 let text_change = self.ime.borrow_mut().take_external_text_change();
                 if let Some(text_change) = text_change {
                     self.insert_str(&mut source, &text_change);
+                    vscode::request_completions(self.selection.end.row, self.selection.end.col);
                 }
 
                 // cursor has moved, so close diagnostics popup
@@ -204,7 +223,7 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.set_handled();
                 }
                 // VSCode Diagnostics
-                else if let Some(diagnostics) = command.get(vscode::DIAGNOSTICS_SELECTOR) {
+                else if let Some(diagnostics) = command.get(vscode::SET_DIAGNOSTICS_SELECTOR) {
                     data.diagnostics = diagnostics.clone();
 
                     // this probably should be handled by the update function
@@ -212,6 +231,30 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.request_paint();
 
                     ctx.set_handled()
+                }
+                // Applying a completion
+                else if let Some(insert_text) = command.get(completion::APPLY_COMPLETION_SELECTOR)
+                {
+                    let mut source = data.source.lock().unwrap();
+
+                    // select all alphabetic characters before the cursor
+                    // (so what was typed so far is replaced by the completion)
+                    let mut start = self.selection.start;
+                    let curr_line = source.line(start.row);
+                    start.col = start.col.min(curr_line.len_chars());
+                    while start.col > 0 {
+                        let c = curr_line.char(start.col - 1);
+                        if !c.is_alphabetic() {
+                            break;
+                        }
+                        start.col -= 1;
+                    }
+                    self.selection = TextRange::new(start, self.selection.end);
+
+                    // replace new selection with completion string
+                    self.insert_str(&mut source, insert_text);
+
+                    ctx.set_handled();
                 }
             }
 
@@ -233,6 +276,7 @@ impl Widget<EditorModel> for BlockEditor {
         env: &druid::Env,
     ) {
         self.diagnostic_popup.update(ctx, data, env);
+        self.completion_popup.update(ctx, data, env);
     }
 
     fn layout(
@@ -259,10 +303,18 @@ impl Widget<EditorModel> for BlockEditor {
 
         let desired = Size { width, height };
 
-        // add hover child
+        // add diagnostic popup
         let point = self.diagnostic_popup.widget().calc_origin(&self.padding);
         self.diagnostic_popup.set_origin(ctx, point);
         self.diagnostic_popup.layout(ctx, bc, data, env);
+
+        // add completion popup
+        let point = self
+            .completion_popup
+            .widget()
+            .calc_origin(&self.padding, self.selection.start);
+        self.completion_popup.set_origin(ctx, point);
+        self.completion_popup.layout(ctx, bc, data, env);
 
         bc.constrain(desired)
     }
@@ -308,6 +360,9 @@ impl Widget<EditorModel> for BlockEditor {
         // draw diagnostic popup (if any)
         self.diagnostic_popup.paint(ctx, data, env);
 
+        // draw completion popup (if any)
+        self.completion_popup.paint(ctx, data, env);
+
         // draw gutter
         gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.row, ctx);
 
@@ -341,7 +396,8 @@ impl Widget<EditorModel> for BlockEditor {
             _ => {}
         }
 
-        // pass lifecycle events to child
+        // pass lifecycle events to children
         self.diagnostic_popup.lifecycle(ctx, event, data, env);
+        self.completion_popup.lifecycle(ctx, event, data, env);
     }
 }

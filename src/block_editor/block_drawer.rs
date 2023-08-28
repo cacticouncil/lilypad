@@ -4,7 +4,7 @@ use tree_sitter_c2rust::{Node, TreeCursor};
 
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 
-use super::{GUTTER_WIDTH, OUTER_PAD};
+use super::{GUTTER_WIDTH, OUTER_PAD, SHOW_ERROR_BLOCK_OUTLINES};
 
 /* ------------------------------ tree handling ----------------------------- */
 
@@ -42,8 +42,7 @@ impl BlockType {
     fn from_node(node: &Node) -> Option<Self> {
         use BlockType::*;
 
-        // todo: this might not be necessary once lsp errors are added
-        if node.is_error() {
+        if SHOW_ERROR_BLOCK_OUTLINES && node.is_error() {
             return Some(Error);
         }
 

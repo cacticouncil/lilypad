@@ -338,6 +338,36 @@ impl BlockEditor {
 
         TextPoint::new(x_bound, y)
     }
+
+    /// Finds the text coordinate that the mouse is over, without clamping to a valid position within the text
+    pub fn mouse_to_raw_coord(&self, point: druid::Point) -> TextPoint {
+        let font_height = *FONT_HEIGHT.get().unwrap();
+        let font_width = *FONT_WIDTH.get().unwrap();
+
+        // find the line clicked on by finding the next one and then going back one
+        let mut y: usize = 0;
+        let mut total_pad = 0.0;
+        for row_pad in &self.padding {
+            total_pad += row_pad;
+            let curr_line_start = total_pad + (y as f64 * font_height);
+            let raw_y = point.y - super::OUTER_PAD;
+            if raw_y <= curr_line_start {
+                break;
+            }
+            y += 1;
+        }
+
+        // add any remaining lines past the last line
+        y += ((point.y - (total_pad + (y as f64 * font_height))) / font_height) as usize;
+
+        y = y.saturating_sub(1);
+
+        let x = ((point.x - super::OUTER_PAD - super::GUTTER_WIDTH - super::TEXT_L_PAD)
+            / font_width)
+            .round() as usize;
+
+        TextPoint::new(x, y)
+    }
 }
 
 fn clamp_col(row: usize, col: usize, source: &Rope) -> usize {
