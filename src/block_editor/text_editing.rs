@@ -156,20 +156,23 @@ impl BlockEditor {
     }
 
     pub fn insert_newline(&mut self, source: &mut Rope) {
+        // find linebreak used in source
+        let linebreak = source.detect_linebreak();
+
         // find previous indent level and set new line to that many spaces
         let old_selection = self.selection.ordered();
 
         // find the indent level of the next line
         // (same as current line & increase if current line ends in colon)
-        let curr_line = source.get_line(old_selection.start.row).unwrap();
+        let curr_line = source.line(old_selection.start.row).excluding_linebreak();
         let indent_inc = if curr_line.ends_with(':') { 4 } else { 0 };
         let next_indent = curr_line.whitespace_at_start() + indent_inc;
 
         // update source
         let indent: &str = &" ".repeat(next_indent);
-        let linebreak = &(source.detect_linebreak().to_owned() + indent);
+        let to_insert = format!("{}{}", linebreak, indent);
 
-        self.replace_range(source, linebreak, old_selection, true, true);
+        self.replace_range(source, &to_insert, old_selection, true, true);
     }
 
     pub fn backspace(&mut self, source: &mut Rope, movement: Movement) {
