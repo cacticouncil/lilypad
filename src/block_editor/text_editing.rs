@@ -77,8 +77,13 @@ impl BlockEditor {
         self.find_pseudo_selection(source);
     }
 
+    /// Apply an edit that originated from vscode (so does not notify vscode of the edit)
     pub fn apply_vscode_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
         self.replace_range(source, &edit.text, edit.range, true, false);
+    }
+
+    pub fn apply_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
+        self.replace_range(source, &edit.text, edit.range, true, true)
     }
 
     pub fn insert_str(&mut self, source: &mut Rope, add: &str) {

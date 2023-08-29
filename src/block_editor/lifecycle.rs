@@ -7,8 +7,8 @@ use druid::{
 use ropey::Rope;
 
 use super::{
-    block_drawer, completion, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel,
-    FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL,
+    block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel,
+    APPLY_EDIT_SELECTOR, FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL,
 };
 use crate::{theme, vscode, GlobalModel};
 
@@ -127,10 +127,9 @@ impl Widget<EditorModel> for BlockEditor {
                         TextAction::InsertBacktab => self.unindent(&mut source),
                         TextAction::Delete(mov) => {
                             self.backspace(&mut source, mov);
-                            vscode::request_completions(
-                                self.selection.end.row,
-                                self.selection.end.col,
-                            );
+                            self.completion_popup
+                                .widget_mut()
+                                .request_completions(&source, self.selection);
                         }
                         TextAction::Move(mov) => self.move_cursor(mov, &source),
                         TextAction::MoveSelecting(mov) => self.move_selecting(mov, &source),
@@ -142,7 +141,9 @@ impl Widget<EditorModel> for BlockEditor {
                 let text_change = self.ime.borrow_mut().take_external_text_change();
                 if let Some(text_change) = text_change {
                     self.insert_str(&mut source, &text_change);
-                    vscode::request_completions(self.selection.end.row, self.selection.end.col);
+                    self.completion_popup
+                        .widget_mut()
+                        .request_completions(&source, self.selection);
                 }
 
                 // cursor has moved, so close diagnostics popup
@@ -177,7 +178,7 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.request_paint();
 
                     ctx.set_handled();
-                } else if let Some(edit) = command.get(vscode::APPLY_EDIT_SELECTOR) {
+                } else if let Some(edit) = command.get(vscode::APPLY_VSCODE_EDIT_SELECTOR) {
                     self.apply_vscode_edit(&mut data.source.lock().unwrap(), edit);
                     ctx.set_handled();
                 }
@@ -232,28 +233,9 @@ impl Widget<EditorModel> for BlockEditor {
 
                     ctx.set_handled()
                 }
-                // Applying a completion
-                else if let Some(insert_text) = command.get(completion::APPLY_COMPLETION_SELECTOR)
-                {
-                    let mut source = data.source.lock().unwrap();
-
-                    // select all alphabetic characters before the cursor
-                    // (so what was typed so far is replaced by the completion)
-                    let mut start = self.selection.start;
-                    let curr_line = source.line(start.row);
-                    start.col = start.col.min(curr_line.len_chars());
-                    while start.col > 0 {
-                        let c = curr_line.char(start.col - 1);
-                        if !c.is_alphabetic() {
-                            break;
-                        }
-                        start.col -= 1;
-                    }
-                    self.selection = TextRange::new(start, self.selection.end);
-
-                    // replace new selection with completion string
-                    self.insert_str(&mut source, insert_text);
-
+                // Applying an edit from elsewhere (that's not VSCode)
+                else if let Some(edit) = command.get(APPLY_EDIT_SELECTOR) {
+                    self.apply_edit(&mut data.source.lock().unwrap(), edit);
                     ctx.set_handled();
                 }
             }

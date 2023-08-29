@@ -1,23 +1,52 @@
 use druid::{
     piet::{PietTextLayout, Text, TextLayoutBuilder},
-    Color, Event, MouseButton, PaintCtx, Point, Rect, RenderContext, Selector, Size, Widget,
+    Color, Event, MouseButton, PaintCtx, Point, Rect, RenderContext, Size, Widget,
 };
+use ropey::Rope;
 use serde::Deserialize;
 
 use super::{
-    text_range::TextPoint, EditorModel, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH,
+    rope_ext::RopeSliceExt,
+    text_range::{TextEdit, TextPoint, TextRange},
+    EditorModel, APPLY_EDIT_SELECTOR, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH,
     TOTAL_TEXT_X_OFFSET,
 };
 use crate::{theme, vscode};
 
-pub const APPLY_COMPLETION_SELECTOR: Selector<String> = Selector::new("apply_completion");
+/* -------------------------------- Data Type ------------------------------- */
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VSCodeCompletionItem {
     label: String,
-    insert_text: String,
+    insert_text: VSCodeInsertText,
     kind: Option<VSCodeCompletionKind>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+enum VSCodeInsertText {
+    Plain(String),
+    Snippet(VSCodeSnippetString),
+}
+
+impl VSCodeInsertText {
+    fn value(&self) -> String {
+        match self {
+            VSCodeInsertText::Plain(s) => s.clone(),
+            VSCodeInsertText::Snippet(s) => {
+                // remove tab stop syntax
+                // TODO: support tab stop syntax (probably as a part of future structural completion)
+                let re = regex::Regex::new(r"\$\{\d:(?<inner>.+)\}").unwrap();
+                re.replace(&s.value, "$inner").into_owned()
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct VSCodeSnippetString {
+    value: String,
 }
 
 #[derive(Deserialize, Debug, Clone, Copy)]
@@ -57,24 +86,28 @@ impl VSCodeCompletionKind {
         use VSCodeCompletionKind::*;
 
         match self {
-            Function => theme::syntax::FUNCTION,
-            Constant | Variable => theme::syntax::VARIABLE,
+            Class | Function | Method => theme::syntax::FUNCTION,
+            Constant | Variable | Property => theme::syntax::VARIABLE,
             Keyword => theme::syntax::KEYWORD,
             _ => theme::syntax::DEFAULT,
         }
     }
 }
 
+/* ---------------------------------- Popup --------------------------------- */
+
 pub struct CompletionPopup {
-    completions: Option<Vec<VSCodeCompletionItem>>,
+    completions: Vec<VSCodeCompletionItem>,
     selection: usize,
+    text_cursor: TextPoint,
 }
 
 impl CompletionPopup {
     pub fn new() -> Self {
         Self {
-            completions: None,
+            completions: vec![],
             selection: 0,
+            text_cursor: TextPoint::ZERO,
         }
     }
 
@@ -87,17 +120,38 @@ impl CompletionPopup {
     }
 
     pub fn clear(&mut self) {
-        self.completions = None;
+        self.completions.clear();
+    }
+
+    pub fn request_completions(&mut self, source: &Rope, selection: TextRange) {
+        // only request completions when selection is just a cursor
+        if !selection.is_cursor() {
+            return;
+        }
+        let cursor = selection.start;
+
+        // if we are at the start of the line, do not do anything
+        // return does not trigger, but backspace does
+        if source.line(cursor.row).whitespace_at_start() == cursor.col {
+            return;
+        }
+
+        // set the cursor so we can filter results using it
+        self.text_cursor = cursor;
+
+        // request
+        vscode::request_completions(cursor.row, cursor.col)
     }
 
     fn calc_size(&self) -> Size {
-        let Some(completions) = &self.completions else {
+        if self.completions.is_empty() {
             return Size::ZERO;
         };
 
-        let height = *FONT_HEIGHT.get().unwrap() * completions.len() as f64;
+        let height = *FONT_HEIGHT.get().unwrap() * self.completions.len() as f64;
 
-        let max_label_len: usize = completions
+        let max_label_len: usize = self
+            .completions
             .iter()
             .map(|fix| fix.label.chars().count())
             .max()
@@ -106,6 +160,47 @@ impl CompletionPopup {
 
         Size::new(width, height)
     }
+
+    fn apply_selected_completion(&mut self, source: &Rope, ctx: &mut druid::EventCtx) {
+        if let Some(completion) = self.completions.get(self.selection) {
+            let text_edit = self.edit_for_completion(completion.insert_text.value(), source);
+            ctx.submit_command(APPLY_EDIT_SELECTOR.with(text_edit));
+
+            self.completions.clear();
+            ctx.request_layout();
+            ctx.request_paint();
+        }
+    }
+
+    fn edit_for_completion(&self, completion: String, source: &Rope) -> TextEdit {
+        // select the word before the cursor
+        // (so what was typed so far is replaced by the completion)
+        let range = self.range_of_word_before_cursor(source);
+
+        // indent newlines with the current indentation level
+        let mut text = completion.clone();
+        if text.contains('\n') {
+            let indent_count = source.line(self.text_cursor.row).whitespace_at_start();
+            let newline_with_indent = &format!("\n{}", " ".repeat(indent_count));
+            text = text.replace('\n', newline_with_indent);
+        }
+
+        TextEdit { text, range }
+    }
+
+    fn range_of_word_before_cursor(&self, source: &Rope) -> TextRange {
+        let mut start = self.text_cursor;
+        let curr_line = source.line(start.row);
+        start.col = start.col.min(curr_line.len_chars());
+        while start.col > 0 {
+            let c = curr_line.char(start.col - 1);
+            if !(c.is_alphanumeric() || c == '_') {
+                break;
+            }
+            start.col -= 1;
+        }
+        TextRange::new(start, self.text_cursor)
+    }
 }
 
 impl Widget<EditorModel> for CompletionPopup {
@@ -113,21 +208,19 @@ impl Widget<EditorModel> for CompletionPopup {
         &mut self,
         ctx: &mut druid::EventCtx,
         event: &Event,
-        _data: &mut EditorModel,
+        data: &mut EditorModel,
         _env: &druid::Env,
     ) {
         let font_height = *FONT_HEIGHT.get().unwrap();
 
         match event {
             Event::MouseDown(mouse) if mouse.button == MouseButton::Left => {
-                if let Some(completions) = &self.completions {
+                if !self.completions.is_empty() {
                     // find fix for row clicked on
                     let row_clicked = (mouse.pos.y / font_height) as usize;
-                    crate::console_log!("mouse pos: {:?}", mouse.pos);
-                    crate::console_log!("row clicked: {}", row_clicked);
 
                     // catch clicking out of bounds
-                    if row_clicked >= completions.len() {
+                    if row_clicked >= self.completions.len() {
                         return;
                     }
 
@@ -139,23 +232,15 @@ impl Widget<EditorModel> for CompletionPopup {
                 ctx.set_handled();
             }
             Event::MouseUp(mouse) if mouse.button == MouseButton::Left => {
-                // trigger the completion
-                if let Some(completions) = &self.completions {
-                    if let Some(completion) = completions.get(self.selection) {
-                        ctx.submit_command(
-                            APPLY_COMPLETION_SELECTOR.with(completion.insert_text.clone()),
-                        );
-
-                        self.completions = None;
-                        ctx.request_layout();
-                        ctx.request_paint();
-                    }
+                // trigger the completion set by mouse down
+                if !self.completions.is_empty() {
+                    self.apply_selected_completion(&data.source.lock().unwrap(), ctx);
                 }
 
                 ctx.set_handled();
             }
             Event::KeyDown(key) => {
-                if let Some(completions) = &self.completions {
+                if !self.completions.is_empty() {
                     match key.key {
                         druid::keyboard_types::Key::ArrowUp => {
                             self.selection = self.selection.saturating_sub(1);
@@ -164,24 +249,16 @@ impl Widget<EditorModel> for CompletionPopup {
                         }
                         druid::keyboard_types::Key::ArrowDown => {
                             self.selection =
-                                std::cmp::min(self.selection + 1, completions.len() - 1);
+                                std::cmp::min(self.selection + 1, self.completions.len() - 1);
                             ctx.request_paint();
                             ctx.set_handled();
                         }
                         druid::keyboard_types::Key::Enter => {
-                            if let Some(completion) = completions.get(self.selection) {
-                                ctx.submit_command(
-                                    APPLY_COMPLETION_SELECTOR.with(completion.insert_text.clone()),
-                                );
-
-                                self.completions = None;
-                                ctx.request_layout();
-                                ctx.request_paint();
-                                ctx.set_handled();
-                            }
+                            self.apply_selected_completion(&data.source.lock().unwrap(), ctx);
+                            ctx.set_handled();
                         }
                         druid::keyboard_types::Key::Escape => {
-                            self.completions = None;
+                            self.completions.clear();
                             ctx.request_layout();
                             ctx.request_paint();
                             ctx.set_handled();
@@ -192,11 +269,42 @@ impl Widget<EditorModel> for CompletionPopup {
             }
             Event::Command(command) => {
                 if let Some(completions) = command.get(vscode::SET_COMPLETIONS_SELECTOR) {
-                    let mut completions = completions.clone();
-                    completions.truncate(10);
+                    // clear existing completions
+                    self.completions.clear();
 
-                    self.completions = Some(completions);
+                    // reset the selection because there are new completions
                     self.selection = 0;
+
+                    // if there are too many completions, it is unfocused so shouldn't show at all
+                    if completions.len() > 100 {
+                        ctx.set_handled();
+                        return;
+                    }
+
+                    // move completions that start with what has been typed so far to the top of the list
+                    // split into two lists and then combine them to maintain ordering between elements within the two groups
+                    let source = &data.source.lock().unwrap();
+                    let prefix_range = self.range_of_word_before_cursor(source);
+                    let prefix = source
+                        .line(prefix_range.start.row)
+                        .slice(prefix_range.start.col..prefix_range.end.col)
+                        .to_string()
+                        .to_lowercase();
+
+                    let mut has_prefix = vec![];
+                    let mut no_prefix = vec![];
+                    for completion in completions {
+                        if completion.label.to_lowercase().starts_with(&prefix) {
+                            has_prefix.push(completion.clone());
+                        } else {
+                            no_prefix.push(completion.clone());
+                        }
+                    }
+                    self.completions.extend(has_prefix);
+                    self.completions.extend(no_prefix);
+
+                    // only show the top 10 completions
+                    self.completions.truncate(10);
 
                     ctx.request_layout();
                     ctx.request_paint();
@@ -239,14 +347,14 @@ impl Widget<EditorModel> for CompletionPopup {
     fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditorModel, _env: &druid::Env) {
         // TODO: look good
 
-        if let Some(completions) = &self.completions {
+        if !self.completions.is_empty() {
             // set background color
             let rect = Rect::from_origin_size(Point::ZERO, ctx.size());
             ctx.fill(rect, &theme::POPUP_BACKGROUND);
 
             // draw completions
             let font_height = *FONT_HEIGHT.get().unwrap();
-            for (line, completion) in completions.iter().enumerate() {
+            for (line, completion) in self.completions.iter().enumerate() {
                 // highlight background if selected
                 if line == self.selection {
                     let rect = Rect::from_origin_size(

@@ -9,11 +9,11 @@ pub mod syntax {
     pub const FUNCTION_BUILT_IN: Color = CYAN;
     pub const KEYWORD: Color = MAGENTA;
     pub const OPERATOR: Color = WHITE;
-    pub const PROPERTY: Color = DARK_RED;
+    pub const PROPERTY: Color = LIGHT_RED;
     pub const INTERPOLATION_SURROUNDING: Color = LIGHT_YELLOW;
     pub const STRING: Color = GREEN;
     pub const TYPE: Color = LIGHT_YELLOW;
-    pub const VARIABLE: Color = DARK_RED;
+    pub const VARIABLE: Color = LIGHT_RED;
     pub const CONSTRUCTOR: Color = BLUE;
     pub const CONSTANT: Color = DARK_YELLOW;
     pub const LITERAL: Color = DARK_YELLOW;

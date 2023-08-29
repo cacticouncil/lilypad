@@ -157,7 +157,7 @@ pub(crate) mod vscode {
     };
 
     pub const SET_TEXT_SELECTOR: Selector<String> = Selector::new("set_text");
-    pub const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_edit");
+    pub const APPLY_VSCODE_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_vscode_edit");
     pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
     pub const SET_DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> =
         Selector::new("set_diagnostics");

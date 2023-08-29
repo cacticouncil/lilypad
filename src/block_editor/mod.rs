@@ -1,4 +1,4 @@
-use druid::{widget::Scroll, Data, TimerToken, Widget, WidgetPod};
+use druid::{widget::Scroll, Data, Selector, TimerToken, Widget, WidgetPod};
 use ropey::Rope;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -27,7 +27,7 @@ use text_range::*;
 use self::diagnostics::DiagnosticPopup;
 use self::ime::ImeComponent;
 
-//controls cursor blinking speed
+// controls cursor blinking speed
 pub const TIMER_INTERVAL: Duration = Duration::from_millis(700);
 
 static FONT_FAMILY: OnceLock<druid::FontFamily> = OnceLock::new();
@@ -67,6 +67,8 @@ const GUTTER_WIDTH: f64 = 30.0;
 const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 
 const SHOW_ERROR_BLOCK_OUTLINES: bool = false;
+
+const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_edit");
 
 pub fn widget() -> impl Widget<EditorModel> {
     Scroll::new(BlockEditor::new()).content_must_fill(true)
