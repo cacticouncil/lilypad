@@ -8,9 +8,9 @@ use ropey::Rope;
 
 use super::{
     block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel,
-    APPLY_EDIT_SELECTOR, FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL,
+    APPLY_EDIT_SELECTOR, FONT_HEIGHT, FONT_WIDTH, SET_FILE_NAME_SELECTOR, TIMER_INTERVAL,
 };
-use crate::{theme, vscode, GlobalModel};
+use crate::{lang::lang_for_file, theme, vscode, GlobalModel};
 
 impl Widget<EditorModel> for BlockEditor {
     fn event(
@@ -182,6 +182,16 @@ impl Widget<EditorModel> for BlockEditor {
                     self.apply_vscode_edit(&mut data.source.lock().unwrap(), edit);
                     ctx.set_handled();
                 }
+                // New file name from the native file picker
+                else if let Some(file_name) = command.get(SET_FILE_NAME_SELECTOR) {
+                    let new_lang = lang_for_file(file_name);
+                    if self.language.name != new_lang.name {
+                        self.language = new_lang;
+                        self.text_drawer.change_language(new_lang);
+                        self.tree_manager.change_language(new_lang);
+                    }
+                    ctx.set_handled();
+                }
                 // Copy, Cut, & (VSCode) Paste
                 else if command.get(druid::commands::COPY).is_some() {
                     // get selected text
@@ -308,7 +318,7 @@ impl Widget<EditorModel> for BlockEditor {
         if self.text_changed {
             // get blocks
             let mut cursor = self.tree_manager.get_cursor();
-            self.blocks = block_drawer::blocks_for_tree(&mut cursor);
+            self.blocks = block_drawer::blocks_for_tree(&mut cursor, self.language);
 
             // get padding
             let line_count = source.len_lines();

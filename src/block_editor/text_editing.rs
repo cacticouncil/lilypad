@@ -161,12 +161,22 @@ impl BlockEditor {
 
         // find previous indent level and set new line to that many spaces
         let old_selection = self.selection.ordered();
+        let curr_line = source.line(old_selection.start.row);
+        let prev_indent = curr_line.whitespace_at_start();
 
         // find the indent level of the next line
-        // (same as current line & increase if current line ends in colon)
-        let curr_line = source.line(old_selection.start.row).excluding_linebreak();
-        let indent_inc = if curr_line.ends_with(':') { 4 } else { 0 };
-        let next_indent = curr_line.whitespace_at_start() + indent_inc;
+        // (same as current line & increase if character before cursor is a scope char)
+        let indent_inc = if old_selection.start.col > 1 {
+            let char_before_cursor = curr_line.char(old_selection.start.col - 1);
+            if char_before_cursor == self.language.new_scope_char {
+                4
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        let next_indent = prev_indent + indent_inc;
 
         // update source
         let indent: &str = &" ".repeat(next_indent);

@@ -1,6 +1,8 @@
 ﻿use ropey::Rope;
 use tree_sitter_c2rust::{InputEdit, Parser, Tree, TreeCursor};
 
+use crate::lang::LanguageConfig;
+
 pub struct TreeManager {
     tree: Tree,
     parser: Parser,
@@ -9,16 +11,19 @@ pub struct TreeManager {
 /* ------- Parsing  ------- */
 impl TreeManager {
     /// create empty tree
-    pub fn new() -> TreeManager {
+    pub fn new(lang: &LanguageConfig) -> TreeManager {
         // Create Parser
         let mut parser = Parser::new();
-        let language = tree_sitter_python::language();
-        parser.set_language(language).unwrap();
+        parser.set_language(lang.tree_sitter()).unwrap();
 
         // Parse initial source
         let tree = parser.parse("", None).unwrap();
 
         TreeManager { tree, parser }
+    }
+
+    pub fn change_language(&mut self, lang: &LanguageConfig) {
+        self.parser.set_language(lang.tree_sitter()).unwrap();
     }
 
     pub fn get_cursor(&self) -> TreeCursor {
@@ -65,11 +70,13 @@ impl TreeManager {
         let join_symbol = if last { "└─ " } else { "├─ " };
         let current_node = cursor.node();
 
-        let mut result = String::new();
-        result.push_str(indent);
-        result.push_str(join_symbol);
-        result.push_str(current_node.kind());
-        result.push('\n');
+        let mut result = format!(
+            "{}{}{} ({})\n",
+            indent,
+            join_symbol,
+            current_node.kind(),
+            current_node.kind_id()
+        );
 
         let child_count = current_node.child_count();
         if cursor.goto_first_child() {

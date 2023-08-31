@@ -1,4 +1,5 @@
 mod block_editor;
+mod lang;
 mod parse;
 mod theme;
 
@@ -8,7 +9,7 @@ use wasm_bindgen::prelude::*;
 
 use block_editor::{
     completion::VSCodeCompletionItem,
-    diagnostics::{Diagnostic, VSCodeCommand},
+    diagnostics::{Diagnostic, VSCodeCodeAction},
     text_range::TextEdit,
     EditorModel,
 };
@@ -27,10 +28,10 @@ pub(crate) use console_log;
 
 /* ----- Javascript -> WASM ----- */
 #[wasm_bindgen]
-pub fn run_editor(font_name: String, font_size: f64) {
+pub fn run_editor(file_name: String, font_name: String, font_size: f64) {
     // This hook is necessary to get panic messages in the console
     console_error_panic_hook::set_once();
-    main(font_name, font_size).expect("could not launch")
+    main(file_name, font_name, font_size).expect("could not launch")
 }
 
 #[wasm_bindgen]
@@ -103,7 +104,7 @@ pub fn new_diagnostics(json: JsValue) {
 
 #[wasm_bindgen]
 pub fn set_quick_fixes(json: JsValue) {
-    let fixes: Vec<VSCodeCommand> =
+    let fixes: Vec<VSCodeCodeAction> =
         serde_wasm_bindgen::from_value(json).expect("Could not deserialize quick fixes");
 
     if let Some(sink) = EVENT_SINK.get() {
@@ -117,7 +118,7 @@ pub fn set_quick_fixes(json: JsValue) {
 #[wasm_bindgen]
 pub fn set_completions(json: JsValue) {
     let fixes: Vec<VSCodeCompletionItem> =
-        serde_wasm_bindgen::from_value(json).expect("Could not deserialize quick fixes");
+        serde_wasm_bindgen::from_value(json).expect("Could not deserialize completions");
 
     if let Some(sink) = EVENT_SINK.get() {
         sink.submit_command(vscode::SET_COMPLETIONS_SELECTOR, fixes, Target::Global)
@@ -134,7 +135,7 @@ pub mod vscode {
 
     use crate::block_editor::{
         completion::VSCodeCompletionItem,
-        diagnostics::{Diagnostic, VSCodeCommand},
+        diagnostics::{Diagnostic, VSCodeCodeAction},
         text_range::TextEdit,
     };
 
@@ -143,7 +144,8 @@ pub mod vscode {
     pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
     pub const SET_DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> =
         Selector::new("set_diagnostics");
-    pub const SET_QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("set_quick_fix");
+    pub const SET_QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCodeAction>> =
+        Selector::new("set_quick_fix");
     pub const SET_COMPLETIONS_SELECTOR: Selector<Vec<VSCodeCompletionItem>> =
         Selector::new("set_completions");
 
@@ -165,6 +167,8 @@ pub mod vscode {
         pub fn request_completions(line: usize, col: usize);
         #[wasm_bindgen(js_name = executeCommand)]
         pub fn execute_command(command: String, args: JsValue);
+        #[wasm_bindgen(js_name = executeWorkspaceEdit)]
+        pub fn execute_workspace_edit(edit: JsValue);
     }
 }
 
@@ -174,7 +178,7 @@ static EVENT_SINK: OnceLock<Arc<ExtEventSink>> = OnceLock::new();
 
 pub type GlobalModel = EditorModel;
 
-fn main(font_name: String, font_size: f64) -> Result<(), PlatformError> {
+fn main(file_name: String, font_name: String, font_size: f64) -> Result<(), PlatformError> {
     block_editor::configure_font(font_name, font_size);
 
     // start with empty string
@@ -185,7 +189,7 @@ fn main(font_name: String, font_size: f64) -> Result<(), PlatformError> {
     };
 
     // create main window
-    let main_window = WindowDesc::new(block_editor::widget()).title("Lilypad Editor");
+    let main_window = WindowDesc::new(block_editor::widget(&file_name)).title("Lilypad Editor");
     let launcher = AppLauncher::with_window(main_window);
 
     // get event sink for launcher

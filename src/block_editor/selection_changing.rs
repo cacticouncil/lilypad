@@ -29,12 +29,46 @@ impl BlockEditor {
             let (prev_char, _) = source.surrounding_chars(cursor_offset);
 
             if prev_char == '"' || prev_char == '\'' {
-                self.pseudo_selection = string_pseudo_selection_range(
+                self.pseudo_selection = self.string_pseudo_selection_range(
                     self.tree_manager.get_cursor(),
                     cursor_loc.into(),
                 );
             }
         }
+    }
+
+    fn string_pseudo_selection_range(
+        &self,
+        mut cursor: TreeCursor,
+        point: Point,
+    ) -> Option<TextRange> {
+        // go to lowest node for point
+        // don't set if error (bc that would make things go wonky when unpaired)
+        while cursor.goto_first_child_for_point(point).is_some() {
+            if cursor.node().is_error() {
+                return None;
+            }
+        }
+
+        // verify that our current point is the start or end of a string (not an escape sequence)
+        let current_kind = cursor.node().kind_id();
+        let kinds = self.language.string_node_ids;
+        if !kinds.string_bounds.contains(&current_kind) {
+            return None;
+        }
+
+        // go up until we hit the string (node of id 230)
+        while cursor.goto_parent() {
+            let node = cursor.node();
+            if node.kind_id() == kinds.string {
+                let range =
+                    TextRange::new(node.start_position().into(), node.end_position().into());
+                return Some(range);
+            }
+        }
+
+        // we hit the top without finding a string, just return none
+        None
     }
 
     /* ----------------------------- Cursor Movement ---------------------------- */
@@ -372,32 +406,4 @@ impl BlockEditor {
 
 fn clamp_col(row: usize, col: usize, source: &Rope) -> usize {
     std::cmp::min(col, source.line(row).len_chars_no_linebreak())
-}
-
-fn string_pseudo_selection_range(mut cursor: TreeCursor, point: Point) -> Option<TextRange> {
-    // go to lowest node for point
-    // don't set if error (bc that would make things go wonky when unpaired)
-    while cursor.goto_first_child_for_point(point).is_some() {
-        if cursor.node().is_error() {
-            return None;
-        }
-    }
-
-    // verify that our current point is the start (104) or end (107) of a string (not an escape sequence)
-    let current_kind = cursor.node().kind_id();
-    if current_kind != 104 && current_kind != 107 {
-        return None;
-    }
-
-    // go up until we hit the string (node of id 230)
-    while cursor.goto_parent() {
-        let node = cursor.node();
-        if node.kind_id() == 230 {
-            let range = TextRange::new(node.start_position().into(), node.end_position().into());
-            return Some(range);
-        }
-    }
-
-    // we hit the top without finding a string, just return none
-    None
 }

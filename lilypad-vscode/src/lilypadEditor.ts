@@ -24,7 +24,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         webviewPanel.webview.options = {
             enableScripts: true,
         };
-        webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
+        webviewPanel.webview.html = this.getHtml(webviewPanel.webview, document);
 
         // Sync our editor to external changes
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
@@ -103,7 +103,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     ).then((actions) => {
                         webviewPanel.webview.postMessage({
                             type: "return_quick_fixes",
-                            actions: actions.map((action: any) => action.command)
+                            actions
                         });
                     });
                     break;
@@ -124,6 +124,14 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                 }
                 case "execute_command": {
                     vscode.commands.executeCommand(message.command, ...message.args);
+                    break;
+                }
+                case "execute_workspace_edit": {
+                    let edit = message.edit as vscode.WorkspaceEdit | null;
+                    if (edit) {
+                        vscode.workspace.applyEdit(edit);
+                    }
+                    break;
                 }
             }
         });
@@ -131,16 +139,34 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
 
     private updateTextDocument(document: vscode.TextDocument, newText: string, range: vscode.Range) {
         const edit = new vscode.WorkspaceEdit();
-        edit.replace(
-            document.uri,
-            range,
-            newText
-        );
+        // apply with the correct action
+        // (in case VSCode internals treat them differently)
+        if (range.start.isEqual(range.end)) {
+            // if cursor, do an insert
+            edit.insert(
+                document.uri,
+                range.start,
+                newText
+            );
+        } else if (newText === "") {
+            // if replacing with an empty string, do a delete
+            edit.delete(
+                document.uri,
+                range
+            );
+        } else {
+            // otherwise, do a replace
+            edit.replace(
+                document.uri,
+                range,
+                newText
+            );
+        }
         this.internalEdit = true;
         return vscode.workspace.applyEdit(edit);
     }
 
-    private getHtml(webview: vscode.Webview): string {
+    private getHtml(webview: vscode.Webview, document: vscode.TextDocument): string {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(
             this.context.extensionUri, "static", "run.js"));
 
@@ -173,7 +199,8 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     <canvas id="canvas"></canvas>
                 </div>
                 <script>
-                    /* this is a hacky way to send the font info to run.js */
+                    /* this is a hacky way to send the configuration to run.js */
+                    var fileName = "${document.fileName}"
                     var fontFamily = "${fontFamily}"
                     var fontSize = ${fontSize}
                 </script>

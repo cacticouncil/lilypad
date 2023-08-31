@@ -89,8 +89,30 @@ impl Diagnostic {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct VSCodeCommand {
+pub struct VSCodeCodeAction {
     title: String,
+    #[serde(rename = "edit")]
+    workspace_edit: Option<serde_json::Value>,
+    command: Option<VSCodeCommand>,
+}
+
+impl VSCodeCodeAction {
+    pub fn run(&self) {
+        // run workspace edit then command
+        if let Some(workspace_edit) = &self.workspace_edit {
+            let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+            vscode::execute_workspace_edit(
+                workspace_edit.serialize(&serializer).unwrap_or_default(),
+            );
+        }
+        if let Some(command) = &self.command {
+            command.run();
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct VSCodeCommand {
     command: String,
     arguments: serde_json::Value,
 }
@@ -108,7 +130,7 @@ impl VSCodeCommand {
 /* --------------------------------- Widget --------------------------------- */
 
 pub struct DiagnosticPopup {
-    fixes: Option<Vec<VSCodeCommand>>,
+    fixes: Option<Vec<VSCodeCodeAction>>,
     curr_diagnostic: Option<Diagnostic>,
 }
 

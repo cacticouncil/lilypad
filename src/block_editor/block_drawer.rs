@@ -3,13 +3,14 @@ use druid::{Color, PaintCtx, Point, RenderContext, Size};
 use tree_sitter_c2rust::{Node, TreeCursor};
 
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
+use crate::lang::LanguageConfig;
 
 use super::{GUTTER_WIDTH, OUTER_PAD, SHOW_ERROR_BLOCK_OUTLINES};
 
 /* ------------------------------ tree handling ----------------------------- */
 
-#[derive(PartialEq)]
-enum BlockType {
+#[derive(PartialEq, Clone, Copy)]
+pub enum BlockType {
     Class,
     FunctionDef,
     While,
@@ -39,35 +40,14 @@ impl BlockType {
         }
     }
 
-    fn from_node(node: &Node) -> Option<Self> {
+    fn from_node(node: &Node, lang: &LanguageConfig) -> Option<Self> {
         use BlockType::*;
 
         if SHOW_ERROR_BLOCK_OUTLINES && node.is_error() {
             return Some(Error);
         }
 
-        match node.kind() {
-            // scopes
-            "class_definition" => Some(Class),
-            "function_definition" => Some(FunctionDef),
-            "while_statement" => Some(While),
-            "if_statement" => Some(If),
-            "for_statement" => Some(For),
-            "try_statement" => Some(Try),
-
-            // normal expressions (incomplete)
-            "import_statement" => Some(Generic),
-            "expression_statement" => Some(Generic),
-            "comment" => Some(Generic),
-
-            // dividers to keep generics from merging
-            "else_clause" => Some(Divider),
-            "elif_clause" => Some(Divider),
-            "except_clause" => Some(Divider),
-
-            // do not handle the rest
-            _ => None,
-        }
+        lang.categorize_node(node)
     }
 }
 
@@ -80,8 +60,8 @@ pub struct Block {
 }
 
 impl Block {
-    fn from_node(node: &Node) -> Option<Self> {
-        let Some(syntax_type) = BlockType::from_node(node) else { return None };
+    fn from_node(node: &Node, lang: &LanguageConfig) -> Option<Self> {
+        let Some(syntax_type) = BlockType::from_node(node, lang) else { return None };
         let start_pos = node.start_position();
         let end_pos = node.end_position();
         Some(Block {
@@ -98,17 +78,17 @@ impl Block {
     }
 }
 
-pub fn blocks_for_tree(cursor: &mut TreeCursor) -> Vec<Block> {
+pub fn blocks_for_tree(cursor: &mut TreeCursor, lang: &LanguageConfig) -> Vec<Block> {
     // generate
     let mut root: Vec<Block> = vec![];
     let curr_node = cursor.node();
 
     // get all lower blocks
     let mut children: Vec<Block> = if cursor.goto_first_child() {
-        let mut blocks = blocks_for_tree(cursor);
+        let mut blocks = blocks_for_tree(cursor, lang);
 
         while cursor.goto_next_sibling() {
-            blocks.append(&mut blocks_for_tree(cursor));
+            blocks.append(&mut blocks_for_tree(cursor, lang));
         }
 
         cursor.goto_parent();
@@ -140,7 +120,7 @@ pub fn blocks_for_tree(cursor: &mut TreeCursor) -> Vec<Block> {
     }
 
     // get block for current level
-    if let Some(mut block) = Block::from_node(&curr_node) {
+    if let Some(mut block) = Block::from_node(&curr_node, lang) {
         block.children = children;
         root.push(block);
     } else {

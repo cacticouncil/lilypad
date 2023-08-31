@@ -2,8 +2,8 @@ import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, 
 
 async function run() {
   await init();
-  // fontFamily, and fontSize are set in another script tag
-  run_editor(fontFamily, fontSize);
+  // fileName, fontFamily, and fontSize are set in another script tag
+  run_editor(fileName, fontFamily, fontSize);
 }
 // web view -> extension messages
 const vscode = acquireVsCodeApi();
@@ -51,6 +51,13 @@ export function executeCommand(command, args) {
     type: "execute_command",
     command: command,
     args: args,
+  });
+}
+
+export function executeWorkspaceEdit(edit) {
+  vscode.postMessage({
+    type: "execute_workspace_edit",
+    edit: edit
   });
 }
 

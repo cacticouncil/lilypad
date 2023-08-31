@@ -13,7 +13,7 @@ use std::{
 
 use super::highlighter::{Highlight, HighlightConfiguration, HighlightEvent};
 use super::{FONT_FAMILY, FONT_HEIGHT, FONT_SIZE};
-use crate::theme;
+use crate::{lang::LanguageConfig, theme};
 
 #[cfg(target_family = "wasm")]
 use druid::piet::TextLayout;
@@ -27,19 +27,22 @@ pub struct TextDrawer {
 }
 
 impl TextDrawer {
-    pub fn new() -> Self {
-        let mut highlighter_config = HighlightConfiguration::new(
-            tree_sitter_python::language(),
-            tree_sitter_python::HIGHLIGHT_QUERY,
-            "",
-        )
-        .unwrap();
+    pub fn new(lang: &LanguageConfig) -> Self {
+        let mut highlighter_config =
+            HighlightConfiguration::new(lang.tree_sitter(), lang.highlight_query, "").unwrap();
         highlighter_config.configure(HIGHLIGHT_NAMES);
 
         Self {
             highlighter_config,
             cache: vec![],
         }
+    }
+
+    pub fn change_language(&mut self, lang: &LanguageConfig) {
+        let mut highlighter_config =
+            HighlightConfiguration::new(lang.tree_sitter(), lang.highlight_query, "").unwrap();
+        highlighter_config.configure(HIGHLIGHT_NAMES);
+        self.highlighter_config = highlighter_config
     }
 
     pub fn draw(&self, padding: &[f64], ctx: &mut PaintCtx) {

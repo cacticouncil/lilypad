@@ -1,8 +1,9 @@
 {
   "name": "lilypad-vscode",
-  "publisher": "org.cacticouncil",
-  "displayName": "lilypad-vscode",
+  "publisher": "Cacti Council",
+  "displayName": "Lilypad",
   "description": "Lilypad editor for VSCode",
+  "repository": "https://github.com/cacticouncil/lilypad",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.75.0"
@@ -20,6 +21,9 @@
         "selector": [
           {
             "filenamePattern": "*.py"
+          },
+          {
+            "filenamePattern": "*.java"
           }
         ],
         "priority": "default"

@@ -1,5 +1,6 @@
 mod block_editor;
 mod file_picker;
+mod lang;
 mod parse;
 mod theme;
 
@@ -79,7 +80,7 @@ fn main() -> Result<(), PlatformError> {
 }
 
 fn app_widget() -> impl Widget<AppModel> {
-    let editor = block_editor::widget().lens(EditorLens).expand();
+    let editor = block_editor::widget("").lens(EditorLens).expand();
 
     let dir_picker = Button::new("Choose directory").on_click(|ctx, _data, _env| {
         let options = FileDialogOptions::new().select_directories();
@@ -152,7 +153,7 @@ pub(crate) mod vscode {
 
     use crate::block_editor::{
         completion::VSCodeCompletionItem,
-        diagnostics::{Diagnostic, VSCodeCommand},
+        diagnostics::{Diagnostic, VSCodeCodeAction},
         text_range::TextEdit,
     };
 
@@ -161,7 +162,8 @@ pub(crate) mod vscode {
     pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
     pub const SET_DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> =
         Selector::new("set_diagnostics");
-    pub const SET_QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCommand>> = Selector::new("set_quick_fix");
+    pub const SET_QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCodeAction>> =
+        Selector::new("set_quick_fix");
     pub const SET_COMPLETIONS_SELECTOR: Selector<Vec<VSCodeCompletionItem>> =
         Selector::new("set_completions");
 
@@ -171,6 +173,7 @@ pub(crate) mod vscode {
     pub fn request_quick_fixes(_: usize, _: usize) {}
     pub fn request_completions(_: usize, _: usize) {}
     pub fn execute_command(_: String, _: wasm_bindgen::JsValue) {}
+    pub fn execute_workspace_edit(_: wasm_bindgen::JsValue) {}
 }
 
 pub(crate) use println as console_log;

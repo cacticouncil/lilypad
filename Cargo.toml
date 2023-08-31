@@ -45,3 +45,7 @@ git = "https://github.com/liamrosenfeld/tree-sitter-python/"
 branch = "wasm"
 default-features = false
 features = ["wasm"]
+
+[dependencies.tree-sitter-java]
+git = "https://github.com/liamrosenfeld/tree-sitter-java/"
+branch = "wasm"

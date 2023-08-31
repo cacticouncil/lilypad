@@ -3,7 +3,7 @@ use druid::{
     Color, Event, MouseButton, PaintCtx, Point, Rect, RenderContext, Size, Widget,
 };
 use ropey::Rope;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use super::{
     rope_ext::RopeSliceExt,
@@ -18,9 +18,31 @@ use crate::{theme, vscode};
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VSCodeCompletionItem {
-    label: String,
+    label: VSCodeLabel,
     insert_text: VSCodeInsertText,
+    #[serde(deserialize_with = "ok_or_none")]
     kind: Option<VSCodeCompletionKind>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+enum VSCodeLabel {
+    Plain(String),
+    Detailed(VSCodeDetailedLabel),
+}
+
+impl VSCodeLabel {
+    fn name(&self) -> String {
+        match self {
+            VSCodeLabel::Plain(s) => s.clone(),
+            VSCodeLabel::Detailed(d) => d.label.clone(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct VSCodeDetailedLabel {
+    label: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -50,7 +72,6 @@ struct VSCodeSnippetString {
 }
 
 #[derive(Deserialize, Debug, Clone, Copy)]
-#[repr(usize)]
 enum VSCodeCompletionKind {
     Class,
     Color,
@@ -92,6 +113,15 @@ impl VSCodeCompletionKind {
             _ => theme::syntax::DEFAULT,
         }
     }
+}
+
+fn ok_or_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    let v = serde_json::Value::deserialize(deserializer)?;
+    Ok(T::deserialize(v).ok())
 }
 
 /* ---------------------------------- Popup --------------------------------- */
@@ -153,7 +183,7 @@ impl CompletionPopup {
         let max_label_len: usize = self
             .completions
             .iter()
-            .map(|fix| fix.label.chars().count())
+            .map(|fix| fix.label.name().chars().count())
             .max()
             .unwrap_or(0);
         let width = max_label_len as f64 * FONT_WIDTH.get().unwrap();
@@ -294,7 +324,7 @@ impl Widget<EditorModel> for CompletionPopup {
                     let mut has_prefix = vec![];
                     let mut no_prefix = vec![];
                     for completion in completions {
-                        if completion.label.to_lowercase().starts_with(&prefix) {
+                        if completion.label.name().to_lowercase().starts_with(&prefix) {
                             has_prefix.push(completion.clone());
                         } else {
                             no_prefix.push(completion.clone());
@@ -368,7 +398,7 @@ impl Widget<EditorModel> for CompletionPopup {
                 let color = completion
                     .kind
                     .map_or(theme::syntax::DEFAULT, |k| k.color());
-                let layout = make_text_layout(&completion.label, color, ctx);
+                let layout = make_text_layout(&completion.label.name(), color, ctx);
                 ctx.draw_text(&layout, pos);
             }
         }

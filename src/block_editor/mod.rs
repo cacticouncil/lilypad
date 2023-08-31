@@ -3,6 +3,7 @@ use ropey::Rope;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
+use crate::lang::{lang_for_file, LanguageConfig};
 use crate::parse::TreeManager;
 
 mod block_drawer;
@@ -18,6 +19,8 @@ mod selection_drawer;
 mod text_drawer;
 mod text_editing;
 pub mod text_range;
+
+pub use block_drawer::BlockType;
 
 use completion::CompletionPopup;
 use diagnostics::Diagnostic;
@@ -69,9 +72,10 @@ const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 const SHOW_ERROR_BLOCK_OUTLINES: bool = false;
 
 const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_edit");
+pub const SET_FILE_NAME_SELECTOR: Selector<String> = Selector::new("set_file_name");
 
-pub fn widget() -> impl Widget<EditorModel> {
-    Scroll::new(BlockEditor::new()).content_must_fill(true)
+pub fn widget(file_name: &str) -> impl Widget<EditorModel> {
+    Scroll::new(BlockEditor::new(file_name)).content_must_fill(true)
 }
 
 struct BlockEditor {
@@ -118,6 +122,9 @@ struct BlockEditor {
     /// the pair down with them if they are deleted
     paired_delete_stack: Vec<bool>,
 
+    /// the current language used by the editor
+    language: &'static LanguageConfig,
+
     ime: ImeComponent,
 }
 
@@ -131,15 +138,16 @@ pub struct EditorModel {
 }
 
 impl BlockEditor {
-    fn new() -> Self {
+    fn new(file_name: &str) -> Self {
+        let lang = lang_for_file(file_name);
         BlockEditor {
-            tree_manager: TreeManager::new(),
+            tree_manager: TreeManager::new(lang),
             selection: TextRange::ZERO,
             pseudo_selection: None,
             mouse_pressed: false,
             cursor_timer: TimerToken::INVALID,
             cursor_visible: true,
-            text_drawer: TextDrawer::new(),
+            text_drawer: TextDrawer::new(lang),
             text_changed: true,
             blocks: vec![],
             padding: vec![],
@@ -147,6 +155,7 @@ impl BlockEditor {
             completion_popup: WidgetPod::new(CompletionPopup::new()),
             input_ignore_stack: vec![],
             paired_delete_stack: vec![],
+            language: lang,
             ime: ImeComponent::default(),
         }
     }
