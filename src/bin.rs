@@ -167,7 +167,7 @@ pub(crate) mod vscode {
     pub const SET_COMPLETIONS_SELECTOR: Selector<Vec<VSCodeCompletionItem>> =
         Selector::new("set_completions");
 
-    // pub fn started() {}
+    pub fn started() {}
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
     pub fn set_clipboard(_: String) {}
     pub fn request_quick_fixes(_: usize, _: usize) {}

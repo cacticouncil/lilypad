@@ -195,8 +195,6 @@ fn main(file_name: String, font_name: String, font_size: f64) -> Result<(), Plat
     // get event sink for launcher
     let _ = EVENT_SINK.set(Arc::new(launcher.get_external_handle()));
 
-    vscode::started();
-
     // start app
     launcher.launch(data)
 }

@@ -380,6 +380,9 @@ impl Widget<EditorModel> for BlockEditor {
                 if FONT_WIDTH.get().is_none() {
                     super::find_font_dimensions(ctx, env);
                 }
+
+                // notify vscode that the editor is ready
+                vscode::started();
             }
             LifeCycle::BuildFocusChain => {
                 // make the view a focus target

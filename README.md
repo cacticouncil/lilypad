@@ -1,19 +1,19 @@
 # Lilypad
 
-A next generation dual modal code editor
+A text-based visual code editor architected to supported multiple languages and platforms.
 
 ## Prerequisite Installs
 
 - Both
-    - [Rust](https://rustup.rs/)
+  - [Rust](https://rustup.rs/)
 - Default Native Fonts
-    - macOS: [SF Mono](https://developer.apple.com/fonts/)
-    - Windows: [Roboto Mono Font](https://fonts.google.com/specimen/Roboto+Mono)
+  - macOS: [SF Mono](https://developer.apple.com/fonts/)
+  - Windows: [Roboto Mono](https://fonts.google.com/specimen/Roboto+Mono)
 - Web
-    - [wasm-pack](https://rustwasm.github.io/wasm-pack/)
-    - LLVM (`tree-sitter-python-wasm-compatible` requires `llvm-ar`) 
-    - [Just Command Runner](https://github.com/casey/just) (optional)
-    - [Host These Things Please](https://crates.io/crates/https) (optional)
+  - [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+  - LLVM (using the language grammars with wasm requires `llvm-ar`)
+  - [Just Command Runner](https://github.com/casey/just) (optional)
+  - [Host These Things Please](https://crates.io/crates/https) (optional)
 
 ## Running
 

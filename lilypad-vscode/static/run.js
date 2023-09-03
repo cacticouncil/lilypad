@@ -9,6 +9,12 @@ async function run() {
 const vscode = acquireVsCodeApi();
 
 export function started() {
+  // send a resize event to the window to make sure the editor is sized correctly
+  // run after a delay so things have the oppurtunity to appear
+  setTimeout(() => {
+    window.dispatchEvent(new UIEvent("resize"));
+  }, 50);
+
   vscode.postMessage({
     type: "started",
   });
