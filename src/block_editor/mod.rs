@@ -1,4 +1,4 @@
-use druid::{widget::Scroll, Data, Selector, TimerToken, Widget, WidgetPod};
+use druid::{widget::Scroll, Data, TimerToken, Widget, WidgetPod};
 use ropey::Rope;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -9,6 +9,7 @@ use crate::parse::TreeManager;
 mod block_drawer;
 pub mod completion;
 pub mod diagnostics;
+mod drag_blocks;
 mod gutter_drawer;
 mod highlighter;
 mod ime;
@@ -28,6 +29,7 @@ use text_drawer::*;
 use text_range::*;
 
 use self::diagnostics::DiagnosticPopup;
+use self::drag_blocks::DraggingPopup;
 use self::ime::ImeComponent;
 
 // controls cursor blinking speed
@@ -71,8 +73,14 @@ const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 
 const SHOW_ERROR_BLOCK_OUTLINES: bool = false;
 
-const APPLY_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_edit");
-pub const SET_FILE_NAME_SELECTOR: Selector<String> = Selector::new("set_file_name");
+mod commands {
+    use super::TextEdit;
+    use druid::Selector;
+
+    pub const APPLY_EDIT: Selector<TextEdit> = Selector::new("apply_edit");
+    pub const SET_FILE_NAME: Selector<String> = Selector::new("set_file_name");
+}
+pub use commands::SET_FILE_NAME;
 
 pub fn widget(file_name: &str) -> impl Widget<EditorModel> {
     Scroll::new(BlockEditor::new(file_name)).content_must_fill(true)
@@ -82,14 +90,14 @@ struct BlockEditor {
     /// generates syntax tree from source code
     tree_manager: TreeManager,
 
+    /// the current language used by the editor
+    language: &'static LanguageConfig,
+
     /// the currently selected text
     selection: TextRange,
 
     /// the frame that hitting backspace would delete
     pseudo_selection: Option<TextRange>,
-
-    /// if the left mouse button is currently pressed
-    mouse_pressed: bool,
 
     /// the timer that toggles the cursor
     cursor_timer: TimerToken,
@@ -109,12 +117,6 @@ struct BlockEditor {
     /// padding between each line
     padding: Vec<f64>,
 
-    /// overlay view for diagnostics
-    diagnostic_popup: WidgetPod<EditorModel, DiagnosticPopup>,
-
-    /// overlay view for completions
-    completion_popup: WidgetPod<EditorModel, CompletionPopup>,
-
     /// pairs that were inserted and should be ignored on the next input
     input_ignore_stack: Vec<&'static str>,
 
@@ -122,9 +124,22 @@ struct BlockEditor {
     /// the pair down with them if they are deleted
     paired_delete_stack: Vec<bool>,
 
-    /// the current language used by the editor
-    language: &'static LanguageConfig,
+    /// store a block that is currently being dragged
+    drag_block: Option<String>,
 
+    /// The row is where to draw the drag insertion line. The column is how much indent to add.
+    drag_insertion_line: Option<TextPoint>,
+
+    /// overlay view for diagnostics
+    diagnostic_popup: WidgetPod<EditorModel, DiagnosticPopup>,
+
+    /// overlay view for completions
+    completion_popup: WidgetPod<EditorModel, CompletionPopup>,
+
+    /// overlay view for dragging blocks
+    dragging_popup: WidgetPod<EditorModel, DraggingPopup>,
+
+    /// connects to the system IME to handle text input
     ime: ImeComponent,
 }
 
@@ -142,20 +157,22 @@ impl BlockEditor {
         let lang = lang_for_file(file_name);
         BlockEditor {
             tree_manager: TreeManager::new(lang),
+            language: lang,
             selection: TextRange::ZERO,
             pseudo_selection: None,
-            mouse_pressed: false,
             cursor_timer: TimerToken::INVALID,
             cursor_visible: true,
             text_drawer: TextDrawer::new(lang),
             text_changed: true,
             blocks: vec![],
             padding: vec![],
-            diagnostic_popup: WidgetPod::new(DiagnosticPopup::new()),
-            completion_popup: WidgetPod::new(CompletionPopup::new()),
             input_ignore_stack: vec![],
             paired_delete_stack: vec![],
-            language: lang,
+            drag_block: None,
+            drag_insertion_line: None,
+            diagnostic_popup: WidgetPod::new(DiagnosticPopup::new()),
+            completion_popup: WidgetPod::new(CompletionPopup::new()),
+            dragging_popup: WidgetPod::new(DraggingPopup::new(lang)),
             ime: ImeComponent::default(),
         }
     }

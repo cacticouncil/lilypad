@@ -5,7 +5,8 @@ use tree_sitter_c2rust::{Node, TreeCursor};
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 use crate::lang::LanguageConfig;
 
-use super::{GUTTER_WIDTH, OUTER_PAD, SHOW_ERROR_BLOCK_OUTLINES};
+use super::text_range::{TextPoint, TextRange};
+use super::{OUTER_PAD, SHOW_ERROR_BLOCK_OUTLINES};
 
 /* ------------------------------ tree handling ----------------------------- */
 
@@ -52,11 +53,11 @@ impl BlockType {
 }
 
 pub struct Block {
-    line: usize,
-    col: usize,
-    height: usize,
-    syntax_type: BlockType,
-    children: Vec<Block>,
+    pub line: usize,
+    pub col: usize,
+    pub height: usize,
+    pub syntax_type: BlockType,
+    pub children: Vec<Block>,
 }
 
 impl Block {
@@ -75,6 +76,19 @@ impl Block {
 
     const fn color(&self) -> Option<Color> {
         self.syntax_type.color()
+    }
+
+    pub fn text_range(&self) -> TextRange {
+        TextRange {
+            start: TextPoint {
+                col: self.col,
+                row: self.line,
+            },
+            end: TextPoint {
+                col: 0,
+                row: self.line + self.height,
+            },
+        }
     }
 }
 
@@ -139,28 +153,30 @@ const BLOCK_STROKE_WIDTH: f64 = 2.0;
 const BLOCK_INNER_PAD: f64 = 2.0;
 const BLOCK_TOP_PAD: f64 = 1.0;
 
-pub fn draw_blocks(blocks: &Vec<Block>, ctx: &mut PaintCtx) {
-    draw_blocks_helper(blocks, 0, 0.0, ctx);
+pub fn draw_blocks(blocks: &Vec<Block>, offset: Point, ctx: &mut PaintCtx) {
+    draw_blocks_helper(blocks, 0, 0.0, offset, ctx);
 }
 
 fn draw_blocks_helper(
     blocks: &Vec<Block>,
     level: usize,
     mut total_padding: f64,
+    offset: Point,
     ctx: &mut PaintCtx,
 ) -> f64 {
     for block in blocks {
         if block.syntax_type == BlockType::Divider {
             // do not draw this block
-            total_padding = draw_blocks_helper(&block.children, level, total_padding, ctx);
+            total_padding = draw_blocks_helper(&block.children, level, total_padding, offset, ctx);
         } else {
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
 
             // draw children first to get total size
             let inside_padding =
-                draw_blocks_helper(&block.children, level + 1, total_padding, ctx) - total_padding;
+                draw_blocks_helper(&block.children, level + 1, total_padding, offset, ctx)
+                    - total_padding;
 
-            draw_block(block, level, total_padding, inside_padding, ctx);
+            draw_block(block, level, total_padding, inside_padding, offset, ctx);
             total_padding += inside_padding;
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
         }
@@ -174,6 +190,7 @@ fn draw_block(
     level: usize,
     padding_above: f64,
     padding_inside: f64,
+    offset: Point,
     ctx: &mut PaintCtx,
 ) {
     // No color for invisible nodes
@@ -186,8 +203,8 @@ fn draw_block(
     let font_height = *FONT_HEIGHT.get().unwrap();
 
     let start_pt = Point::new(
-        (block.col as f64) * font_width + OUTER_PAD + GUTTER_WIDTH - (BLOCK_STROKE_WIDTH / 2.0),
-        (block.line as f64) * font_height + OUTER_PAD - (BLOCK_STROKE_WIDTH / 2.0) + padding_above,
+        (block.col as f64) * font_width + offset.x - (BLOCK_STROKE_WIDTH / 2.0),
+        (block.line as f64) * font_height + offset.y - (BLOCK_STROKE_WIDTH / 2.0) + padding_above,
     );
 
     // determine the margin based on level

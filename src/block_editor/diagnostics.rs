@@ -1,6 +1,6 @@
 use druid::{
     piet::{PietTextLayout, Text, TextLayoutBuilder},
-    Color, Event, MouseButton, PaintCtx, Point, Rect, RenderContext, Size, Widget,
+    Color, Event, MouseButton, PaintCtx, Point, RenderContext, Size, Widget,
 };
 use serde::{Deserialize, Serialize};
 
@@ -246,7 +246,7 @@ impl Widget<EditorModel> for DiagnosticPopup {
             }
 
             Event::Command(command) => {
-                if let Some(fixes) = command.get(vscode::SET_QUICK_FIX_SELECTOR) {
+                if let Some(fixes) = command.get(vscode::commands::SET_QUICK_FIX) {
                     // TODO: verify id matches
                     self.fixes = Some(fixes.clone());
 
@@ -303,7 +303,7 @@ impl Widget<EditorModel> for DiagnosticPopup {
         // TODO: look good
 
         // set background color
-        let rect = Rect::from_origin_size(Point::ZERO, ctx.size());
+        let rect = ctx.size().to_rect();
         ctx.fill(rect, &theme::POPUP_BACKGROUND);
 
         // draw message

@@ -37,7 +37,7 @@ pub fn run_editor(file_name: String, font_name: String, font_size: f64) {
 #[wasm_bindgen]
 pub fn set_text(text: String) {
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::SET_TEXT_SELECTOR, text, Target::Global)
+        sink.submit_command(vscode::commands::SET_TEXT, text, Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -48,7 +48,7 @@ pub fn set_text(text: String) {
 pub fn apply_edit(json: JsValue) {
     let edits: TextEdit = serde_wasm_bindgen::from_value(json).expect("Could not deserialize edit");
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::APPLY_VSCODE_EDIT_SELECTOR, edits, Target::Global)
+        sink.submit_command(vscode::commands::APPLY_VSCODE_EDIT, edits, Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -78,7 +78,7 @@ pub fn cut_selection() {
 #[wasm_bindgen]
 pub fn insert_text(text: String) {
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::PASTE_SELECTOR, text, Target::Global)
+        sink.submit_command(vscode::commands::PASTE, text, Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -92,7 +92,7 @@ pub fn new_diagnostics(json: JsValue) {
 
     if let Some(sink) = EVENT_SINK.get() {
         sink.submit_command(
-            vscode::SET_DIAGNOSTICS_SELECTOR,
+            vscode::commands::SET_DIAGNOSTICS,
             diagnostics,
             Target::Global,
         )
@@ -108,7 +108,7 @@ pub fn set_quick_fixes(json: JsValue) {
         serde_wasm_bindgen::from_value(json).expect("Could not deserialize quick fixes");
 
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::SET_QUICK_FIX_SELECTOR, fixes, Target::Global)
+        sink.submit_command(vscode::commands::SET_QUICK_FIX, fixes, Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -121,7 +121,7 @@ pub fn set_completions(json: JsValue) {
         serde_wasm_bindgen::from_value(json).expect("Could not deserialize completions");
 
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(vscode::SET_COMPLETIONS_SELECTOR, fixes, Target::Global)
+        sink.submit_command(vscode::commands::SET_COMPLETIONS, fixes, Target::Global)
             .unwrap();
     } else {
         console_log!("could not get sink");
@@ -130,24 +130,25 @@ pub fn set_completions(json: JsValue) {
 
 /* ----- WASM -> Javascript ----- */
 pub mod vscode {
-    use druid::Selector;
     use wasm_bindgen::prelude::*;
 
-    use crate::block_editor::{
-        completion::VSCodeCompletionItem,
-        diagnostics::{Diagnostic, VSCodeCodeAction},
-        text_range::TextEdit,
-    };
+    pub mod commands {
+        use druid::Selector;
 
-    pub const SET_TEXT_SELECTOR: Selector<String> = Selector::new("set_text");
-    pub const APPLY_VSCODE_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_vscode_edit");
-    pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
-    pub const SET_DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> =
-        Selector::new("set_diagnostics");
-    pub const SET_QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCodeAction>> =
-        Selector::new("set_quick_fix");
-    pub const SET_COMPLETIONS_SELECTOR: Selector<Vec<VSCodeCompletionItem>> =
-        Selector::new("set_completions");
+        use crate::block_editor::{
+            completion::VSCodeCompletionItem,
+            diagnostics::{Diagnostic, VSCodeCodeAction},
+            text_range::TextEdit,
+        };
+
+        pub const SET_TEXT: Selector<String> = Selector::new("set_text");
+        pub const APPLY_VSCODE_EDIT: Selector<TextEdit> = Selector::new("apply_vscode_edit");
+        pub const PASTE: Selector<String> = Selector::new("paste");
+        pub const SET_DIAGNOSTICS: Selector<Vec<Diagnostic>> = Selector::new("set_diagnostics");
+        pub const SET_QUICK_FIX: Selector<Vec<VSCodeCodeAction>> = Selector::new("set_quick_fix");
+        pub const SET_COMPLETIONS: Selector<Vec<VSCodeCompletionItem>> =
+            Selector::new("set_completions");
+    }
 
     #[wasm_bindgen(raw_module = "./run.js")]
     extern "C" {

@@ -7,8 +7,8 @@ use druid::{
 use ropey::Rope;
 
 use super::{
-    block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel,
-    APPLY_EDIT_SELECTOR, FONT_HEIGHT, FONT_WIDTH, SET_FILE_NAME_SELECTOR, TIMER_INTERVAL,
+    block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel, FONT_HEIGHT,
+    FONT_WIDTH, TIMER_INTERVAL,
 };
 use crate::{lang::lang_for_file, theme, vscode, GlobalModel};
 
@@ -23,14 +23,18 @@ impl Widget<EditorModel> for BlockEditor {
         // first see if a child handled it
         self.diagnostic_popup.event(ctx, event, data, env);
         self.completion_popup.event(ctx, event, data, env);
+        self.dragging_popup.event(ctx, event, data, env);
         if ctx.is_handled() {
             return;
         }
 
         match event {
             Event::WindowConnected => {
-                //starts initial timer
+                // starts initial timer
                 self.cursor_timer = ctx.request_timer(TIMER_INTERVAL);
+
+                // have the cursor be a text edit cursor by default
+                ctx.set_cursor(&druid::Cursor::IBeam);
             }
             Event::Timer(id) => {
                 if *id == self.cursor_timer {
@@ -44,14 +48,22 @@ impl Widget<EditorModel> for BlockEditor {
             Event::MouseDown(mouse) => {
                 match mouse.button {
                     MouseButton::Left => {
-                        self.mouse_clicked(mouse, &data.source.lock().unwrap(), ctx);
-                        self.mouse_pressed = true;
+                        self.mouse_clicked(mouse, &mut data.source.lock().unwrap(), ctx);
+
+                        // set the origin of the dragging popup if dragging
+                        if self.drag_block.is_some() {
+                            let origin = self.dragging_popup.widget().calc_origin(mouse.pos);
+                            self.dragging_popup.set_origin(ctx, origin);
+                        }
+
+                        ctx.request_layout();
+                        ctx.request_paint();
                     }
                     MouseButton::Right => {
                         // move mouse to right click if not a selection
                         // TODO: also check if the click was inside of the selection
                         if self.selection.is_cursor() {
-                            self.mouse_clicked(mouse, &data.source.lock().unwrap(), ctx);
+                            self.mouse_clicked(mouse, &mut data.source.lock().unwrap(), ctx);
                         }
 
                         // custom menus do not work for druid on web
@@ -73,14 +85,24 @@ impl Widget<EditorModel> for BlockEditor {
                 ctx.set_handled();
             }
             Event::MouseUp(mouse) if mouse.button == MouseButton::Left => {
-                self.mouse_pressed = false;
-                ctx.request_paint();
-                ctx.set_handled();
+                if self.drop_block(&mut data.source.lock().unwrap()) {
+                    // redraw because text and drag line changed
+                    ctx.request_layout();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                }
             }
 
             Event::MouseMove(mouse) => {
-                if self.mouse_pressed {
+                if mouse.buttons.has_left() {
                     self.mouse_dragged(mouse, &data.source.lock().unwrap(), ctx);
+
+                    // set the origin of the dragging popup if dragging
+                    if self.drag_block.is_some() {
+                        let origin = self.dragging_popup.widget().calc_origin(mouse.pos);
+                        self.dragging_popup.set_origin(ctx, origin);
+                    }
+
                     ctx.request_paint();
                     ctx.set_handled();
                 } else {
@@ -91,7 +113,10 @@ impl Widget<EditorModel> for BlockEditor {
                         let coord = self.mouse_to_raw_coord(mouse.pos);
                         data.diagnostic_selection = None;
                         for diagnostic in &data.diagnostics {
-                            if diagnostic.range.contains(coord) {
+                            if diagnostic
+                                .range
+                                .contains(coord, &data.source.lock().unwrap())
+                            {
                                 data.diagnostic_selection = Some(diagnostic.id);
                                 break;
                             }
@@ -100,16 +125,24 @@ impl Widget<EditorModel> for BlockEditor {
                         data.diagnostic_selection = None
                     }
                 }
-
-                // when cursor is inside of editor, have it be in text edit mode
-                ctx.set_cursor(&druid::Cursor::IBeam);
             }
 
-            Event::KeyDown(_) => {
+            Event::KeyDown(key) => {
                 // manually pass key events to completion popup so it can intercept them before ime
                 self.completion_popup
                     .widget_mut()
                     .event(ctx, event, data, env);
+
+                // holding alt switches cursor to grab
+                if key.mods.alt() {
+                    ctx.set_cursor(&druid::Cursor::Arrow);
+                }
+            }
+            Event::KeyUp(key) => {
+                // letting go of alt should switch the cursor back to text edit
+                if key.key == druid::keyboard_types::Key::Alt {
+                    ctx.set_cursor(&druid::Cursor::IBeam);
+                }
             }
 
             Event::ImeStateChange => {
@@ -140,7 +173,7 @@ impl Widget<EditorModel> for BlockEditor {
                 // apply text change
                 let text_change = self.ime.borrow_mut().take_external_text_change();
                 if let Some(text_change) = text_change {
-                    self.insert_str(&mut source, &text_change);
+                    self.insert_char(&mut source, &text_change);
                     self.completion_popup
                         .widget_mut()
                         .request_completions(&source, self.selection);
@@ -159,7 +192,7 @@ impl Widget<EditorModel> for BlockEditor {
 
             Event::Command(command) => {
                 // VSCode new text
-                if let Some(new_text) = command.get(vscode::SET_TEXT_SELECTOR) {
+                if let Some(new_text) = command.get(vscode::commands::SET_TEXT) {
                     // update state and tree
                     let rope = Rope::from_str(new_text);
                     data.source = Arc::new(Mutex::new(rope));
@@ -178,17 +211,22 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.request_paint();
 
                     ctx.set_handled();
-                } else if let Some(edit) = command.get(vscode::APPLY_VSCODE_EDIT_SELECTOR) {
+                } else if let Some(edit) = command.get(vscode::commands::APPLY_VSCODE_EDIT) {
                     self.apply_vscode_edit(&mut data.source.lock().unwrap(), edit);
+
+                    ctx.request_layout();
+                    ctx.request_paint();
+
                     ctx.set_handled();
                 }
                 // New file name from the native file picker
-                else if let Some(file_name) = command.get(SET_FILE_NAME_SELECTOR) {
+                else if let Some(file_name) = command.get(super::commands::SET_FILE_NAME) {
                     let new_lang = lang_for_file(file_name);
                     if self.language.name != new_lang.name {
                         self.language = new_lang;
                         self.text_drawer.change_language(new_lang);
                         self.tree_manager.change_language(new_lang);
+                        self.dragging_popup.widget_mut().change_language(new_lang);
                     }
                     ctx.set_handled();
                 }
@@ -227,24 +265,33 @@ impl Widget<EditorModel> for BlockEditor {
                             .put_string(selected_text);
                     }
 
+                    // redraw
+                    ctx.request_layout();
+                    ctx.request_paint();
+
                     ctx.set_handled()
-                } else if let Some(clip_text) = command.get(vscode::PASTE_SELECTOR) {
+                } else if let Some(clip_text) = command.get(vscode::commands::PASTE) {
                     // paste from vscode provides string
                     self.insert_str(&mut data.source.lock().unwrap(), clip_text);
+
+                    // redraw
+                    ctx.request_layout();
+                    ctx.request_paint();
+
                     ctx.set_handled();
                 }
                 // VSCode Diagnostics
-                else if let Some(diagnostics) = command.get(vscode::SET_DIAGNOSTICS_SELECTOR) {
+                else if let Some(diagnostics) = command.get(vscode::commands::SET_DIAGNOSTICS) {
                     data.diagnostics = diagnostics.clone();
 
-                    // this probably should be handled by the update function
+                    // TODO: this probably should be handled by the update function
                     // because diagnostics is in data
                     ctx.request_paint();
 
                     ctx.set_handled()
                 }
                 // Applying an edit from elsewhere (that's not VSCode)
-                else if let Some(edit) = command.get(APPLY_EDIT_SELECTOR) {
+                else if let Some(edit) = command.get(super::commands::APPLY_EDIT) {
                     self.apply_edit(&mut data.source.lock().unwrap(), edit);
                     ctx.set_handled();
                 }
@@ -253,6 +300,10 @@ impl Widget<EditorModel> for BlockEditor {
             Event::Paste(clipboard) => {
                 let clip_text = clipboard.get_string().unwrap_or_default();
                 self.insert_str(&mut data.source.lock().unwrap(), &clip_text);
+
+                // redraw
+                ctx.request_layout();
+                ctx.request_paint();
                 ctx.set_handled();
             }
 
@@ -269,6 +320,7 @@ impl Widget<EditorModel> for BlockEditor {
     ) {
         self.diagnostic_popup.update(ctx, data, env);
         self.completion_popup.update(ctx, data, env);
+        self.dragging_popup.update(ctx, data, env);
     }
 
     fn layout(
@@ -280,7 +332,7 @@ impl Widget<EditorModel> for BlockEditor {
     ) -> Size {
         // width is max between text and window
         let source = data.source.lock().unwrap();
-        let max_chars = source.lines().map(|l| l.chars().count()).max().unwrap_or(0);
+        let max_chars = source.lines().map(|l| l.len_chars()).max().unwrap_or(0);
         let width = max_chars as f64 * FONT_WIDTH.get().unwrap()
             + super::OUTER_PAD
             + super::GUTTER_WIDTH
@@ -308,6 +360,9 @@ impl Widget<EditorModel> for BlockEditor {
         self.completion_popup.set_origin(ctx, point);
         self.completion_popup.layout(ctx, bc, data, env);
 
+        // add dragging popup
+        self.dragging_popup.layout(ctx, bc, data, env);
+
         bc.constrain(desired)
     }
 
@@ -326,7 +381,7 @@ impl Widget<EditorModel> for BlockEditor {
 
             // layout text
             self.text_drawer
-                .layout(self.tree_manager.get_cursor().node(), &source, ctx);
+                .layout(self.tree_manager.get_cursor().node(), &source, ctx.text());
 
             self.text_changed = false;
         }
@@ -339,9 +394,14 @@ impl Widget<EditorModel> for BlockEditor {
         self.draw_pseudo_selection(&source, ctx);
         self.draw_selection(&source, ctx);
 
-        // draw content
-        block_drawer::draw_blocks(&self.blocks, ctx);
-        self.text_drawer.draw(&self.padding, ctx);
+        // draw text and blocks
+        let block_offset = Point::new(super::OUTER_PAD + super::GUTTER_WIDTH, super::OUTER_PAD);
+        block_drawer::draw_blocks(&self.blocks, block_offset, ctx);
+        let text_offset = Point::new(super::TOTAL_TEXT_X_OFFSET, super::OUTER_PAD);
+        self.text_drawer.draw(&self.padding, text_offset, ctx);
+
+        // draw drag & drop insertion line
+        self.draw_dropping_line(ctx);
 
         // draw diagnostics
         // TODO: draw higher priorities on top
@@ -354,6 +414,11 @@ impl Widget<EditorModel> for BlockEditor {
 
         // draw completion popup (if any)
         self.completion_popup.paint(ctx, data, env);
+
+        // draw dragging popup (if any)
+        if self.drag_block.is_some() {
+            self.dragging_popup.paint(ctx, data, env);
+        }
 
         // draw gutter
         gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.row, ctx);
@@ -394,5 +459,6 @@ impl Widget<EditorModel> for BlockEditor {
         // pass lifecycle events to children
         self.diagnostic_popup.lifecycle(ctx, event, data, env);
         self.completion_popup.lifecycle(ctx, event, data, env);
+        self.dragging_popup.lifecycle(ctx, event, data, env);
     }
 }

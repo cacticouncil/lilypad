@@ -86,8 +86,8 @@ impl Widget<AppModel> for FilePicker {
                 let file_contents = std::fs::read_to_string(&file_path)
                     .unwrap_or_else(|_| "# could not read file".to_string());
                 let file_name = file_path.file_name().unwrap().to_string_lossy().to_string();
-                ctx.submit_command(crate::block_editor::SET_FILE_NAME_SELECTOR.with(file_name));
-                ctx.submit_command(crate::vscode::SET_TEXT_SELECTOR.with(file_contents));
+                ctx.submit_command(crate::block_editor::SET_FILE_NAME.with(file_name));
+                ctx.submit_command(crate::vscode::commands::SET_TEXT.with(file_contents));
             }
         }
     }

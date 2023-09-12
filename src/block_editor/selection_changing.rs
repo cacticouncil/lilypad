@@ -1,6 +1,6 @@
-use druid::{text::Movement, EventCtx, MouseEvent};
+use druid::{text::Movement, EventCtx, MouseEvent, Point};
 use ropey::Rope;
-use tree_sitter_c2rust::{Point, TreeCursor};
+use tree_sitter_c2rust::TreeCursor;
 
 use super::{
     rope_ext::{RopeExt, RopeSliceExt},
@@ -40,7 +40,7 @@ impl BlockEditor {
     fn string_pseudo_selection_range(
         &self,
         mut cursor: TreeCursor,
-        point: Point,
+        point: tree_sitter_c2rust::Point,
     ) -> Option<TextRange> {
         // go to lowest node for point
         // don't set if error (bc that would make things go wonky when unpaired)
@@ -316,9 +316,15 @@ impl BlockEditor {
     }
 
     /* ------------------------------ Mouse Clicks ------------------------------ */
-    pub fn mouse_clicked(&mut self, mouse: &MouseEvent, source: &Rope, ctx: &mut EventCtx) {
+    pub fn mouse_clicked(&mut self, mouse: &MouseEvent, source: &mut Rope, ctx: &mut EventCtx) {
+        // if option is held, remove the current block from the source and place it in drag_block
+        if mouse.mods.alt() {
+            self.start_block_drag(mouse.pos, source, ctx);
+            return;
+        }
+
         // move the cursor and get selection start position
-        let loc = self.mouse_to_coord(mouse, source);
+        let loc = self.mouse_to_coord(mouse.pos, source);
         let selection = TextRange::new_cursor(loc);
         self.set_selection(selection, source);
 
@@ -329,26 +335,32 @@ impl BlockEditor {
     }
 
     pub fn mouse_dragged(&mut self, mouse: &MouseEvent, source: &Rope, _ctx: &mut EventCtx) {
-        // set selection end position to dragged position
-        self.selection.end = self.mouse_to_coord(mouse, source);
+        if self.drag_block.is_some() {
+            self.set_dropping_line(mouse.pos, source);
+        } else {
+            // set selection end position to dragged position
+            let coord = self.mouse_to_coord(mouse.pos, source);
+            self.selection.end = coord;
 
-        // clear pseudo selection if making a selection
-        if !self.selection.is_cursor() {
-            self.pseudo_selection = None;
+            // clear pseudo selection if making a selection
+            if !self.selection.is_cursor() {
+                self.pseudo_selection = None;
+            }
+
+            // show cursor
+            self.cursor_visible = true;
         }
-
-        // show cursor
-        self.cursor_visible = true;
     }
 
-    pub fn mouse_to_coord(&self, mouse: &MouseEvent, source: &Rope) -> TextPoint {
+    /* -------------------- UI <-> Text Coordinate Conversion ------------------- */
+    pub fn mouse_to_coord(&self, point: Point, source: &Rope) -> TextPoint {
         // find the line clicked on by finding the next one and then going back one
         let mut y: usize = 0;
         let mut total_pad = 0.0;
         for row_pad in &self.padding {
             total_pad += row_pad;
             let curr_line_start = total_pad + (y as f64 * FONT_HEIGHT.get().unwrap());
-            let raw_y = mouse.pos.y - super::OUTER_PAD;
+            let raw_y = point.y - super::OUTER_PAD;
             if raw_y <= curr_line_start {
                 break;
             }
@@ -365,7 +377,7 @@ impl BlockEditor {
 
         // TODO: if past last line, move to end of last line
 
-        let x_raw = ((mouse.pos.x - super::OUTER_PAD - super::GUTTER_WIDTH - super::TEXT_L_PAD)
+        let x_raw = ((point.x - super::OUTER_PAD - super::GUTTER_WIDTH - super::TEXT_L_PAD)
             / FONT_WIDTH.get().unwrap())
         .round() as usize;
         let x_bound = clamp_col(y, x_raw, source);
@@ -374,7 +386,7 @@ impl BlockEditor {
     }
 
     /// Finds the text coordinate that the mouse is over, without clamping to a valid position within the text
-    pub fn mouse_to_raw_coord(&self, point: druid::Point) -> TextPoint {
+    pub fn mouse_to_raw_coord(&self, point: Point) -> TextPoint {
         let font_height = *FONT_HEIGHT.get().unwrap();
         let font_width = *FONT_WIDTH.get().unwrap();
 
@@ -401,6 +413,18 @@ impl BlockEditor {
             .round() as usize;
 
         TextPoint::new(x, y)
+    }
+
+    pub fn coord_to_mouse(&self, coord: TextPoint) -> Point {
+        let font_height = *FONT_HEIGHT.get().unwrap();
+        let font_width = *FONT_WIDTH.get().unwrap();
+
+        let y = super::OUTER_PAD
+            + (coord.row as f64 * font_height)
+            + self.padding.iter().take(coord.row).sum::<f64>();
+        let x = super::TOTAL_TEXT_X_OFFSET + (coord.col as f64 * font_width);
+
+        Point::new(x, y)
     }
 }
 

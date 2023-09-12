@@ -8,8 +8,7 @@ use serde::{Deserialize, Deserializer};
 use super::{
     rope_ext::RopeSliceExt,
     text_range::{TextEdit, TextPoint, TextRange},
-    EditorModel, APPLY_EDIT_SELECTOR, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH,
-    TOTAL_TEXT_X_OFFSET,
+    EditorModel, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH, TOTAL_TEXT_X_OFFSET,
 };
 use crate::{theme, vscode};
 
@@ -194,7 +193,7 @@ impl CompletionPopup {
     fn apply_selected_completion(&mut self, source: &Rope, ctx: &mut druid::EventCtx) {
         if let Some(completion) = self.completions.get(self.selection) {
             let text_edit = self.edit_for_completion(completion.insert_text.value(), source);
-            ctx.submit_command(APPLY_EDIT_SELECTOR.with(text_edit));
+            ctx.submit_command(super::commands::APPLY_EDIT.with(text_edit));
 
             self.completions.clear();
             ctx.request_layout();
@@ -298,7 +297,7 @@ impl Widget<EditorModel> for CompletionPopup {
                 }
             }
             Event::Command(command) => {
-                if let Some(completions) = command.get(vscode::SET_COMPLETIONS_SELECTOR) {
+                if let Some(completions) = command.get(vscode::commands::SET_COMPLETIONS) {
                     // clear existing completions
                     self.completions.clear();
 
@@ -379,7 +378,7 @@ impl Widget<EditorModel> for CompletionPopup {
 
         if !self.completions.is_empty() {
             // set background color
-            let rect = Rect::from_origin_size(Point::ZERO, ctx.size());
+            let rect = ctx.size().to_rect();
             ctx.fill(rect, &theme::POPUP_BACKGROUND);
 
             // draw completions

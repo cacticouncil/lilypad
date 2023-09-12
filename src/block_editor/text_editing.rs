@@ -1,5 +1,6 @@
 use druid::text::{Direction, Movement};
 use ropey::Rope;
+use std::cmp;
 use tree_sitter_c2rust::InputEdit;
 
 use super::{
@@ -28,14 +29,21 @@ impl BlockEditor {
         source.insert(char_range.start, new);
 
         // find new ending (account for newlines present)
+        let ends_with_linebreak = new.ends_with('\n');
         let line_count = std::cmp::max(
-            new.lines().count() + if new.ends_with('\n') { 1 } else { 0 },
+            new.lines().count() + if ends_with_linebreak { 1 } else { 0 },
             1,
         );
-        let last_line_len = new.lines().last().unwrap_or("").chars().count();
+
+        let last_line_len = if ends_with_linebreak {
+            0
+        } else {
+            new.lines().last().unwrap_or("").chars().count()
+        };
+        // move to cursor to the end of the last line that isn't just a newline
         let new_end = TextPoint::new(
             if line_count == 1 { range.start.col } else { 0 } + last_line_len,
-            range.start.row + (line_count - 1),
+            range.start.row + line_count - 1,
         );
 
         // update tree
@@ -86,7 +94,15 @@ impl BlockEditor {
         self.replace_range(source, &edit.text, edit.range, true, true)
     }
 
+    /// Handle inserting a string at the current selection
     pub fn insert_str(&mut self, source: &mut Rope, add: &str) {
+        let old_selection = self.selection.ordered();
+        self.replace_range(source, add, old_selection, true, true);
+    }
+
+    /// Handle typing a single character
+    /// (separate from `insert_str` because it also handles paired completion)
+    pub fn insert_char(&mut self, source: &mut Rope, add: &str) {
         let old_selection = self.selection.ordered();
 
         // move cursor
@@ -259,11 +275,15 @@ impl BlockEditor {
             // add it
             let start_of_line = TextRange::new_cursor(TextPoint::new(0, line_num));
             self.replace_range(source, indent, start_of_line, false, true);
-        }
 
-        // adjust selection
-        self.selection.start.col += 4;
-        self.selection.end.col += 4;
+            // adjust selection if first or last line
+            if line_num == ordered.start.row {
+                self.selection.start.col += indent_amount;
+            }
+            if line_num == ordered.end.row {
+                self.selection.end.col += indent_amount;
+            }
+        }
     }
 
     pub fn unindent(&mut self, source: &mut Rope) {
@@ -280,7 +300,7 @@ impl BlockEditor {
             }
 
             // remove start of line
-            let unindent_amount = 4 - (curr_indent % 4);
+            let unindent_amount = cmp::min(4 - (curr_indent % 4), curr_indent);
             let remove_range = TextRange::new(
                 TextPoint::new(0, line_num),
                 TextPoint::new(unindent_amount, line_num),
