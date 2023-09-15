@@ -123,6 +123,7 @@ target/
 !.vscode/launch.json
 !.vscode/extensions.json
 *.code-workspace
+.vs/*
 
 # Local History for Visual Studio Code
 .history/
