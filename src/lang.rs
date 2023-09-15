@@ -150,15 +150,13 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
             "class_declaration" => Some(Class),
             "method_declaration" => Some(FunctionDef),
             "while_statement" => Some(While),
-            "if_statement" => Some(If),//{
-                // the java grammar treats else if as else, if_statement
-                // so check that is isn't that
-                //if node.prev_sibling().map_or("", |s| s.kind()) == "else" {
-                  //  None
-              //  } else {
-               //     Some(If)
-               // }
-            //}
+            "if_statement" => {
+                if node.prev_sibling().map_or("", |s| s.kind()) == "else" {
+                   None
+                } else {
+                   Some(If)
+                }
+            }
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
 

@@ -797,6 +797,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "tree-sitter-c-sharp",
  "tree-sitter-c2rust",
  "tree-sitter-java",
  "tree-sitter-python",
@@ -1422,6 +1423,15 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "tree-sitter-c-sharp"
+version = "0.20.0"
+source = "git+https://github.com/Alex-Aron/tree-sitter-c-sharp/?branch=new-wasm#3c95aa39894a4eb6554c63838929ec506f0d8bb1"
+dependencies = [
+ "cc",
+ "tree-sitter-c2rust",
 ]
 
 [[package]]
