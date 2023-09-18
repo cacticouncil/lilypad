@@ -20,6 +20,7 @@ pub struct LanguageConfig {
     pub string_node_ids: StringNodeIDs,
 }
 
+#[derive(PartialEq)]
 pub enum NewScopeChar {
     Colon,
     Brace,

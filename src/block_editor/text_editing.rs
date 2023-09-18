@@ -8,7 +8,7 @@ use super::{
     text_range::{TextEdit, TextPoint},
     BlockEditor, TextRange,
 };
-use crate::vscode;
+use crate::{lang::NewScopeChar, vscode};
 
 impl BlockEditor {
     fn replace_range(
@@ -180,6 +180,15 @@ impl BlockEditor {
         let curr_line = source.line(old_selection.start.row);
         let prev_indent = curr_line.whitespace_at_start();
 
+        let middle_of_bracket = self.language.new_scope_char == NewScopeChar::Brace && {
+            if old_selection.start.col > 1 {
+                let char_before_cursor = curr_line.char(old_selection.start.col - 1);
+                char_before_cursor == self.language.new_scope_char.char()
+            } else {
+                false
+            }
+        };
+
         // find the indent level of the next line
         // (same as current line & increase if character before cursor is a scope char)
         let indent_inc = if old_selection.start.col > 1 {
@@ -198,7 +207,18 @@ impl BlockEditor {
         let indent: &str = &" ".repeat(next_indent);
         let to_insert = format!("{}{}", linebreak, indent);
 
-        self.replace_range(source, &to_insert, old_selection, true, true);
+        if !middle_of_bracket {
+            self.replace_range(source, &to_insert, old_selection, true, true);
+        } else {
+            // if in the middle of a bracket, insert an extra linebreak and indent
+            // but only move the cursor to the newline in the middle
+            let following_indent = " ".repeat(prev_indent);
+            let extra_to_insert = format!("{}{}{}", to_insert, linebreak, following_indent);
+            self.replace_range(source, &extra_to_insert, old_selection, false, true);
+
+            let new_cursor = TextPoint::new(next_indent, old_selection.start.row + 1);
+            self.selection = TextRange::new_cursor(new_cursor);
+        }
     }
 
     pub fn backspace(&mut self, source: &mut Rope, movement: Movement) {
