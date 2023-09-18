@@ -11,13 +11,27 @@ pub struct LanguageConfig {
     pub highlight_query: &'static str,
 
     /// The character that starts a new scope (so should increase the indent)
-    pub new_scope_char: char,
+    pub new_scope_char: NewScopeChar,
 
     /// Assigns a node a block type to draw
     node_categorizer: fn(&tree_sitter_c2rust::Node) -> Option<BlockType>,
 
     /// The IDs for a string, and the start and end. Used for pseudo-selections
     pub string_node_ids: StringNodeIDs,
+}
+
+pub enum NewScopeChar {
+    Colon,
+    Brace,
+}
+
+impl NewScopeChar {
+    pub const fn char(&self) -> char {
+        match self {
+            NewScopeChar::Colon => ':',
+            NewScopeChar::Brace => '{',
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -48,7 +62,7 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "python",
     ts_lang: tree_sitter_python::language,
     highlight_query: tree_sitter_python::HIGHLIGHT_QUERY,
-    new_scope_char: ':',
+    new_scope_char: NewScopeChar::Colon,
     node_categorizer: |node| {
         use BlockType::*;
 
@@ -85,7 +99,7 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "java",
     ts_lang: tree_sitter_java::language,
     highlight_query: tree_sitter_java::HIGHLIGHT_QUERY,
-    new_scope_char: '{',
+    new_scope_char: NewScopeChar::Brace,
     node_categorizer: |node| {
         use BlockType::*;
 

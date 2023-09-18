@@ -5,7 +5,11 @@ use druid::{
 };
 use ropey::Rope;
 
-use crate::{lang::LanguageConfig, parse::TreeManager, theme};
+use crate::{
+    lang::{LanguageConfig, NewScopeChar},
+    parse::TreeManager,
+    theme,
+};
 
 use super::{
     block_drawer::{self, Block, BlockType},
@@ -122,30 +126,38 @@ impl BlockEditor {
         // clamp row to end of source
         let row = coord.row.min(source.len_lines() - 1);
 
-        // if dragging, set the drop location
-        // snap the row to the nearest indent level.
-        // limit to the line above's level (or 1 more if it ends in a new scope character)
-        let allowed_indent = if row == 0 {
-            0
-        } else {
-            let line_above = source.line(row - 1);
-            let above_indent = line_above.whitespace_at_start();
-
-            if above_indent == line_above.len_chars_no_linebreak() {
-                // if the line above is entirely whitespace, ignore it
-                0
-            } else if line_above
-                .excluding_linebreak()
-                .ends_with(self.language.new_scope_char)
-            {
-                // if the line above ends in a new scope character, allow one more indent
-                above_indent + 4
+        // limit to the first non-empty above line's level
+        // (or 1 more if it ends in a new scope character)
+        let mut relative_whitespace_row = row;
+        let allowed_indent = loop {
+            if relative_whitespace_row == 0 {
+                break 0;
             } else {
-                // otherwise, allow up to the same indent as the line above
-                above_indent
+                let line_above = source.line(relative_whitespace_row - 1);
+                let above_indent = line_above.whitespace_at_start();
+
+                if above_indent == line_above.len_chars_no_linebreak() {
+                    // if the line above is entirely whitespace, move to the line above
+                    relative_whitespace_row -= 1;
+                    continue;
+                } else if line_above
+                    .excluding_linebreak()
+                    .ends_with(self.language.new_scope_char.char())
+                {
+                    // if the line above ends in a new scope character, allow one more indent
+                    break above_indent + 4;
+                } else {
+                    // otherwise, allow up to the same indent as the line above
+                    break above_indent;
+                }
             }
         };
-        let indent = ((coord.col / 4) * 4).min(allowed_indent);
+        let indent = match self.language.new_scope_char {
+            // when scope is indent based, allow reducing scope when dragging
+            NewScopeChar::Colon => ((coord.col / 4) * 4).min(allowed_indent),
+            // when scope is brace based, only allow the maximum indent
+            NewScopeChar::Brace => allowed_indent,
+        };
 
         self.drag_insertion_line = Some(TextPoint { col: indent, row });
     }
@@ -283,15 +295,17 @@ fn block_for_point<'a>(
     'outer: while !curr_level.is_empty() {
         for block in curr_level {
             if block.text_range().contains(point, source) {
-                // check that the column of the block is less than the point's.
-                // this because the block's text range includes the indents but we want
-                // clicking on indents to select the scope above
-                if point.col < block.col {
-                    continue;
-                }
-
                 // walk divider blocks but do not return them
+                // dividers can also have nonsense columns walk them even if
+                // the column is less than the point's
                 if block.syntax_type != BlockType::Divider {
+                    // check that the column of the block is less than the point's.
+                    // this because the block's text range includes the indents but we want
+                    // clicking on indents to select the scope above
+                    if point.col < block.col {
+                        continue;
+                    }
+
                     curr_block = Some(block);
                 }
 

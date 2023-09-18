@@ -184,7 +184,7 @@ impl BlockEditor {
         // (same as current line & increase if character before cursor is a scope char)
         let indent_inc = if old_selection.start.col > 1 {
             let char_before_cursor = curr_line.char(old_selection.start.col - 1);
-            if char_before_cursor == self.language.new_scope_char {
+            if char_before_cursor == self.language.new_scope_char.char() {
                 4
             } else {
                 0
