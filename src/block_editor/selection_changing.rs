@@ -217,7 +217,11 @@ impl BlockEditor {
         // move to line above if at start of line
         let at_start = cursor_pos.col == 0;
         if at_start {
-            cursor_pos.row -= 1;
+            if cursor_pos.row == 0 {
+                return TextPoint::ZERO;
+            } else {
+                cursor_pos.row -= 1;
+            }
         }
         let line = source.line(cursor_pos.row);
         if at_start {
