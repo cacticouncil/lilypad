@@ -152,14 +152,13 @@ fn tree_to_blocks(cursor: &mut TreeCursor, lang: &LanguageConfig) -> Vec<Block> 
 fn merge_adjacent_generic_blocks(blocks: &mut Vec<Block>) {
     // this makes the assumption that generic blocks won't have any children.
     // would need to be adjusted if that changes.
-
     let mut i = 0;
-    while !blocks.is_empty() && i < blocks.len() - 1 {
+    while !blocks.is_empty() && i < blocks.len() {
         let curr = &blocks[i];
-        let next = &blocks[i + 1];
 
-        if curr.syntax_type == BlockType::Generic {
+        if curr.syntax_type == BlockType::Generic && i < blocks.len() - 1 {
             // have current generic absorb following generic
+            let next = &blocks[i + 1];
             if next.syntax_type == BlockType::Generic {
                 if curr.line + curr.height <= next.line {
                     let gap = next.line - (curr.line + curr.height);

@@ -79,6 +79,8 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
             // normal expressions (incomplete)
             "import_statement" => Some(Generic),
             "expression_statement" => Some(Generic),
+            "continue_statement" => Some(Generic),
+            "break_statement" => Some(Generic),
             "comment" => Some(Generic),
 
             // dividers to keep generics from merging
