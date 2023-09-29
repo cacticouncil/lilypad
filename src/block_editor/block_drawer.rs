@@ -5,12 +5,13 @@ use tree_sitter_c2rust::{Node, TreeCursor};
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 use crate::lang::LanguageConfig;
 
+use super::rope_ext::RopeSliceExt;
 use super::text_range::{TextPoint, TextRange};
 use super::{OUTER_PAD, SHOW_ERROR_BLOCK_OUTLINES};
 
 /* ------------------------------ tree handling ----------------------------- */
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum BlockType {
     Class,
     FunctionDef,
@@ -94,17 +95,37 @@ impl Block {
     }
 }
 
-pub fn blocks_for_tree(cursor: &mut TreeCursor, lang: &LanguageConfig) -> Vec<Block> {
-    // generate
-    let mut root: Vec<Block> = vec![];
+/* ----------------------- tree sitter tree to blocks ----------------------- */
+
+pub fn blocks_for_tree(
+    cursor: &mut TreeCursor,
+    source: &ropey::Rope,
+    lang: &LanguageConfig,
+) -> Vec<Block> {
+    let mut blocks = tree_to_blocks(cursor, lang);
+
+    // insert divider blocks for 2+ lines of whitespace
+    let newline_chunks = find_whitespace_chunks(source, 2);
+    for chunk_start_line in newline_chunks {
+        insert_divider(&mut blocks, chunk_start_line);
+    }
+
+    merge_adjacent_generic_blocks(&mut blocks);
+
+    blocks
+}
+
+/// Converts a tree sitter tree to a tree of blocks (with no additional processing)
+fn tree_to_blocks(cursor: &mut TreeCursor, lang: &LanguageConfig) -> Vec<Block> {
+    // get the current node before moving the cursor
     let curr_node = cursor.node();
 
     // get all lower blocks
     let mut children: Vec<Block> = if cursor.goto_first_child() {
-        let mut blocks = blocks_for_tree(cursor, lang);
+        let mut blocks = tree_to_blocks(cursor, lang);
 
         while cursor.goto_next_sibling() {
-            blocks.append(&mut blocks_for_tree(cursor, lang));
+            blocks.append(&mut tree_to_blocks(cursor, lang));
         }
 
         cursor.goto_parent();
@@ -114,36 +135,110 @@ pub fn blocks_for_tree(cursor: &mut TreeCursor, lang: &LanguageConfig) -> Vec<Bl
         vec![]
     };
 
-    // merge adjacent generics
-    let mut i = 0;
-    while !children.is_empty() && i < children.len() - 1 {
-        let curr = &children[i];
-        let next = &children[i + 1];
-
-        if curr.syntax_type == BlockType::Generic && next.syntax_type == BlockType::Generic {
-            if curr.line + curr.height <= next.line {
-                let gap = next.line - (curr.line + curr.height);
-                children[i].height += gap + next.height;
-            }
-
-            // does not merge children because currently generic blocks won't have any.
-            // if that changes, that will need to be added here
-
-            children.remove(i + 1);
-        } else {
-            i += 1;
-        }
-    }
-
     // get block for current level
+    let mut root: Vec<Block> = vec![];
     if let Some(mut block) = Block::from_node(&curr_node, lang) {
+        // if the current node gets a block, add it to the root
         block.children = children;
         root.push(block);
     } else {
+        // otherwise, add the children to the top level
         root.append(&mut children);
     }
 
     root
+}
+
+fn merge_adjacent_generic_blocks(blocks: &mut Vec<Block>) {
+    // this makes the assumption that generic blocks won't have any children.
+    // would need to be adjusted if that changes.
+
+    let mut i = 0;
+    while !blocks.is_empty() && i < blocks.len() - 1 {
+        let curr = &blocks[i];
+        let next = &blocks[i + 1];
+
+        if curr.syntax_type == BlockType::Generic {
+            // have current generic absorb following generic
+            if next.syntax_type == BlockType::Generic {
+                if curr.line + curr.height <= next.line {
+                    let gap = next.line - (curr.line + curr.height);
+                    blocks[i].height += gap + next.height;
+                }
+
+                blocks.remove(i + 1);
+            } else {
+                i += 1;
+            }
+        } else {
+            merge_adjacent_generic_blocks(&mut blocks[i].children);
+            i += 1;
+        }
+    }
+}
+
+// Inserts a divider at the given line
+fn insert_divider(blocks: &mut Vec<Block>, line: usize) {
+    let divider = Block {
+        line,
+        col: 0,
+        height: 0,
+        syntax_type: BlockType::Divider,
+        children: vec![],
+    };
+
+    let mut curr_level = blocks;
+    'outer: while !curr_level.is_empty() {
+        for idx in 0..curr_level.len() {
+            let block = &curr_level[idx];
+
+            // if block contains the line, insert the divider inside the block
+            // otherwise, insert before the first block past that line
+            if block.line <= line && line < block.line + block.height {
+                curr_level = &mut curr_level[idx].children;
+                continue 'outer;
+            }
+
+            if block.line > line {
+                curr_level.insert(idx, divider);
+                return;
+            }
+        }
+        break;
+    }
+}
+
+/// Finds the starting indexes of chunks consisting of chunk_size or more whitespace lines
+fn find_whitespace_chunks(source: &ropey::Rope, chunk_size: usize) -> Vec<usize> {
+    // find all lines that are whitespace
+    let whitespace_lines: Vec<usize> = source
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.whitespace_at_start() == line.excluding_linebreak().len_chars())
+        .map(|(idx, _)| idx)
+        .collect();
+
+    // filter to just chunks of two or more (and only keep the first in a chunk)
+    let mut chunk_starts = vec![];
+    let mut current_chunk = vec![];
+
+    for line in whitespace_lines {
+        if current_chunk.is_empty() || current_chunk.last().map(|x| x + 1) == Some(line) {
+            current_chunk.push(line);
+        } else {
+            if current_chunk.len() >= chunk_size {
+                chunk_starts.push(current_chunk[0]);
+            }
+            current_chunk.clear();
+            current_chunk.push(line);
+        }
+    }
+
+    if current_chunk.len() >= chunk_size {
+        chunk_starts.push(current_chunk[0]);
+    }
+
+    chunk_starts
 }
 
 /* --------------------------------- drawing -------------------------------- */
@@ -255,5 +350,29 @@ fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
             }
         }
         padding_helper(&block.children, padding);
+    }
+}
+
+/* -------------------------------- debugging ------------------------------- */
+
+#[allow(dead_code)]
+pub fn print_blocks_debug(blocks: &Vec<Block>) {
+    print_blocks_debug_helper(blocks, "", true);
+}
+
+fn print_blocks_debug_helper(blocks: &Vec<Block>, indent: &str, last: bool) {
+    let join_symbol = if last { "└─ " } else { "├─ " };
+
+    let new_indent = format!("{}{}", indent, if last { "    " } else { "│  " });
+    for (idx, block) in blocks.iter().enumerate() {
+        let last_child = idx == blocks.len() - 1;
+        println!(
+            "{}{}{:?} ({:?})",
+            indent,
+            join_symbol,
+            block.syntax_type,
+            block.text_range()
+        );
+        print_blocks_debug_helper(&block.children, &new_indent, last_child);
     }
 }

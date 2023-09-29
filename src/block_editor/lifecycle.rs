@@ -373,7 +373,7 @@ impl Widget<EditorModel> for BlockEditor {
         if self.text_changed {
             // get blocks
             let mut cursor = self.tree_manager.get_cursor();
-            self.blocks = block_drawer::blocks_for_tree(&mut cursor, self.language);
+            self.blocks = block_drawer::blocks_for_tree(&mut cursor, &source, self.language);
 
             // get padding
             let line_count = source.len_lines();

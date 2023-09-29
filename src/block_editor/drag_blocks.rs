@@ -204,8 +204,11 @@ impl DraggingPopup {
         self.text_drawer
             .layout(self.tree_manager.get_cursor().node(), &rope, piet_text);
 
-        self.blocks =
-            block_drawer::blocks_for_tree(&mut self.tree_manager.get_cursor(), self.language);
+        self.blocks = block_drawer::blocks_for_tree(
+            &mut self.tree_manager.get_cursor(),
+            &rope,
+            self.language,
+        );
         self.padding = block_drawer::make_padding(&self.blocks, rope.len_lines());
     }
 
