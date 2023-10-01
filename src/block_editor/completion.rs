@@ -297,7 +297,7 @@ impl Widget<EditorModel> for CompletionPopup {
                 }
             }
             Event::Command(command) => {
-                if let Some(completions) = command.get(vscode::commands::SET_COMPLETIONS) {
+                if let Some(completions) = command.get(super::commands::SET_COMPLETIONS) {
                     // clear existing completions
                     self.completions.clear();
 

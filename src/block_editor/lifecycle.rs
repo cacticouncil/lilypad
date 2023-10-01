@@ -7,8 +7,8 @@ use druid::{
 use ropey::Rope;
 
 use super::{
-    block_drawer, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel, FONT_HEIGHT,
-    FONT_WIDTH, TIMER_INTERVAL,
+    block_drawer, commands, gutter_drawer, text_range::TextRange, BlockEditor, EditorModel,
+    FONT_HEIGHT, FONT_WIDTH, TIMER_INTERVAL,
 };
 use crate::{lang::lang_for_file, theme, vscode, GlobalModel};
 
@@ -192,7 +192,7 @@ impl Widget<EditorModel> for BlockEditor {
 
             Event::Command(command) => {
                 // VSCode new text
-                if let Some(new_text) = command.get(vscode::commands::SET_TEXT) {
+                if let Some(new_text) = command.get(commands::SET_TEXT) {
                     // update state and tree
                     let rope = Rope::from_str(new_text);
                     data.source = Arc::new(Mutex::new(rope));
@@ -211,7 +211,7 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.request_paint();
 
                     ctx.set_handled();
-                } else if let Some(edit) = command.get(vscode::commands::APPLY_VSCODE_EDIT) {
+                } else if let Some(edit) = command.get(commands::APPLY_VSCODE_EDIT) {
                     self.apply_vscode_edit(&mut data.source.lock().unwrap(), edit);
 
                     ctx.request_layout();
@@ -220,7 +220,7 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.set_handled();
                 }
                 // New file name from the native file picker
-                else if let Some(file_name) = command.get(super::commands::SET_FILE_NAME) {
+                else if let Some(file_name) = command.get(commands::SET_FILE_NAME) {
                     let new_lang = lang_for_file(file_name);
                     if self.language.name != new_lang.name {
                         self.language = new_lang;
@@ -270,7 +270,7 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.request_paint();
 
                     ctx.set_handled()
-                } else if let Some(clip_text) = command.get(vscode::commands::PASTE) {
+                } else if let Some(clip_text) = command.get(commands::PASTE) {
                     // paste from vscode provides string
                     self.insert_str(&mut data.source.lock().unwrap(), clip_text);
 
@@ -281,7 +281,7 @@ impl Widget<EditorModel> for BlockEditor {
                     ctx.set_handled();
                 }
                 // VSCode Diagnostics
-                else if let Some(diagnostics) = command.get(vscode::commands::SET_DIAGNOSTICS) {
+                else if let Some(diagnostics) = command.get(commands::SET_DIAGNOSTICS) {
                     data.diagnostics = diagnostics.clone();
 
                     // TODO: this probably should be handled by the update function

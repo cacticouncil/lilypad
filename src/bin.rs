@@ -149,24 +149,6 @@ impl AppDelegate<AppModel> for LilypadAppDelegate {
 
 // temp shim
 pub(crate) mod vscode {
-    pub mod commands {
-        use druid::Selector;
-
-        use crate::block_editor::{
-            completion::VSCodeCompletionItem,
-            diagnostics::{Diagnostic, VSCodeCodeAction},
-            text_range::TextEdit,
-        };
-
-        pub const SET_TEXT: Selector<String> = Selector::new("set_text");
-        pub const APPLY_VSCODE_EDIT: Selector<TextEdit> = Selector::new("apply_vscode_edit");
-        pub const PASTE: Selector<String> = Selector::new("paste");
-        pub const SET_DIAGNOSTICS: Selector<Vec<Diagnostic>> = Selector::new("set_diagnostics");
-        pub const SET_QUICK_FIX: Selector<Vec<VSCodeCodeAction>> = Selector::new("set_quick_fix");
-        pub const SET_COMPLETIONS: Selector<Vec<VSCodeCompletionItem>> =
-            Selector::new("set_completions");
-    }
-
     pub fn started() {}
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
     pub fn set_clipboard(_: String) {}

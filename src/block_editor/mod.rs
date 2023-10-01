@@ -7,6 +7,7 @@ use crate::lang::{lang_for_file, LanguageConfig};
 use crate::parse::TreeManager;
 
 mod block_drawer;
+pub mod commands;
 pub mod completion;
 pub mod diagnostics;
 mod drag_blocks;
@@ -72,15 +73,6 @@ const GUTTER_WIDTH: f64 = 30.0;
 const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 
 const SHOW_ERROR_BLOCK_OUTLINES: bool = false;
-
-mod commands {
-    use super::TextEdit;
-    use druid::Selector;
-
-    pub const APPLY_EDIT: Selector<TextEdit> = Selector::new("apply_edit");
-    pub const SET_FILE_NAME: Selector<String> = Selector::new("set_file_name");
-}
-pub use commands::SET_FILE_NAME;
 
 pub fn widget(file_name: &str) -> impl Widget<EditorModel> {
     Scroll::new(BlockEditor::new(file_name)).content_must_fill(true)

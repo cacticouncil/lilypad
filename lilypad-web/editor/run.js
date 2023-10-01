@@ -1,4 +1,4 @@
-import init, { run_editor } from "./lilypad_web.js";
+import init, { run_editor, set_file } from "./lilypad_web.js";
 
 async function run() {
   await init();
@@ -20,5 +20,10 @@ export function requestQuickFixes(line, col) { }
 export function executeCommand(command, args) { }
 export function requestCompletions(line, col) { }
 export function executeWorkspaceEdit(edit) { }
+
+document.getElementById("language-picker").addEventListener("change", (e) => {
+  const language = e.target.value;
+  set_file("test." + language);
+});
 
 run();

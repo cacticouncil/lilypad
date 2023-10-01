@@ -14,6 +14,16 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #header {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: small;
+            background-color: #282C34;
+            color: #fff;
+            padding-top: 6pt;
         }
     </style>
 </head>
@@ -22,6 +32,14 @@
     <noscript>This page contains WebAssembly and JavaScript content, please enable JavaScript in your
         browser.</noscript>
     <div style="text-align: center; margin: 0px; padding: 0px;">
+        <div id="header">
+            Language:
+            <select id="language-picker">
+                <option value="py">Python</option>
+                <option value="java">Java</option>
+            </select>
+        </div>
+
         <!-- Windowed mode: canvas MUST has a set both `width` AND `height` attributes -->
         <!-- <canvas id="canvas" style="width: 300px; height: 300px;" width="300" height="300"></canvas> -->
 

@@ -246,7 +246,7 @@ impl Widget<EditorModel> for DiagnosticPopup {
             }
 
             Event::Command(command) => {
-                if let Some(fixes) = command.get(vscode::commands::SET_QUICK_FIX) {
+                if let Some(fixes) = command.get(super::commands::SET_QUICK_FIX) {
                     // TODO: verify id matches
                     self.fixes = Some(fixes.clone());
 
