@@ -20,6 +20,7 @@ pub enum BlockType {
     For,
     Try,
     Generic,
+    Comment,
     Error,
     Divider,
 }
@@ -37,6 +38,7 @@ impl BlockType {
             For => Some(FOR),
             Try => Some(TRY),
             Generic => Some(GENERIC),
+            Comment => None,
             Error => Some(ERROR),
             Divider => None,
         }
@@ -104,6 +106,8 @@ pub fn blocks_for_tree(
 ) -> Vec<Block> {
     let mut blocks = tree_to_blocks(cursor, lang);
 
+    merge_comments(&mut blocks, source);
+
     // insert divider blocks for 2+ lines of whitespace
     let newline_chunks = find_whitespace_chunks(source, 2);
     for chunk_start_line in newline_chunks {
@@ -149,6 +153,36 @@ fn tree_to_blocks(cursor: &mut TreeCursor, lang: &LanguageConfig) -> Vec<Block> 
     root
 }
 
+/// Merges comments above a block into the block below.
+/// Also discards comment blocks that are on the same line as code.
+fn merge_comments(blocks: &mut Vec<Block>, source: &ropey::Rope) {
+    let mut i = 0;
+    while !blocks.is_empty() && i < blocks.len() {
+        let curr = &blocks[i];
+
+        if curr.syntax_type == BlockType::Comment && i < blocks.len() - 1 {
+            let next = &blocks[i + 1];
+
+            // touches the next block
+            if curr.line + curr.height == next.line 
+                // don't merge with dividers
+                && next.syntax_type != BlockType::Divider 
+                // not sharing a line with code
+                && source.line(curr.line).whitespace_at_start() == curr.col
+            {
+                blocks[i + 1].line = blocks[i].line;
+                blocks[i + 1].height += blocks[i].height;
+            }
+
+            blocks.remove(i);
+        } else {
+            merge_comments(&mut blocks[i].children, source);
+            i += 1;
+        }
+    }
+}
+
+/// Combines adjacent generic blocks into one generic block
 fn merge_adjacent_generic_blocks(blocks: &mut Vec<Block>) {
     // this makes the assumption that generic blocks won't have any children.
     // would need to be adjusted if that changes.

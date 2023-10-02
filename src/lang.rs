@@ -81,7 +81,9 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
             "expression_statement" => Some(Generic),
             "continue_statement" => Some(Generic),
             "break_statement" => Some(Generic),
-            "comment" => Some(Generic),
+
+            // comments
+            "comment" => Some(Comment),
 
             // dividers to keep generics from merging
             "else_clause" => Some(Divider),
@@ -137,8 +139,10 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
             "field_declaration" => Some(Generic),
             "return_statement" => Some(Generic),
             "assert_statement" => Some(Generic),
-            "line_comment" => Some(Generic),
-            "block_comment" => Some(Generic),
+
+            // comments
+            "line_comment" => Some(Comment),
+            "block_comment" => Some(Comment),
 
             // dividers to keep generics from merging
             "block" => Some(Divider),
