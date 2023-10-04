@@ -26,4 +26,5 @@ document.getElementById("language-picker").addEventListener("change", (e) => {
   set_file("test." + language);
 });
 
-run();
+// start after the window loads so is calculates the font size after it loads it
+window.onload = run;

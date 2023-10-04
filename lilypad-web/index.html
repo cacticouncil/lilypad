@@ -19,11 +19,23 @@
         }
 
         #header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+
             font-family: Arial, Helvetica, sans-serif;
             font-size: small;
             background-color: #282C34;
-            color: #fff;
+            color: white;
             padding-top: 6pt;
+        }
+
+        a {
+            color: white;
+        }
+
+        #header * {
+            padding: 0px;
+            margin: 0px;
         }
     </style>
 </head>
@@ -33,11 +45,19 @@
         browser.</noscript>
     <div style="text-align: center; margin: 0px; padding: 0px;">
         <div id="header">
-            Language:
-            <select id="language-picker">
-                <option value="py">Python</option>
-                <option value="java">Java</option>
-            </select>
+            <span>
+                Language:
+                <select id="language-picker">
+                    <option value="py">Python</option>
+                    <option value="java">Java</option>
+                </select>
+            </span>
+
+            <p style="font-weight: bold;">Lilypad Editor Alpha</p>
+
+            <a href="https://github.com/cacticouncil/lilypad/issues" target="_blank">
+                Report an Issue
+            </a>
         </div>
 
         <!-- Windowed mode: canvas MUST has a set both `width` AND `height` attributes -->
