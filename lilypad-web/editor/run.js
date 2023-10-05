@@ -27,4 +27,11 @@ document.getElementById("language-picker").addEventListener("change", (e) => {
 });
 
 // start after the window loads so is calculates the font size after it loads it
-window.onload = run;
+const robotoMono = new FontFace(
+  "Roboto Mono",
+  "url(https://fonts.gstatic.com/s/robotomono/v23/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW-AJi8SJQt.woff)",
+);
+document.fonts.add(robotoMono);
+document.fonts.load("14pt Roboto Mono").then((_) => {
+  run();
+})
