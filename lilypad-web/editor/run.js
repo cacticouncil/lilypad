@@ -1,4 +1,4 @@
-import init, { run_editor, set_file } from "./lilypad_web.js";
+import init, { run_editor, set_file, insert_text, copy_selection, cut_selection } from "./lilypad_web.js";
 
 async function run() {
   await init();
@@ -15,18 +15,35 @@ export function started() {
   }, 10);
 }
 export function edited(newText, startLine, startCol, endLine, endCol) { }
-export function setClipboard(text) { }
+export function setClipboard(text) {
+  navigator.clipboard.writeText(text);
+}
 export function requestQuickFixes(line, col) { }
 export function executeCommand(command, args) { }
 export function requestCompletions(line, col) { }
 export function executeWorkspaceEdit(edit) { }
+
+// handle clipboard actions
+document.addEventListener("copy", function (e) {
+  copy_selection();
+  e.preventDefault();
+});
+
+document.addEventListener("cut", function (e) {
+  cut_selection();
+  e.preventDefault();
+});
+
+addEventListener("paste", (event) => {
+  insert_text(event.clipboardData.getData("text"));
+});
 
 document.getElementById("language-picker").addEventListener("change", (e) => {
   const language = e.target.value;
   set_file("test." + language);
 });
 
-// start after the window loads so is calculates the font size after it loads it
+// start running after the font is downloaded so it can be measured at launch
 const robotoMono = new FontFace(
   "Roboto Mono",
   "url(https://fonts.gstatic.com/s/robotomono/v23/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW-AJi8SJQt.woff)",

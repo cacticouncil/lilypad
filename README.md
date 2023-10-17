@@ -2,7 +2,15 @@
 
 A text-based visual code editor architected to supported multiple languages and platforms.
 
-## Prerequisite Installs
+## Using It
+
+- [Web](https://lilypad.cacticouncil.org/lilypad.html)
+- VSCode Extension To Be Released
+- Native App To Be Released
+
+## Development
+
+### Prerequisite Installs
 
 - Both
   - [Rust](https://rustup.rs/)
@@ -15,20 +23,20 @@ A text-based visual code editor architected to supported multiple languages and 
   - [Just Command Runner](https://github.com/casey/just) (optional)
   - [Host These Things Please](https://crates.io/crates/https) (optional)
 
-## Running
+### Running
 
-### Native App
+#### Native App
 
 1. `cargo run`
 
-### VSCode Extension
+#### VSCode Extension
 
 1. `just wasm-vscode`
 2. Open `lilypad-vscode/` in [VSCode Insiders](https://code.visualstudio.com/insiders/)
 3. `npm install`
 4. Run using VSCode
 
-### In Browser
+#### In Browser
 
 1. `just wasm-web`
 2. `cd lilypad-web`
