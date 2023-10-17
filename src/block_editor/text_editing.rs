@@ -183,7 +183,8 @@ impl BlockEditor {
         let middle_of_bracket = self.language.new_scope_char == NewScopeChar::Brace && {
             if old_selection.start.col > 1 {
                 let char_before_cursor = curr_line.char(old_selection.start.col - 1);
-                char_before_cursor == self.language.new_scope_char.char()
+                let char_after_cursor = curr_line.char(old_selection.start.col);
+                char_before_cursor == '{' && char_after_cursor == '}'
             } else {
                 false
             }
