@@ -13,7 +13,7 @@ use super::{OUTER_PAD, SHOW_ERROR_BLOCK_OUTLINES};
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum BlockType {
-    Class,
+    Object,
     FunctionDef,
     While,
     If,
@@ -31,7 +31,7 @@ impl BlockType {
         use BlockType::*;
 
         match self {
-            Class => Some(CLASS),
+            Object => Some(OBJECT),
             FunctionDef => Some(FUNCTION),
             While => Some(WHILE),
             If => Some(IF),
@@ -72,7 +72,7 @@ impl Block {
         let end_pos = node.end_position();
         Some(Block {
             line: start_pos.row,
-            col: start_pos.column,
+            col: std::cmp::min(start_pos.column, end_pos.column.saturating_sub(1)),
             height: end_pos.row - start_pos.row + 1,
             syntax_type,
             children: vec![],
@@ -116,6 +116,13 @@ pub fn blocks_for_tree(
 
     merge_adjacent_generic_blocks(&mut blocks);
 
+    // if languages uses braces for new scopes,
+    // adjust the block starts so that they contain their children
+    // (since it would be possible for a block to start further in than its children)
+    if lang.new_scope_char == crate::lang::NewScopeChar::Brace {
+        adjust_block_starts(&mut blocks);
+    }
+    
     blocks
 }
 
@@ -272,6 +279,33 @@ fn find_whitespace_chunks(source: &ropey::Rope, chunk_size: usize) -> Vec<usize>
     }
 
     chunk_starts
+}
+
+/// Adjust the column and width of blocks so that all blocks contain their descendants
+fn adjust_block_starts(blocks: &mut Vec<Block>) -> usize {
+    let mut max_col = usize::MAX;
+    for block in blocks {
+        // adjust children first and find the max column that still contains them
+        let child_max = adjust_block_starts(&mut block.children);
+
+        // divider columns are nonsense
+        // so skip adjusting them
+        if block.syntax_type == BlockType::Divider {
+            max_col = child_max;
+            continue;
+        }
+
+        // adjust this block if it does not contain its children
+        if child_max < block.col {
+            block.col = child_max;
+        }
+        
+        // min the max column for this layer with this block
+        if block.col < max_col {
+            max_col = block.col;
+        }
+    }
+    max_col
 }
 
 /* --------------------------------- drawing -------------------------------- */

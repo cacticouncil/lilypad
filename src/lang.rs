@@ -69,7 +69,7 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
 
         match node.kind() {
             // scopes
-            "class_definition" => Some(Class),
+            "class_definition" => Some(Object),
             "function_definition" => Some(FunctionDef),
             "while_statement" => Some(While),
             "if_statement" => Some(If),
@@ -110,7 +110,8 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
 
         match node.kind() {
             // scopes
-            "class_declaration" => Some(Class),
+            "class_declaration" => Some(Object),
+            "interface_declaration" => Some(Object),
             "method_declaration" => Some(FunctionDef),
             "while_statement" => Some(While),
             "if_statement" => {

@@ -26,7 +26,7 @@ pub mod syntax {
 pub mod blocks {
     use druid::Color;
 
-    pub const CLASS: Color = Color::rgb8(247, 109, 60);
+    pub const OBJECT: Color = Color::rgb8(247, 109, 60);
     pub const FUNCTION: Color = Color::rgb8(163, 93, 213);
     pub const IF: Color = Color::rgb8(103, 199, 40);
     pub const WHILE: Color = Color::rgb8(245, 163, 0);
