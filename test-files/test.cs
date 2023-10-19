@@ -8,6 +8,7 @@ public class CSharpTestOne
         TestLoop();
         TestConditional();
         TestMethod();
+        TestCatch();
         Console.WriteLine("Hello world");
     }
 
@@ -24,6 +25,11 @@ public class CSharpTestOne
         for (int i = 1; i <= 5; i++)
         {
             sum += i;
+        }
+        sum = 0;
+        while(sum <=5)
+        {
+            sum++;
         }
     }
 
@@ -57,19 +63,6 @@ public class CSharpTestOne
         return a * b;
     }
 
-    public static void TestEnum(){
-    enum DaysOfWeek
-    {
-        Monday,
-        Tuesday,
-        Wednesday,
-        Thursday,
-        Friday,
-        Saturday,
-        Sunday
-    }
-    }
-
     public static void TestCatch(){
         try
         {
@@ -78,6 +71,21 @@ public class CSharpTestOne
         catch(Exception ex)
         {
             Console.WriteLine("An error occurred: " + ex.Message);
+        }
+    }
+
+    public static void TestSwitch(){
+        switch (day)
+        {
+        case "Monday":
+            Console.WriteLine("It's Monday!");
+            break;
+        case "Tuesday":
+            Console.WriteLine("It's Tuesday!");
+            break;
+        default:
+            Console.WriteLine("It's some other day.");
+            break;
         }
     }
 }

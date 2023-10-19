@@ -61,6 +61,8 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
             "if_statement" => Some(If),
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
+            "match_statement" => Some(Switch),
+            "case_clause" => Some(Divider),
 
             // normal expressions (incomplete)
             "import_statement" => Some(Generic),
@@ -107,6 +109,9 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
 
+            "switch_expression" => Some(Switch),
+            "switch_label" => Some(Divider),
+
             // normal expressions (incomplete)
             "import_declaration" => Some(Generic),
             "expression_statement" => Some(Generic),
@@ -121,6 +126,7 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
             "field_declaration" => Some(Generic),
             "return_statement" => Some(Generic),
             "assert_statement" => Some(Generic),
+            "break_statement" => Some(Generic),
             "line_comment" => Some(Generic),
             "block_comment" => Some(Generic),
 
@@ -152,14 +158,16 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
             "while_statement" => Some(While),
             "if_statement" => {
                 if node.prev_sibling().map_or("", |s| s.kind()) == "else" {
-                   None
+                    None
                 } else {
-                   Some(If)
+                    Some(If)
                 }
             }
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
-
+            "switch_statement" => Some(Switch),
+            "case_switch_label" => Some(Divider),
+            "default_switch_label" => Some(Divider),
             // normal expressions (incomplete)
             "import_declaration" => Some(Generic),
             "expression_statement" => Some(Generic),
@@ -172,6 +180,7 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
                 }
             }
             "field_declaration" => Some(Generic),
+            "break_statement" => Some(Generic),
             "return_statement" => Some(Generic),
             "assert_statement" => Some(Generic),
             "line_comment" => Some(Generic),

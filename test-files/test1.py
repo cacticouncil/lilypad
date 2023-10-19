@@ -24,3 +24,15 @@ if guess == number:
     print('Good job, {0}! You guessed my number in {1} guesses!'.format(name, guesses_made))
 else:
     print('Nope. The number I was thinking of was {0}'.format(number))
+
+
+term = 5
+match term:
+    case 1:
+        print("hello")
+    case 2:
+        print("hello!")
+    case 3:
+        print("hello?")
+    case _:
+        print("goodbye!")

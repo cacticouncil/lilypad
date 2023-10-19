@@ -32,6 +32,7 @@ pub mod blocks {
     pub const WHILE: Color = Color::rgb8(245, 163, 0);
     pub const FOR: Color = Color::rgb8(255, 131, 193);
     pub const TRY: Color = Color::rgb8(84, 129, 230);
+    pub const SWITCH: Color = Color::rgb8(198, 87, 172);
     pub const GENERIC: Color = Color::rgb8(42, 189, 218);
     pub const ERROR: Color = Color::rgb8(255, 0, 0);
 }
