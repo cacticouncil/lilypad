@@ -21,6 +21,7 @@ use druid::piet::TextLayout;
 #[cfg(not(target_family = "wasm"))]
 use druid::piet::TextAttribute;
 
+// TODO: probably should have text drawers share highlight configurations
 pub struct TextDrawer {
     highlighter_config: HighlightConfiguration,
     cache: Vec<ColoredText>,

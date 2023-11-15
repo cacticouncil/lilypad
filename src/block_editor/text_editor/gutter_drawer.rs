@@ -3,28 +3,30 @@ use druid::{
     PaintCtx, Point, RenderContext,
 };
 
-use super::{FONT_FAMILY, FONT_SIZE};
-use crate::theme;
+use crate::{
+    block_editor::{FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, GUTTER_WIDTH, OUTER_PAD},
+    theme,
+};
 
 pub fn draw_line_numbers(padding: &Vec<f64>, curr_line: usize, ctx: &mut PaintCtx) {
     // if document is empty
     if padding.is_empty() {
         let text = make_num_text(1, true, ctx);
-        let pos = Point::new(super::GUTTER_WIDTH - text.size().width, super::OUTER_PAD);
+        let pos = Point::new(GUTTER_WIDTH - text.size().width, OUTER_PAD);
         ctx.draw_text(&text, pos);
         return;
     }
 
-    let mut y_pos = super::OUTER_PAD;
+    let mut y_pos = OUTER_PAD;
     for (num, padding) in padding.iter().enumerate() {
         y_pos += padding;
         let text = make_num_text(num + 1, curr_line == num, ctx);
         let pos = Point::new(
-            super::GUTTER_WIDTH - text.size().width, // left align the text
+            GUTTER_WIDTH - text.size().width, // left align the text
             y_pos,
         );
         ctx.draw_text(&text, pos);
-        y_pos += super::FONT_HEIGHT.get().unwrap();
+        y_pos += FONT_HEIGHT.get().unwrap();
     }
 }
 

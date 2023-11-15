@@ -11,11 +11,18 @@ pub trait RopeExt {
     ///
     /// runs in O(log N) time
     fn detect_linebreak(&self) -> &'static str;
+
+    /// check last character in rope slice
+    ///
+    /// runs in O(log N) time
+    fn ends_with(&self, c: char) -> bool;
 }
 
 impl RopeExt for Rope {
     fn surrounding_chars(&self, cursor_idx: usize) -> (char, char) {
-        let Some(mut chars) = self.get_chars_at(cursor_idx) else { return ('\0', '\0') };
+        let Some(mut chars) = self.get_chars_at(cursor_idx) else {
+            return ('\0', '\0');
+        };
         let prev = chars.prev();
         if prev.is_some() {
             // if did move back, move back forward
@@ -39,6 +46,16 @@ impl RopeExt for Rope {
         } else {
             "\n"
         }
+    }
+
+    fn ends_with(&self, c: char) -> bool {
+        if self.len_chars() == 0 {
+            return false;
+        };
+        let Some(last) = self.get_char(self.len_chars() - 1) else {
+            return false;
+        };
+        last == c
     }
 }
 
@@ -69,7 +86,9 @@ impl<'a> RopeSliceExt for RopeSlice<'a> {
         if self.len_chars() == 0 {
             return false;
         };
-        let Some(last) = self.get_char(self.len_chars() - 1) else { return false };
+        let Some(last) = self.get_char(self.len_chars() - 1) else {
+            return false;
+        };
         last == c
     }
 

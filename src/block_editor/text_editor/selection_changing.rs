@@ -1,13 +1,17 @@
+use std::sync::Arc;
+
 use druid::{text::Movement, EventCtx, MouseEvent, Point};
 use ropey::Rope;
 use tree_sitter_c2rust::TreeCursor;
 
-use super::{
+use super::TextEditor;
+use crate::block_editor::{
     rope_ext::{RopeExt, RopeSliceExt},
-    BlockEditor, TextPoint, TextRange, FONT_HEIGHT, FONT_WIDTH,
+    DragSession, TextPoint, TextRange, FONT_HEIGHT, FONT_WIDTH, GUTTER_WIDTH, OUTER_PAD,
+    TEXT_L_PAD, TOTAL_TEXT_X_OFFSET,
 };
 
-impl BlockEditor {
+impl TextEditor {
     fn set_selection(&mut self, selection: TextRange, source: &Rope) {
         self.selection = selection;
         self.find_pseudo_selection(source);
@@ -320,10 +324,16 @@ impl BlockEditor {
     }
 
     /* ------------------------------ Mouse Clicks ------------------------------ */
-    pub fn mouse_clicked(&mut self, mouse: &MouseEvent, source: &mut Rope, ctx: &mut EventCtx) {
+    pub fn mouse_clicked(
+        &mut self,
+        mouse: &MouseEvent,
+        source: &mut Rope,
+        drag_block: &mut Option<Arc<DragSession>>,
+        ctx: &mut EventCtx,
+    ) {
         // if option is held, remove the current block from the source and place it in drag_block
         if mouse.mods.alt() {
-            self.start_block_drag(mouse.pos, source, ctx);
+            self.start_block_drag(mouse.pos, source, drag_block, ctx);
             return;
         }
 
@@ -338,8 +348,8 @@ impl BlockEditor {
         }
     }
 
-    pub fn mouse_dragged(&mut self, mouse: &MouseEvent, source: &Rope, _ctx: &mut EventCtx) {
-        if self.drag_block.is_some() {
+    pub fn mouse_dragged(&mut self, mouse: &MouseEvent, source: &Rope, is_dragging: bool) {
+        if is_dragging {
             self.set_dropping_line(mouse.pos, source);
         } else {
             // set selection end position to dragged position
@@ -364,7 +374,7 @@ impl BlockEditor {
         for row_pad in &self.padding {
             total_pad += row_pad;
             let curr_line_start = total_pad + (y as f64 * FONT_HEIGHT.get().unwrap());
-            let raw_y = point.y - super::OUTER_PAD;
+            let raw_y = point.y - OUTER_PAD;
             if raw_y <= curr_line_start {
                 break;
             }
@@ -381,9 +391,8 @@ impl BlockEditor {
 
         // TODO: if past last line, move to end of last line
 
-        let x_raw = ((point.x - super::OUTER_PAD - super::GUTTER_WIDTH - super::TEXT_L_PAD)
-            / FONT_WIDTH.get().unwrap())
-        .round() as usize;
+        let x_raw = ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / FONT_WIDTH.get().unwrap())
+            .round() as usize;
         let x_bound = clamp_col(y, x_raw, source);
 
         TextPoint::new(x_bound, y)
@@ -400,7 +409,7 @@ impl BlockEditor {
         for row_pad in &self.padding {
             total_pad += row_pad;
             let curr_line_start = total_pad + (y as f64 * font_height);
-            let raw_y = point.y - super::OUTER_PAD;
+            let raw_y = point.y - OUTER_PAD;
             if raw_y <= curr_line_start {
                 break;
             }
@@ -412,9 +421,7 @@ impl BlockEditor {
 
         y = y.saturating_sub(1);
 
-        let x = ((point.x - super::OUTER_PAD - super::GUTTER_WIDTH - super::TEXT_L_PAD)
-            / font_width)
-            .round() as usize;
+        let x = ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / font_width).round() as usize;
 
         TextPoint::new(x, y)
     }
@@ -423,10 +430,10 @@ impl BlockEditor {
         let font_height = *FONT_HEIGHT.get().unwrap();
         let font_width = *FONT_WIDTH.get().unwrap();
 
-        let y = super::OUTER_PAD
+        let y = OUTER_PAD
             + (coord.row as f64 * font_height)
             + self.padding.iter().take(coord.row).sum::<f64>();
-        let x = super::TOTAL_TEXT_X_OFFSET + (coord.col as f64 * font_width);
+        let x = TOTAL_TEXT_X_OFFSET + (coord.col as f64 * font_width);
 
         Point::new(x, y)
     }

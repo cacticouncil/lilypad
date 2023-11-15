@@ -1,9 +1,7 @@
-use crate::{block_editor::commands, theme, AppModel};
+use crate::{block_editor::commands, theme, util::make_label_text_layout, AppModel};
 use druid::{
-    piet::{PietTextLayout, Text, TextLayout, TextLayoutBuilder},
-    widget::Scroll,
-    Event, FontFamily, LifeCycle, MouseButton, PaintCtx, Point, Rect, RenderContext, Size, Widget,
-    WidgetExt,
+    piet::TextLayout, widget::Scroll, Event, LifeCycle, MouseButton, Point, Rect, RenderContext,
+    Size, Widget, WidgetExt,
 };
 
 pub fn widget() -> impl Widget<AppModel> {
@@ -114,7 +112,7 @@ impl Widget<AppModel> for FilePicker {
         }
 
         for (num, file) in self.files.iter().enumerate() {
-            let layout = make_text_layout(file, ctx);
+            let layout = make_label_text_layout(file, ctx);
 
             let pos = Point::new(0.0, ROW_HEIGHT * num as f64);
 
@@ -129,19 +127,4 @@ impl Widget<AppModel> for FilePicker {
             ctx.draw_text(&layout, text_pos);
         }
     }
-}
-
-fn make_text_layout(text: &str, ctx: &mut PaintCtx) -> PietTextLayout {
-    let font_family = if cfg!(target_os = "macos") {
-        FontFamily::new_unchecked("SF Pro Text")
-    } else {
-        FontFamily::new_unchecked("San Serif")
-    };
-
-    ctx.text()
-        .new_text_layout(text.to_string())
-        .font(font_family, 15.0)
-        .text_color(theme::INTERFACE_TEXT)
-        .build()
-        .unwrap()
 }

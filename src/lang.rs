@@ -18,6 +18,9 @@ pub struct LanguageConfig {
 
     /// The IDs for a string, and the start and end. Used for pseudo-selections
     pub string_node_ids: StringNodeIDs,
+
+    /// Snippets to use for the palette. Must end with a newline.
+    pub palette: &'static [&'static str],
 }
 
 #[derive(PartialEq)]
@@ -81,6 +84,7 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
             "expression_statement" => Some(Generic),
             "continue_statement" => Some(Generic),
             "break_statement" => Some(Generic),
+            "pass_statement" => Some(Generic),
 
             // comments
             "comment" => Some(Comment),
@@ -98,6 +102,13 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 230,
         string_bounds: &[104, 107], // 104 is string start, 107 is string end
     },
+    palette: &[
+        "if condition:\n    pass\nelif condition:\n    pass\nelse:\n    pass\n",
+        "while condition:\n    pass\n",
+        "class Class:\n    def __init__(self):\n        pass\n",
+        "def function():\n    pass\n",
+        "try:\n    pass\nexcept:\n    pass\nelse:\n    pass\nfinally:\n    pass\n",
+    ],
 };
 
 const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
@@ -156,4 +167,5 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 141,
         string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
     },
+    palette: &[],
 };

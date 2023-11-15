@@ -1,9 +1,9 @@
 use druid::Selector;
 
-use crate::block_editor::{
+use crate::block_editor::text_range::TextEdit;
+use crate::lsp::{
     completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCodeAction},
-    text_range::TextEdit,
 };
 
 // set up
@@ -19,3 +19,6 @@ pub const PASTE: Selector<String> = Selector::new("paste");
 pub const SET_DIAGNOSTICS: Selector<Vec<Diagnostic>> = Selector::new("set_diagnostics");
 pub const SET_QUICK_FIX: Selector<Vec<VSCodeCodeAction>> = Selector::new("set_quick_fix");
 pub const SET_COMPLETIONS: Selector<Vec<VSCodeCompletionItem>> = Selector::new("set_completions");
+
+// internal communication
+pub const DRAG_CANCELLED: Selector<()> = Selector::new("drag_cancelled");

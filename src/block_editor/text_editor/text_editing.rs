@@ -3,14 +3,18 @@ use ropey::Rope;
 use std::cmp;
 use tree_sitter_c2rust::InputEdit;
 
-use super::{
-    rope_ext::{RopeExt, RopeSliceExt},
-    text_range::{TextEdit, TextPoint},
-    BlockEditor, TextRange,
+use super::TextEditor;
+use crate::{
+    block_editor::{
+        rope_ext::{RopeExt, RopeSliceExt},
+        text_range::{TextEdit, TextPoint},
+        TextRange,
+    },
+    lang::NewScopeChar,
+    vscode,
 };
-use crate::{lang::NewScopeChar, vscode};
 
-impl BlockEditor {
+impl TextEditor {
     fn replace_range(
         &mut self,
         source: &mut Rope,

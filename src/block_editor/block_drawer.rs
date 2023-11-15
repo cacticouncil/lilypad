@@ -7,7 +7,7 @@ use crate::lang::LanguageConfig;
 
 use super::rope_ext::RopeSliceExt;
 use super::text_range::{TextPoint, TextRange};
-use super::{OUTER_PAD, SHOW_ERROR_BLOCK_OUTLINES};
+use super::SHOW_ERROR_BLOCK_OUTLINES;
 
 /* ------------------------------ tree handling ----------------------------- */
 
@@ -317,8 +317,8 @@ const BLOCK_STROKE_WIDTH: f64 = 2.0;
 const BLOCK_INNER_PAD: f64 = 2.0;
 const BLOCK_TOP_PAD: f64 = 1.0;
 
-pub fn draw_blocks(blocks: &Vec<Block>, offset: Point, ctx: &mut PaintCtx) {
-    draw_blocks_helper(blocks, 0, 0.0, offset, ctx);
+pub fn draw_blocks(blocks: &Vec<Block>, offset: Point, width: f64, ctx: &mut PaintCtx) {
+    draw_blocks_helper(blocks, 0, 0.0, offset, width, ctx);
 }
 
 fn draw_blocks_helper(
@@ -326,21 +326,22 @@ fn draw_blocks_helper(
     level: usize,
     mut total_padding: f64,
     offset: Point,
+    width: f64,
     ctx: &mut PaintCtx,
 ) -> f64 {
     for block in blocks {
         if block.syntax_type == BlockType::Divider {
             // do not draw this block
-            total_padding = draw_blocks_helper(&block.children, level, total_padding, offset, ctx);
+            total_padding = draw_blocks_helper(&block.children, level, total_padding, offset, width, ctx);
         } else {
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
 
             // draw children first to get total size
             let inside_padding =
-                draw_blocks_helper(&block.children, level + 1, total_padding, offset, ctx)
+                draw_blocks_helper(&block.children, level + 1, total_padding, offset, width, ctx)
                     - total_padding;
 
-            draw_block(block, level, total_padding, inside_padding, offset, ctx);
+            draw_block(block, level, total_padding, inside_padding, offset, width, ctx);
             total_padding += inside_padding;
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
         }
@@ -355,6 +356,7 @@ fn draw_block(
     padding_above: f64,
     padding_inside: f64,
     offset: Point,
+    width: f64,
     ctx: &mut PaintCtx,
 ) {
     // No color for invisible nodes
@@ -373,11 +375,11 @@ fn draw_block(
 
     // determine the margin based on level
     let margin =
-        (start_pt.x) + ((level as f64) * (BLOCK_INNER_PAD + BLOCK_STROKE_WIDTH)) + OUTER_PAD;
+        (start_pt.x) + ((level as f64) * (BLOCK_INNER_PAD + BLOCK_STROKE_WIDTH));
 
     // get the size of the rectangle to draw
     let size = Size::new(
-        (ctx.size().width) - margin,
+        (width) - margin,
         ((block.height as f64) * font_height) + (BLOCK_INNER_PAD * 2.0) + padding_inside,
     );
 

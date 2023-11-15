@@ -2,20 +2,25 @@ use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
 use ropey::Rope;
 use std::cmp::Ordering;
 
-use crate::theme;
+use super::TextEditor;
+use crate::{
+    block_editor::{
+        rope_ext::RopeSliceExt, text_range::TextRange, FONT_HEIGHT, FONT_WIDTH, OUTER_PAD,
+        TOTAL_TEXT_X_OFFSET,
+    },
+    theme,
+};
 
-use super::{rope_ext::RopeSliceExt, text_range::TextRange, BlockEditor, FONT_HEIGHT, FONT_WIDTH};
-
-impl BlockEditor {
+impl TextEditor {
     pub fn draw_cursor(&self, ctx: &mut PaintCtx) {
         if self.cursor_visible {
             // we want to draw the cursor where the mouse has last been (selection end)
             let total_pad: f64 = self.padding.iter().take(self.selection.end.row + 1).sum();
             let block = Rect::from_origin_size(
                 Point::new(
-                    super::TOTAL_TEXT_X_OFFSET
+                    TOTAL_TEXT_X_OFFSET
                         + (self.selection.end.col as f64) * FONT_WIDTH.get().unwrap(),
-                    super::OUTER_PAD
+                    OUTER_PAD
                         + (self.selection.end.row as f64) * FONT_HEIGHT.get().unwrap()
                         + total_pad,
                 ),
@@ -158,8 +163,8 @@ impl BlockEditor {
 
         let block = Rect::from_origin_size(
             Point::new(
-                (x as f64 * font_width) + super::TOTAL_TEXT_X_OFFSET,
-                (y as f64 * font_height) + super::OUTER_PAD + total_pad,
+                (x as f64 * font_width) + TOTAL_TEXT_X_OFFSET,
+                (y as f64 * font_height) + OUTER_PAD + total_pad,
             ),
             Size::new(
                 width as f64 * font_width,

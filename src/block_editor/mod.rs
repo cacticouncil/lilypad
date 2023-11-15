@@ -1,40 +1,28 @@
-use druid::{widget::Scroll, Data, TimerToken, Widget, WidgetPod};
+use druid::widget::Flex;
+use druid::{widget::Scroll, Data, Point, Widget, WidgetPod};
+use druid::{Event, MouseButton, WidgetExt};
 use ropey::Rope;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
 
 use crate::lang::{lang_for_file, LanguageConfig};
-use crate::parse::TreeManager;
 
 mod block_drawer;
 pub mod commands;
-pub mod completion;
-pub mod diagnostics;
-mod drag_blocks;
-mod gutter_drawer;
+mod dragging;
 mod highlighter;
-mod ime;
-mod lifecycle;
 mod rope_ext;
-mod selection_changing;
-mod selection_drawer;
 mod text_drawer;
-mod text_editing;
+mod text_editor;
 pub mod text_range;
 
 pub use block_drawer::BlockType;
 
-use completion::CompletionPopup;
-use diagnostics::Diagnostic;
-use text_drawer::*;
+use crate::lsp::diagnostics::Diagnostic;
 use text_range::*;
 
-use self::diagnostics::DiagnosticPopup;
-use self::drag_blocks::DraggingPopup;
-use self::ime::ImeComponent;
-
-// controls cursor blinking speed
-pub const TIMER_INTERVAL: Duration = Duration::from_millis(700);
+use self::dragging::block_palette::BlockPalette;
+use self::dragging::dragging_popup::DraggingPopup;
+use self::text_editor::TextEditor;
 
 static FONT_FAMILY: OnceLock<druid::FontFamily> = OnceLock::new();
 static FONT_SIZE: OnceLock<f64> = OnceLock::new();
@@ -75,97 +63,164 @@ const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 const SHOW_ERROR_BLOCK_OUTLINES: bool = false;
 
 pub fn widget(file_name: &str) -> impl Widget<EditorModel> {
-    Scroll::new(BlockEditor::new(file_name)).content_must_fill(true)
+    BlockEditor::new(file_name)
 }
 
 struct BlockEditor {
-    /// generates syntax tree from source code
-    tree_manager: TreeManager,
-
     /// the current language used by the editor
     language: &'static LanguageConfig,
 
-    /// the currently selected text
-    selection: TextRange,
-
-    /// the frame that hitting backspace would delete
-    pseudo_selection: Option<TextRange>,
-
-    /// the timer that toggles the cursor
-    cursor_timer: TimerToken,
-
-    /// if the blinking cursor is visible
-    cursor_visible: bool,
-
-    /// object to calculate text views
-    text_drawer: TextDrawer,
-
-    /// if the blocks and text need to be re-rendered
-    text_changed: bool,
-
-    /// blocks to draw
-    blocks: Vec<block_drawer::Block>,
-
-    /// padding between each line
-    padding: Vec<f64>,
-
-    /// pairs that were inserted and should be ignored on the next input
-    input_ignore_stack: Vec<&'static str>,
-
-    /// tracking which characters had pairs inserted with them, and should take
-    /// the pair down with them if they are deleted
-    paired_delete_stack: Vec<bool>,
-
-    /// store a block that is currently being dragged
-    drag_block: Option<String>,
-
-    /// The row is where to draw the drag insertion line. The column is how much indent to add.
-    drag_insertion_line: Option<TextPoint>,
-
-    /// overlay view for diagnostics
-    diagnostic_popup: WidgetPod<EditorModel, DiagnosticPopup>,
-
-    /// overlay view for completions
-    completion_popup: WidgetPod<EditorModel, CompletionPopup>,
+    /// a horizontal stack with the text editor and block palette
+    content: WidgetPod<EditorModel, Flex<EditorModel>>,
 
     /// overlay view for dragging blocks
     dragging_popup: WidgetPod<EditorModel, DraggingPopup>,
+}
 
-    /// connects to the system IME to handle text input
-    ime: ImeComponent,
+pub struct DragSession {
+    text: String,
+
+    /// point within the block that it is dragged by
+    offset: Point,
 }
 
 #[derive(Clone, Data)]
 pub struct EditorModel {
+    /// the source code to edit
     pub source: Arc<Mutex<Rope>>,
-    #[data(eq)]
-    pub diagnostics: Vec<Diagnostic>,
+
+    /// diagnostics for current cursor position
+    pub diagnostics: Arc<Vec<Diagnostic>>,
+
+    /// id of diagnostic selected in the popup
     #[data(eq)]
     pub diagnostic_selection: Option<u64>,
+
+    /// text that is currently getting dragged
+    pub drag_block: Option<Arc<DragSession>>,
 }
 
 impl BlockEditor {
     fn new(file_name: &str) -> Self {
         let lang = lang_for_file(file_name);
         BlockEditor {
-            tree_manager: TreeManager::new(lang),
             language: lang,
-            selection: TextRange::ZERO,
-            pseudo_selection: None,
-            cursor_timer: TimerToken::INVALID,
-            cursor_visible: true,
-            text_drawer: TextDrawer::new(lang),
-            text_changed: true,
-            blocks: vec![],
-            padding: vec![],
-            input_ignore_stack: vec![],
-            paired_delete_stack: vec![],
-            drag_block: None,
-            drag_insertion_line: None,
-            diagnostic_popup: WidgetPod::new(DiagnosticPopup::new()),
-            completion_popup: WidgetPod::new(CompletionPopup::new()),
+            content: WidgetPod::new(Self::make_content(lang)),
             dragging_popup: WidgetPod::new(DraggingPopup::new(lang)),
-            ime: ImeComponent::default(),
+        }
+    }
+
+    fn make_content(lang: &'static LanguageConfig) -> Flex<EditorModel> {
+        Flex::row()
+            .with_flex_child(
+                Scroll::new(TextEditor::new(lang))
+                    .content_must_fill(true)
+                    .expand(),
+                1.0,
+            )
+            .with_child(
+                Scroll::new(BlockPalette::new(lang))
+                    .content_must_fill(true)
+                    .expand_height(),
+            )
+            .must_fill_main_axis(true)
+    }
+}
+
+impl Widget<EditorModel> for BlockEditor {
+    fn event(
+        &mut self,
+        ctx: &mut druid::EventCtx,
+        event: &druid::Event,
+        data: &mut EditorModel,
+        env: &druid::Env,
+    ) {
+        self.dragging_popup.event(ctx, event, data, env);
+        self.content.event(ctx, event, data, env);
+
+        match event {
+            Event::MouseDown(mouse) => {
+                if mouse.button == MouseButton::Left {
+                    // set the origin of the dragging popup if dragging
+                    if data.drag_block.is_some() {
+                        let origin = self.dragging_popup.widget().calc_origin(mouse.pos);
+                        self.dragging_popup.set_origin(ctx, origin);
+                    }
+
+                    ctx.request_layout();
+                    ctx.request_paint();
+                }
+            }
+
+            Event::MouseMove(mouse) => {
+                if mouse.buttons.has_left() {
+                    // set the origin of the dragging popup if dragging
+                    if data.drag_block.is_some() {
+                        let origin = self.dragging_popup.widget().calc_origin(mouse.pos);
+                        self.dragging_popup.set_origin(ctx, origin);
+                    }
+
+                    ctx.request_paint();
+                }
+            }
+
+            Event::Command(command) => {
+                if let Some(file_name) = command.get(commands::SET_FILE_NAME) {
+                    let new_lang = lang_for_file(file_name);
+                    if self.language.name != new_lang.name {
+                        self.language = new_lang;
+                        self.dragging_popup.widget_mut().change_language(new_lang);
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    }
+
+    fn lifecycle(
+        &mut self,
+        ctx: &mut druid::LifeCycleCtx,
+        event: &druid::LifeCycle,
+        data: &EditorModel,
+        env: &druid::Env,
+    ) {
+        self.dragging_popup.lifecycle(ctx, event, data, env);
+        self.content.lifecycle(ctx, event, data, env);
+    }
+
+    fn update(
+        &mut self,
+        ctx: &mut druid::UpdateCtx,
+        _old_data: &EditorModel,
+        data: &EditorModel,
+        env: &druid::Env,
+    ) {
+        self.dragging_popup.update(ctx, data, env);
+        self.content.update(ctx, data, env);
+    }
+
+    fn layout(
+        &mut self,
+        ctx: &mut druid::LayoutCtx,
+        bc: &druid::BoxConstraints,
+        data: &EditorModel,
+        env: &druid::Env,
+    ) -> druid::Size {
+        self.dragging_popup.layout(ctx, bc, data, env);
+        self.content.layout(ctx, bc, data, env);
+
+        bc.constrain(druid::Size {
+            width: f64::INFINITY,
+            height: f64::INFINITY,
+        })
+    }
+
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &EditorModel, env: &druid::Env) {
+        self.content.paint(ctx, data, env);
+
+        if data.drag_block.is_some() {
+            self.dragging_popup.paint(ctx, data, env);
         }
     }
 }

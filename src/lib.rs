@@ -1,18 +1,18 @@
 mod block_editor;
 mod lang;
+mod lsp;
 mod parse;
 mod theme;
+mod util;
 
 use druid::{AppLauncher, ExtEventSink, PlatformError, Target, WindowDesc};
 use std::sync::{Arc, Mutex, OnceLock};
 use wasm_bindgen::prelude::*;
 
-use block_editor::{
-    commands,
+use block_editor::{commands, text_range::TextEdit, EditorModel};
+use lsp::{
     completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCodeAction},
-    text_range::TextEdit,
-    EditorModel,
 };
 
 #[wasm_bindgen]
@@ -176,8 +176,9 @@ fn main(file_name: String, font_name: String, font_size: f64) -> Result<(), Plat
     // start with empty string
     let data = EditorModel {
         source: Arc::new(Mutex::new(ropey::Rope::new())),
-        diagnostics: vec![],
+        diagnostics: Arc::new(vec![]),
         diagnostic_selection: None,
+        drag_block: None,
     };
 
     // create main window

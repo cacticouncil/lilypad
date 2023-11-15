@@ -2,132 +2,15 @@ use druid::{
     piet::{PietTextLayout, Text, TextLayoutBuilder},
     Color, Event, MouseButton, PaintCtx, Point, RenderContext, Size, Widget,
 };
-use serde::{Deserialize, Serialize};
 
-use crate::{theme, vscode};
-
-use super::{
-    text_range::{TextPoint, TextRange},
-    EditorModel, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH,
+use crate::{
+    block_editor::{
+        commands, EditorModel, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH, OUTER_PAD,
+        TOTAL_TEXT_X_OFFSET,
+    },
+    lsp::diagnostics::{Diagnostic, VSCodeCodeAction},
+    theme,
 };
-
-/* -------------------------------- Data Type ------------------------------- */
-
-#[derive(Deserialize, Debug, PartialEq, Clone)]
-pub struct Diagnostic {
-    pub message: String,
-    pub range: TextRange,
-    pub severity: DiagnosticSeverity,
-    pub source: String,
-    #[serde(skip, default = "rand_u64")]
-    pub id: u64,
-}
-
-#[derive(Deserialize, Debug, Clone, PartialEq, PartialOrd)]
-pub enum DiagnosticSeverity {
-    Error = 3,
-    Warning = 2,
-    Information = 1,
-    Hint = 0,
-}
-
-impl DiagnosticSeverity {
-    fn color(&self) -> Color {
-        use crate::theme::diagnostic::*;
-        use DiagnosticSeverity::*;
-
-        match self {
-            Error => ERROR,
-            Warning => WARNING,
-            Information => INFO,
-            Hint => HINT,
-        }
-    }
-}
-
-fn rand_u64() -> u64 {
-    let mut buf = [0u8; 8];
-    getrandom::getrandom(&mut buf).expect("Failed to generate random bytes");
-    u64::from_le_bytes(buf)
-}
-
-impl Diagnostic {
-    pub fn draw(&self, padding: &[f64], ctx: &mut PaintCtx) {
-        // TODO: multiline diagnostic underlines
-        // could probably share the same logic as selections
-
-        // find bottom of current line
-        let total_padding: f64 = padding.iter().take(self.range.start.row + 1).sum();
-        let y = total_padding
-            + ((self.range.start.row + 1) as f64 * FONT_HEIGHT.get().unwrap())
-            + super::OUTER_PAD;
-
-        // find the start and end of the line
-        let x =
-            super::TOTAL_TEXT_X_OFFSET + (self.range.start.col as f64 * FONT_WIDTH.get().unwrap());
-        let width = (self.range.end.col - self.range.start.col) as f64 * FONT_WIDTH.get().unwrap();
-
-        // draw
-        let line = druid::kurbo::Line::new((x, y), (x + width, y));
-        ctx.stroke(line, &self.severity.color(), 2.0);
-    }
-
-    pub fn request_fixes(&self) {
-        crate::vscode::request_quick_fixes(self.range.start.row, self.range.start.col);
-    }
-
-    #[allow(dead_code)]
-    pub fn example() -> Diagnostic {
-        Diagnostic {
-            message: "example diagnostic".to_string(),
-            range: TextRange::new(TextPoint::new(18, 2), TextPoint::new(25, 2)),
-            severity: DiagnosticSeverity::Error,
-            source: "example".to_string(),
-            id: rand_u64(),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct VSCodeCodeAction {
-    title: String,
-    #[serde(rename = "edit")]
-    workspace_edit: Option<serde_json::Value>,
-    command: Option<VSCodeCommand>,
-}
-
-impl VSCodeCodeAction {
-    pub fn run(&self) {
-        // run workspace edit then command
-        if let Some(workspace_edit) = &self.workspace_edit {
-            let serializer = serde_wasm_bindgen::Serializer::json_compatible();
-            vscode::execute_workspace_edit(
-                workspace_edit.serialize(&serializer).unwrap_or_default(),
-            );
-        }
-        if let Some(command) = &self.command {
-            command.run();
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct VSCodeCommand {
-    command: String,
-    arguments: serde_json::Value,
-}
-
-impl VSCodeCommand {
-    pub fn run(&self) {
-        let serializer = serde_wasm_bindgen::Serializer::json_compatible();
-        vscode::execute_command(
-            self.command.clone(),
-            self.arguments.serialize(&serializer).unwrap_or_default(),
-        );
-    }
-}
-
-/* --------------------------------- Widget --------------------------------- */
 
 pub struct DiagnosticPopup {
     fixes: Option<Vec<VSCodeCodeAction>>,
@@ -170,12 +53,11 @@ impl DiagnosticPopup {
         // find the vertical start by finding top of line and then subtracting box size
         let total_padding: f64 = padding.iter().take(diagnostic.range.start.row + 1).sum();
         let y =
-            total_padding + (diagnostic.range.start.row as f64 * font_height) + super::OUTER_PAD
-                - height;
+            total_padding + (diagnostic.range.start.row as f64 * font_height) + OUTER_PAD - height;
 
         // find the horizontal start
-        let x = super::TOTAL_TEXT_X_OFFSET
-            + (diagnostic.range.start.col as f64 * FONT_WIDTH.get().unwrap());
+        let x =
+            TOTAL_TEXT_X_OFFSET + (diagnostic.range.start.col as f64 * FONT_WIDTH.get().unwrap());
 
         Point::new(x, y)
     }
@@ -246,7 +128,7 @@ impl Widget<EditorModel> for DiagnosticPopup {
             }
 
             Event::Command(command) => {
-                if let Some(fixes) = command.get(super::commands::SET_QUICK_FIX) {
+                if let Some(fixes) = command.get(commands::SET_QUICK_FIX) {
                     // TODO: verify id matches
                     self.fixes = Some(fixes.clone());
 
@@ -322,6 +204,27 @@ impl Widget<EditorModel> for DiagnosticPopup {
                 ctx.draw_text(&layout, pos);
             }
         }
+    }
+}
+
+impl Diagnostic {
+    pub fn draw(&self, padding: &[f64], ctx: &mut PaintCtx) {
+        // TODO: multiline diagnostic underlines
+        // could probably share the same logic as selections
+
+        // find bottom of current line
+        let total_padding: f64 = padding.iter().take(self.range.start.row + 1).sum();
+        let y = total_padding
+            + ((self.range.start.row + 1) as f64 * FONT_HEIGHT.get().unwrap())
+            + OUTER_PAD;
+
+        // find the start and end of the line
+        let x = TOTAL_TEXT_X_OFFSET + (self.range.start.col as f64 * FONT_WIDTH.get().unwrap());
+        let width = (self.range.end.col - self.range.start.col) as f64 * FONT_WIDTH.get().unwrap();
+
+        // draw
+        let line = druid::kurbo::Line::new((x, y), (x + width, y));
+        ctx.stroke(line, &self.severity.color(), 2.0);
     }
 }
 

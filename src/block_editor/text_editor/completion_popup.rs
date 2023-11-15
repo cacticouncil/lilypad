@@ -3,127 +3,17 @@ use druid::{
     Color, Event, MouseButton, PaintCtx, Point, Rect, RenderContext, Size, Widget,
 };
 use ropey::Rope;
-use serde::{Deserialize, Deserializer};
 
-use super::{
-    rope_ext::RopeSliceExt,
-    text_range::{TextEdit, TextPoint, TextRange},
-    EditorModel, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH, TOTAL_TEXT_X_OFFSET,
+use crate::{
+    block_editor::{
+        commands,
+        rope_ext::RopeSliceExt,
+        text_range::{TextEdit, TextPoint, TextRange},
+        EditorModel, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH, TOTAL_TEXT_X_OFFSET,
+    },
+    lsp::completion::VSCodeCompletionItem,
+    theme, vscode,
 };
-use crate::{theme, vscode};
-
-/* -------------------------------- Data Type ------------------------------- */
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct VSCodeCompletionItem {
-    label: VSCodeLabel,
-    insert_text: VSCodeInsertText,
-    #[serde(deserialize_with = "ok_or_none")]
-    kind: Option<VSCodeCompletionKind>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(untagged)]
-enum VSCodeLabel {
-    Plain(String),
-    Detailed(VSCodeDetailedLabel),
-}
-
-impl VSCodeLabel {
-    fn name(&self) -> String {
-        match self {
-            VSCodeLabel::Plain(s) => s.clone(),
-            VSCodeLabel::Detailed(d) => d.label.clone(),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, Clone)]
-struct VSCodeDetailedLabel {
-    label: String,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(untagged)]
-enum VSCodeInsertText {
-    Plain(String),
-    Snippet(VSCodeSnippetString),
-}
-
-impl VSCodeInsertText {
-    fn value(&self) -> String {
-        match self {
-            VSCodeInsertText::Plain(s) => s.clone(),
-            VSCodeInsertText::Snippet(s) => {
-                // remove tab stop syntax
-                // TODO: support tab stop syntax (probably as a part of future structural completion)
-                let re = regex::Regex::new(r"\$\{\d:(?<inner>.+)\}").unwrap();
-                re.replace(&s.value, "$inner").into_owned()
-            }
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, Clone)]
-struct VSCodeSnippetString {
-    value: String,
-}
-
-#[derive(Deserialize, Debug, Clone, Copy)]
-enum VSCodeCompletionKind {
-    Class,
-    Color,
-    Constant,
-    Constructor,
-    Enum,
-    EnumMember,
-    Event,
-    Field,
-    File,
-    Folder,
-    Function,
-    Interface,
-    Issue,
-    Keyword,
-    Method,
-    Module,
-    Operator,
-    Property,
-    Reference,
-    Snippet,
-    Struct,
-    Text,
-    TypeParameter,
-    Unit,
-    User,
-    Value,
-    Variable,
-}
-
-impl VSCodeCompletionKind {
-    fn color(self) -> Color {
-        use VSCodeCompletionKind::*;
-
-        match self {
-            Class | Function | Method => theme::syntax::FUNCTION,
-            Constant | Variable | Property => theme::syntax::VARIABLE,
-            Keyword => theme::syntax::KEYWORD,
-            _ => theme::syntax::DEFAULT,
-        }
-    }
-}
-
-fn ok_or_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    let v = serde_json::Value::deserialize(deserializer)?;
-    Ok(T::deserialize(v).ok())
-}
-
-/* ---------------------------------- Popup --------------------------------- */
 
 pub struct CompletionPopup {
     completions: Vec<VSCodeCompletionItem>,
@@ -182,7 +72,7 @@ impl CompletionPopup {
         let max_label_len: usize = self
             .completions
             .iter()
-            .map(|fix| fix.label.name().chars().count())
+            .map(|fix| fix.name().chars().count())
             .max()
             .unwrap_or(0);
         let width = max_label_len as f64 * FONT_WIDTH.get().unwrap();
@@ -192,8 +82,8 @@ impl CompletionPopup {
 
     fn apply_selected_completion(&mut self, source: &Rope, ctx: &mut druid::EventCtx) {
         if let Some(completion) = self.completions.get(self.selection) {
-            let text_edit = self.edit_for_completion(completion.insert_text.value(), source);
-            ctx.submit_command(super::commands::APPLY_EDIT.with(text_edit));
+            let text_edit = self.edit_for_completion(completion.text_to_insert(), source);
+            ctx.submit_command(commands::APPLY_EDIT.with(text_edit));
 
             self.completions.clear();
             ctx.request_layout();
@@ -297,7 +187,7 @@ impl Widget<EditorModel> for CompletionPopup {
                 }
             }
             Event::Command(command) => {
-                if let Some(completions) = command.get(super::commands::SET_COMPLETIONS) {
+                if let Some(completions) = command.get(commands::SET_COMPLETIONS) {
                     // clear existing completions
                     self.completions.clear();
 
@@ -323,7 +213,7 @@ impl Widget<EditorModel> for CompletionPopup {
                     let mut has_prefix = vec![];
                     let mut no_prefix = vec![];
                     for completion in completions {
-                        if completion.label.name().to_lowercase().starts_with(&prefix) {
+                        if completion.name().to_lowercase().starts_with(&prefix) {
                             has_prefix.push(completion.clone());
                         } else {
                             no_prefix.push(completion.clone());
@@ -394,10 +284,8 @@ impl Widget<EditorModel> for CompletionPopup {
                 }
 
                 let pos = Point::new(0.0, line as f64 * font_height);
-                let color = completion
-                    .kind
-                    .map_or(theme::syntax::DEFAULT, |k| k.color());
-                let layout = make_text_layout(&completion.label.name(), color, ctx);
+                let color = completion.color();
+                let layout = make_text_layout(&completion.name(), color, ctx);
                 ctx.draw_text(&layout, pos);
             }
         }
