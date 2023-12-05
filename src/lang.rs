@@ -11,13 +11,31 @@ pub struct LanguageConfig {
     pub highlight_query: &'static str,
 
     /// The character that starts a new scope (so should increase the indent)
-    pub new_scope_char: char,
+    pub new_scope_char: NewScopeChar,
 
     /// Assigns a node a block type to draw
     node_categorizer: fn(&tree_sitter_c2rust::Node) -> Option<BlockType>,
 
     /// The IDs for a string, and the start and end. Used for pseudo-selections
     pub string_node_ids: StringNodeIDs,
+
+    /// Snippets to use for the palette. Must end with a newline.
+    pub palette: &'static [&'static str],
+}
+
+#[derive(PartialEq)]
+pub enum NewScopeChar {
+    Colon,
+    Brace,
+}
+
+impl NewScopeChar {
+    pub const fn char(&self) -> char {
+        match self {
+            NewScopeChar::Colon => ':',
+            NewScopeChar::Brace => '{',
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -49,25 +67,28 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "python",
     ts_lang: tree_sitter_python::language,
     highlight_query: tree_sitter_python::HIGHLIGHT_QUERY,
-    new_scope_char: ':',
+    new_scope_char: NewScopeChar::Colon,
     node_categorizer: |node| {
         use BlockType::*;
 
         match node.kind() {
             // scopes
-            "class_definition" => Some(Class),
+            "class_definition" => Some(Object),
             "function_definition" => Some(FunctionDef),
             "while_statement" => Some(While),
             "if_statement" => Some(If),
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
-            "match_statement" => Some(Switch),
-            "case_clause" => Some(Divider),
 
             // normal expressions (incomplete)
             "import_statement" => Some(Generic),
             "expression_statement" => Some(Generic),
-            "comment" => Some(Generic),
+            "continue_statement" => Some(Generic),
+            "break_statement" => Some(Generic),
+            "pass_statement" => Some(Generic),
+
+            // comments
+            "comment" => Some(Comment),
 
             // dividers to keep generics from merging
             "else_clause" => Some(Divider),
@@ -82,19 +103,27 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 230,
         string_bounds: &[104, 107], // 104 is string start, 107 is string end
     },
+    palette: &[
+        "if condition:\n    pass\nelif condition:\n    pass\nelse:\n    pass\n",
+        "while condition:\n    pass\n",
+        "class Class:\n    def __init__(self):\n        pass\n",
+        "def function():\n    pass\n",
+        "try:\n    pass\nexcept:\n    pass\nelse:\n    pass\nfinally:\n    pass\n",
+    ],
 };
 
 const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "java",
     ts_lang: tree_sitter_java::language,
     highlight_query: tree_sitter_java::HIGHLIGHT_QUERY,
-    new_scope_char: '{',
+    new_scope_char: NewScopeChar::Brace,
     node_categorizer: |node| {
         use BlockType::*;
 
         match node.kind() {
             // scopes
-            "class_declaration" => Some(Class),
+            "class_declaration" => Some(Object),
+            "interface_declaration" => Some(Object),
             "method_declaration" => Some(FunctionDef),
             "while_statement" => Some(While),
             "if_statement" => {
@@ -108,9 +137,6 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
             }
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
-
-            "switch_expression" => Some(Switch),
-            "switch_label" => Some(Divider),
 
             // normal expressions (incomplete)
             "import_declaration" => Some(Generic),
@@ -126,9 +152,10 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
             "field_declaration" => Some(Generic),
             "return_statement" => Some(Generic),
             "assert_statement" => Some(Generic),
-            "break_statement" => Some(Generic),
-            "line_comment" => Some(Generic),
-            "block_comment" => Some(Generic),
+
+            // comments
+            "line_comment" => Some(Comment),
+            "block_comment" => Some(Comment),
 
             // dividers to keep generics from merging
             "block" => Some(Divider),
@@ -141,19 +168,26 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 141,
         string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
     },
+    palette: &[
+        "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
+        "while (condition) {\n    \n}\n",
+        "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
+        "public void myFunction() {\n    \n}\n",
+        "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
+    ],
 };
 
 const CS_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "c#",
     ts_lang: tree_sitter_c_sharp::language,
     highlight_query: tree_sitter_c_sharp::HIGHLIGHT_QUERY,
-    new_scope_char: '{',
+    new_scope_char: NewScopeChar::Brace,
     node_categorizer: |node| {
         use BlockType::*;
 
         match node.kind() {
             // scopes
-            "class_declaration" => Some(Class),
+            "class_declaration" => Some(Object),
             "method_declaration" => Some(FunctionDef),
             "while_statement" => Some(While),
             "if_statement" => {
@@ -197,4 +231,11 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 141,
         string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
     },
+    palette: &[
+        "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
+        "while (condition) {\n    \n}\n",
+        "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
+        "public static void MyFunction()\n{\n    \n}\n",
+        "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
+    ],
 };

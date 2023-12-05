@@ -4,6 +4,8 @@ use std::ops::Range;
 
 /* ------------------------------- Text Range ------------------------------- */
 
+/// An range of text points. Half open: [start, end).
+/// A cursor is a special case where the start and end are the same.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct TextRange {
     pub start: TextPoint,
@@ -60,12 +62,23 @@ impl TextRange {
         self.start.char_idx_in(source)..self.end.char_idx_in(source)
     }
 
-    pub fn contains(&self, point: TextPoint) -> bool {
-        // TODO: multiline
-        point.row >= self.start.row
-            && point.row <= self.end.row
-            && point.col >= self.start.col
-            && point.col <= self.end.col
+    pub fn contains(&self, point: TextPoint, source: &Rope) -> bool {
+        if self.start.row == self.end.row {
+            // if a single line, can just check the column
+            point.row == self.start.row && point.col >= self.start.col && point.col <= self.end.col
+        } else if point.row == self.start.row {
+            // if on the first row, check that the column is greater than the start
+            point.col >= self.start.col
+        } else if point.row == self.end.row {
+            // if on the last row, check that the column is less than the end
+            point.col <= self.end.col
+        } else if point.row < self.start.row || point.row > self.end.row {
+            // if outside the range of rows, it is false
+            false
+        } else {
+            // if somewhere in the middle, check the length of the line
+            point.col <= source.line(point.row).len_chars()
+        }
     }
 }
 
@@ -140,4 +153,13 @@ impl From<TextPoint> for tree_sitter_c2rust::Point {
 pub struct TextEdit {
     pub text: String,
     pub range: TextRange,
+}
+
+impl TextEdit {
+    pub fn delete(range: TextRange) -> Self {
+        TextEdit {
+            text: "".to_string(),
+            range,
+        }
+    }
 }

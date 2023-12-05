@@ -1,8 +1,10 @@
 mod block_editor;
 mod file_picker;
 mod lang;
+mod lsp;
 mod parse;
 mod theme;
+mod util;
 
 use druid::widget::{Button, Either, Flex};
 use druid::{
@@ -13,7 +15,7 @@ use ropey::Rope;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use block_editor::EditorModel;
+use block_editor::{DragSession, EditorModel};
 
 #[derive(Clone, Data)]
 pub struct AppModel {
@@ -22,10 +24,10 @@ pub struct AppModel {
     pub file: Option<String>,
 
     pub source: Arc<Mutex<Rope>>,
-    #[data(eq)]
-    pub diagnostics: Vec<block_editor::diagnostics::Diagnostic>,
+    pub diagnostics: Arc<Vec<lsp::diagnostics::Diagnostic>>,
     #[data(eq)]
     pub diagnostic_selection: Option<u64>,
+    pub drag_block: Option<Arc<DragSession>>,
 }
 
 pub type GlobalModel = AppModel;
@@ -38,6 +40,7 @@ impl Lens<AppModel, EditorModel> for EditorLens {
             source: data.source.clone(),
             diagnostics: data.diagnostics.clone(),
             diagnostic_selection: data.diagnostic_selection,
+            drag_block: data.drag_block.clone(),
         })
     }
 
@@ -46,11 +49,13 @@ impl Lens<AppModel, EditorModel> for EditorLens {
             source: data.source.clone(),
             diagnostics: data.diagnostics.clone(),
             diagnostic_selection: data.diagnostic_selection,
+            drag_block: data.drag_block.clone(),
         };
         let val = f(&mut editor_model);
         data.source = editor_model.source;
         data.diagnostics = editor_model.diagnostics;
         data.diagnostic_selection = editor_model.diagnostic_selection;
+        data.drag_block = editor_model.drag_block;
         val
     }
 }
@@ -67,8 +72,9 @@ fn main() -> Result<(), PlatformError> {
         dir: None,
         file: None,
         source: Arc::new(Mutex::new(Rope::new())),
-        diagnostics: vec![],
+        diagnostics: Arc::new(vec![]),
         diagnostic_selection: None,
+        drag_block: None,
     };
     // launch
     let main_window = WindowDesc::new(app_widget())
@@ -149,24 +155,6 @@ impl AppDelegate<AppModel> for LilypadAppDelegate {
 
 // temp shim
 pub(crate) mod vscode {
-    use druid::Selector;
-
-    use crate::block_editor::{
-        completion::VSCodeCompletionItem,
-        diagnostics::{Diagnostic, VSCodeCodeAction},
-        text_range::TextEdit,
-    };
-
-    pub const SET_TEXT_SELECTOR: Selector<String> = Selector::new("set_text");
-    pub const APPLY_VSCODE_EDIT_SELECTOR: Selector<TextEdit> = Selector::new("apply_vscode_edit");
-    pub const PASTE_SELECTOR: Selector<String> = Selector::new("paste");
-    pub const SET_DIAGNOSTICS_SELECTOR: Selector<Vec<Diagnostic>> =
-        Selector::new("set_diagnostics");
-    pub const SET_QUICK_FIX_SELECTOR: Selector<Vec<VSCodeCodeAction>> =
-        Selector::new("set_quick_fix");
-    pub const SET_COMPLETIONS_SELECTOR: Selector<Vec<VSCodeCompletionItem>> =
-        Selector::new("set_completions");
-
     pub fn started() {}
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
     pub fn set_clipboard(_: String) {}

@@ -68,20 +68,20 @@ print(dict1)
 
 #Testing try blocks
 try:
-  print(x)
+    print(x)
 except:
-  print("Something went wrong")
+    print("Something went wrong")
 else:
-  print("Nothing went wrong")
+    print("Nothing went wrong")
 finally:
-  print("The 'try except' is finished")
+    print("The 'try except' is finished")
 
 x = "Works."
 try:
-  print(x)
+    print(x)
 except:
-  print("Something went wrong")
+    print("Something went wrong")
 else:
-  print("Nothing went wrong")
+    print("Nothing went wrong")
 finally:
-  print("The 'try except' is finished")
+    print("The 'try except' is finished")

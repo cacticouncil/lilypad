@@ -1,5 +1,5 @@
 use druid::{
-    piet::{PietTextLayout, Text, TextLayoutBuilder},
+    piet::{PietText, PietTextLayout, Text, TextLayoutBuilder},
     Color, PaintCtx, Point, RenderContext,
 };
 use ropey::Rope;
@@ -21,6 +21,7 @@ use druid::piet::TextLayout;
 #[cfg(not(target_family = "wasm"))]
 use druid::piet::TextAttribute;
 
+// TODO: probably should have text drawers share highlight configurations
 pub struct TextDrawer {
     highlighter_config: HighlightConfiguration,
     cache: Vec<ColoredText>,
@@ -42,22 +43,23 @@ impl TextDrawer {
         let mut highlighter_config =
             HighlightConfiguration::new(lang.tree_sitter(), lang.highlight_query, "").unwrap();
         highlighter_config.configure(HIGHLIGHT_NAMES);
-        self.highlighter_config = highlighter_config
+        self.highlighter_config = highlighter_config;
+        self.cache.clear();
     }
 
-    pub fn draw(&self, padding: &[f64], ctx: &mut PaintCtx) {
+    pub fn draw(&self, padding: &[f64], offset: Point, ctx: &mut PaintCtx) {
         let mut total_padding = 0.0;
         for (num, layout) in self.cache.iter().enumerate() {
             total_padding += padding[num];
             let pos = Point {
-                x: super::TOTAL_TEXT_X_OFFSET,
-                y: ((num as f64) * FONT_HEIGHT.get().unwrap()) + total_padding + super::OUTER_PAD,
+                x: offset.x,
+                y: ((num as f64) * FONT_HEIGHT.get().unwrap()) + total_padding + offset.y,
             };
             layout.draw(pos, ctx);
         }
     }
 
-    pub fn layout(&mut self, root_node: Node, source: &Rope, ctx: &mut PaintCtx) {
+    pub fn layout(&mut self, root_node: Node, source: &Rope, piet_text: &mut PietText) {
         // erase old values
         self.cache.clear();
 
@@ -150,7 +152,7 @@ impl TextDrawer {
             }
 
             // build
-            self.cache.push(colored_text.build(ctx));
+            self.cache.push(colored_text.build(piet_text));
 
             // prepare for next
             start_of_line = end_of_line;
@@ -236,9 +238,8 @@ impl<'a> ColoredTextBuilder<'a> {
     }
 
     #[cfg(not(target_family = "wasm"))]
-    fn build(self, ctx: &mut PaintCtx) -> ColoredText {
-        let mut layout = ctx
-            .text()
+    fn build(self, piet_text: &mut PietText) -> ColoredText {
+        let mut layout = piet_text
             .new_text_layout(self.text.into_owned())
             .font(
                 FONT_FAMILY.get().unwrap().clone(),
@@ -260,9 +261,9 @@ impl<'a> ColoredTextBuilder<'a> {
     }
 
     #[cfg(target_family = "wasm")]
-    fn build(self, ctx: &mut PaintCtx) -> ColoredText {
-        fn make_text_layout(text: &str, color: Color, ctx: &mut PaintCtx) -> PietTextLayout {
-            ctx.text()
+    fn build(self, piet_text: &mut PietText) -> ColoredText {
+        fn make_text_layout(text: &str, color: Color, piet_text: &mut PietText) -> PietTextLayout {
+            piet_text
                 .new_text_layout(text.to_string())
                 .font(
                     FONT_FAMILY.get().unwrap().clone(),
@@ -281,19 +282,19 @@ impl<'a> ColoredTextBuilder<'a> {
             // add anything this might have skipped
             if handled_up_to < color_range.range.start {
                 let text = &self.text[handled_up_to..color_range.range.start];
-                layouts.push(make_text_layout(text, theme::syntax::DEFAULT, ctx));
+                layouts.push(make_text_layout(text, theme::syntax::DEFAULT, piet_text));
             }
 
             // add this
             handled_up_to = color_range.range.end;
             let text = &self.text[color_range.range];
-            layouts.push(make_text_layout(text, color_range.color, ctx));
+            layouts.push(make_text_layout(text, color_range.color, piet_text));
         }
 
         // add the rest
         if handled_up_to != self.text.len() {
             let text = &self.text[handled_up_to..];
-            layouts.push(make_text_layout(text, theme::syntax::DEFAULT, ctx));
+            layouts.push(make_text_layout(text, theme::syntax::DEFAULT, piet_text));
         }
 
         ColoredText { layouts }
