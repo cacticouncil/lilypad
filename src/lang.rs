@@ -188,7 +188,7 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
         match node.kind() {
             // scopes
             "class_declaration" => Some(Object),
-            "method_declaration" => Some(FunctionDef),
+            "local_function_statement" => Some(FunctionDef),
             "while_statement" => Some(While),
             "if_statement" => {
                 if node.prev_sibling().map_or("", |s| s.kind()) == "else" {
