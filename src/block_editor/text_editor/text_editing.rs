@@ -1,86 +1,424 @@
 use druid::text::{Direction, Movement};
 use ropey::Rope;
-use std::cmp;
+use std::borrow::Cow;
 use tree_sitter_c2rust::InputEdit;
 
 use super::TextEditor;
 use crate::{
     block_editor::{
         rope_ext::{RopeExt, RopeSliceExt},
-        text_range::{TextEdit, TextPoint},
+        text_range::TextPoint,
         TextRange,
     },
     lang::NewScopeChar,
     vscode,
 };
 
-impl TextEditor {
-    fn replace_range(
-        &mut self,
-        source: &mut Rope,
-        new: &str,
-        range: TextRange,
-        change_selection: bool,
-        notify_vscode: bool,
-    ) {
-        // get edit ranges
-        let range = range.ordered();
-        let char_range = range.char_range_in(source);
-        let byte_range = range.byte_range_in(source);
+const TAB_SIZE: usize = 4;
 
-        // edit string
+#[derive(Debug, Clone)]
+pub struct TextEdit<'a> {
+    text: Cow<'a, str>,
+    range: TextRange,
+    new_end_point: TextPoint,
+}
+
+impl<'a> TextEdit<'a> {
+    pub fn new(text: Cow<'a, str>, range: TextRange) -> Self {
+        let ordered = range.ordered();
+        let new_end_point = Self::find_new_end_point(&text, ordered);
+        Self {
+            text,
+            range: ordered,
+            new_end_point,
+        }
+    }
+
+    pub fn delete(range: TextRange) -> Self {
+        Self {
+            text: Cow::Borrowed(""),
+            range: range.ordered(),
+            new_end_point: range.start,
+        }
+    }
+
+    pub fn apply(&self, source: &mut Rope, tree_manager: &mut crate::parse::TreeManager) {
+        let char_range = self.range.char_range_in(source);
+        let byte_range = self.range.byte_range_in(source);
+
+        // update buffer
         source.remove(char_range.clone());
-        source.insert(char_range.start, new);
+        source.insert(char_range.start, &self.text);
 
+        // update tree
+        let tree_edit = InputEdit {
+            start_byte: byte_range.start,
+            old_end_byte: byte_range.end,
+            new_end_byte: byte_range.start + self.text.len(),
+            start_position: self.range.start.into(),
+            old_end_position: self.range.end.into(),
+            new_end_position: self.new_end().into(),
+        };
+        tree_manager.update(source, tree_edit);
+    }
+
+    pub fn notify_vscode(&self) {
+        // TODO: this is a pretty major bottleneck in the extension due to javascript overhead
+        vscode::edited(
+            &self.text,
+            self.range.start.row,
+            self.range.start.col,
+            self.range.end.row,
+            self.range.end.col,
+        );
+    }
+
+    pub fn new_end(&self) -> TextPoint {
+        self.new_end_point
+    }
+
+    #[cfg(test)]
+    pub fn apply_to_rope(&self, source: &mut Rope) {
+        let char_range = self.range.char_range_in(source);
+        source.remove(char_range.clone());
+        source.insert(char_range.start, &self.text);
+    }
+
+    /// The end of the last line that isn't just a newline
+    fn find_new_end_point(new_text: &str, text_range: TextRange) -> TextPoint {
         // find new ending (account for newlines present)
-        let ends_with_linebreak = new.ends_with('\n');
+        let ends_with_linebreak = new_text.ends_with('\n');
         let line_count = std::cmp::max(
-            new.lines().count() + if ends_with_linebreak { 1 } else { 0 },
+            new_text.lines().count() + if ends_with_linebreak { 1 } else { 0 },
             1,
         );
 
         let last_line_len = if ends_with_linebreak {
             0
         } else {
-            new.lines().last().unwrap_or("").chars().count()
+            new_text.lines().last().unwrap_or("").chars().count()
         };
-        // move to cursor to the end of the last line that isn't just a newline
-        let new_end = TextPoint::new(
-            if line_count == 1 { range.start.col } else { 0 } + last_line_len,
-            range.start.row + line_count - 1,
-        );
 
-        // update tree
-        let edits = InputEdit {
-            start_byte: byte_range.start,
-            old_end_byte: byte_range.end,
-            new_end_byte: byte_range.start + new.len(),
-            start_position: range.start.into(),
-            old_end_position: range.end.into(),
-            new_end_position: new_end.into(),
+        let end_col = if line_count == 1 {
+            text_range.start.col
+        } else {
+            0
+        } + last_line_len;
+        let end_row = text_range.start.row + line_count - 1;
+        TextPoint::new(end_col, end_row)
+    }
+}
+
+/// Find the edit for inserting a single character. Returns the edit and the new selection.
+fn edit_for_insert_char<'a>(
+    selection: TextRange,
+    source: &Rope,
+    add: &'a str,
+    input_ignore_stack: &mut Vec<&'static str>,
+    paired_delete_stack: &mut Vec<bool>,
+) -> (Option<TextEdit<'a>>, TextRange) {
+    let old_selection = selection.ordered();
+
+    // move cursor
+    let new_selection = TextRange::new_cursor(TextPoint::new(
+        old_selection.start.col + add.chars().count(),
+        old_selection.start.row,
+    ));
+
+    // don't insert if previously automatically inserted
+    // this is cleared whenever the cursor is manually moved
+    if Some(add) == input_ignore_stack.last().copied() {
+        input_ignore_stack.pop();
+        paired_delete_stack.clear();
+
+        return (None, new_selection);
+    }
+
+    // (what is added, full insertion, string)
+    let pair_completion = match add {
+        "'" => Some(("'", "''", true)),
+        "\"" => Some(("\"", "\"\"", true)),
+        "(" => Some((")", "()", false)),
+        "[" => Some(("]", "[]", false)),
+        "{" => Some(("}", "{}", false)),
+        _ => None,
+    };
+
+    let actual_add = if let Some((additional, full_add, for_string)) = pair_completion {
+        // only insert if the previous and next characters meet the conditions
+        // (different conditions for string or not)
+        let start_char = old_selection.start.char_idx_in(source);
+        let (prev_char, next_char) = source.surrounding_chars(start_char);
+
+        let should_insert = if for_string {
+            let add_char = add.chars().next().unwrap();
+            // if there is a character before, they probably want that to be inside (& allow f strings)
+            !(prev_char.is_alphanumeric() && prev_char != 'f')
+                // if there is a character following, they probably want that to be inside
+                && !next_char.is_alphanumeric()
+                // multiline strings are 3 long, this prevents jumping to 4
+                && prev_char != add_char
+                && next_char != add_char
+        } else {
+            // only care about next character because parenthesis and brackets
+            // can be attached to the character before
+            !next_char.is_alphanumeric()
         };
-        self.tree_manager.update(source, edits);
+
+        if should_insert {
+            input_ignore_stack.push(additional);
+            paired_delete_stack.push(true);
+            full_add
+        } else {
+            if !paired_delete_stack.is_empty() {
+                paired_delete_stack.push(false);
+            }
+            add
+        }
+    } else {
+        if !paired_delete_stack.is_empty() {
+            paired_delete_stack.push(false);
+        }
+        add
+    };
+
+    let edit = TextEdit::new(Cow::Borrowed(actual_add), old_selection);
+    (Some(edit), new_selection)
+}
+
+fn edit_for_insert_newline<'a>(
+    selection: TextRange,
+    source: &Rope,
+    new_scope_char: NewScopeChar,
+) -> (TextEdit<'a>, TextRange) {
+    // find linebreak used in source
+    let linebreak = source.detect_linebreak();
+
+    // find previous indent level and set new line to that many spaces
+    let old_selection = selection.ordered();
+    let curr_line = source.line(old_selection.start.row);
+    let prev_indent = curr_line.whitespace_at_start();
+
+    let middle_of_bracket = new_scope_char == NewScopeChar::Brace && {
+        if old_selection.start.col > 1 {
+            let char_before_cursor = curr_line.char(old_selection.start.col - 1);
+            let char_after_cursor = curr_line.char(old_selection.start.col);
+            char_before_cursor == '{' && char_after_cursor == '}'
+        } else {
+            false
+        }
+    };
+
+    // find the indent level of the next line
+    // (same as current line & increase if character before cursor is a scope char)
+    let indent_inc = if old_selection.start.col > 1 {
+        let char_before_cursor = curr_line.char(old_selection.start.col - 1);
+        if char_before_cursor == new_scope_char.char() {
+            TAB_SIZE
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+    let next_indent = prev_indent + indent_inc;
+
+    // update source
+    let indent: &str = &" ".repeat(next_indent);
+    let to_insert = format!("{}{}", linebreak, indent);
+
+    if !middle_of_bracket {
+        let edit = TextEdit::new(Cow::Owned(to_insert), old_selection);
+        let new_selection = TextRange::new_cursor(edit.new_end());
+        (edit, new_selection)
+    } else {
+        // if in the middle of a bracket, insert an extra linebreak and indent
+        // but only move the cursor to the newline in the middle
+        let following_indent = " ".repeat(prev_indent);
+        let extra_to_insert = format!("{}{}{}", to_insert, linebreak, following_indent);
+
+        let edit = TextEdit::new(Cow::Owned(extra_to_insert), old_selection);
+        let new_selection =
+            TextRange::new_cursor(TextPoint::new(next_indent, old_selection.start.row + 1));
+        (edit, new_selection)
+    }
+}
+
+fn edit_for_backspace<'a>(
+    selection: TextRange,
+    source: &Rope,
+    movement: Movement,
+    pseudo_selection: Option<TextRange>,
+    input_ignore_stack: &mut Vec<&'static str>,
+    paired_delete_stack: &mut Vec<bool>,
+) -> (Option<TextEdit<'a>>, TextRange) {
+    let old_selection = selection.ordered();
+
+    let delete_selection = if let Some(pseudo_selection) = pseudo_selection {
+        // reset pair stacks because this could be deleting what they cover
+        input_ignore_stack.clear();
+        paired_delete_stack.clear();
+
+        pseudo_selection
+    } else if old_selection.is_cursor() {
+        // if single character not at start of line, backspace apply de-indent and paired delete
+        if old_selection.start.col != 0
+            && (movement == Movement::Grapheme(Direction::Upstream)
+                || movement == Movement::Grapheme(Direction::Left))
+        {
+            // unindent if at start of line
+            let line_indent = source.line(old_selection.start.row).whitespace_at_start();
+            let at_indent = old_selection.start.col == line_indent;
+            if at_indent {
+                let (edit, new_selection) = edit_for_unindent(old_selection, source);
+                return (Some(edit), new_selection);
+            }
+
+            // see if there is a paired character to delete
+            let paired = paired_delete_stack.pop().unwrap_or(false);
+            let after_delete_amount = if paired {
+                // pop because we're going to delete the character to ignore
+                input_ignore_stack.pop();
+                1
+            } else {
+                0
+            };
+
+            TextRange::new(
+                TextPoint::new(old_selection.start.col - 1, old_selection.start.row),
+                TextPoint::new(
+                    old_selection.start.col + after_delete_amount,
+                    old_selection.start.row,
+                ),
+            )
+        } else {
+            old_selection.expanded_by(movement, source).ordered()
+        }
+    } else {
+        // if a selection, delete the whole selection (applying a movement if necessary)
+        if let Movement::Grapheme(_) = movement {
+            // if just a single character, delete the current selection
+            old_selection
+        } else {
+            // if more, delete the selection and the movement
+            old_selection.expanded_by(movement, source).ordered()
+        }
+    };
+
+    let edit = TextEdit::delete(delete_selection);
+    let new_selection = TextRange::new_cursor(edit.new_end());
+    (Some(edit), new_selection)
+}
+
+fn edit_for_indent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, TextRange) {
+    let ordered = selection.ordered();
+
+    // expand selection to include entire lines
+    let full_selection = TextRange::new(
+        TextPoint::new(0, ordered.start.row),
+        TextPoint::new(
+            source.line(ordered.end.row).len_chars_no_linebreak(),
+            ordered.end.row,
+        ),
+    );
+    let mut new_text: Rope = source.slice(full_selection.char_range_in(source)).into();
+
+    let mut new_selection = selection;
+
+    // apply to every line of selection
+    for line_num in 0..new_text.len_lines() {
+        // get current indent of line
+        let line = new_text.line(line_num);
+        let curr_indent = line.whitespace_at_start();
+
+        // make what to add to start of line
+        let indent_amount = TAB_SIZE - (curr_indent % TAB_SIZE);
+        let indent = " ".repeat(indent_amount);
+
+        // add it
+        let start_of_line = TextPoint::new(0, line_num);
+        new_text.insert(start_of_line.char_idx_in(&new_text), &indent);
+
+        // adjust selection if first or last line if the cursor for that line is in the text.
+        // this is more complicated than a single comparison because new_selection can be inverted.
+        if full_selection.start.row + line_num == new_selection.start.row
+            && new_selection.start.col > curr_indent
+        {
+            new_selection.start.col += indent_amount;
+        }
+        if full_selection.start.row + line_num == new_selection.end.row
+            && new_selection.end.col > curr_indent
+        {
+            new_selection.end.col += indent_amount;
+        }
+    }
+
+    (
+        TextEdit::new(Cow::Owned(new_text.to_string()), full_selection),
+        new_selection,
+    )
+}
+
+fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, TextRange) {
+    // apply to every line of selection
+    let ordered = selection.ordered();
+
+    // expand selection to include entire lines
+    let full_selection = TextRange::new(
+        TextPoint::new(0, ordered.start.row),
+        TextPoint::new(
+            source.line(ordered.end.row).len_chars_no_linebreak(),
+            ordered.end.row,
+        ),
+    );
+    let mut new_text: Rope = source
+        .slice(full_selection.start.char_idx_in(source)..full_selection.end.char_idx_in(source))
+        .into();
+
+    let mut new_selection = selection;
+
+    for line_num in 0..new_text.len_lines() {
+        // get current indent of line
+        let line = new_text.line(line_num);
+        let curr_indent = line.whitespace_at_start();
+        if curr_indent == 0 {
+            continue;
+        }
+
+        // remove start of line
+        let unindent_amount = if curr_indent % TAB_SIZE == 0 {
+            TAB_SIZE
+        } else {
+            curr_indent % TAB_SIZE
+        };
+        let remove_range = TextRange::new(
+            TextPoint::new(0, line_num),
+            TextPoint::new(unindent_amount, line_num),
+        );
+        new_text.remove(remove_range.char_range_in(&new_text));
+
+        // adjust selection if first or last line
+        if full_selection.start.row + line_num == new_selection.start.row {
+            new_selection.start.col = new_selection.start.col.saturating_sub(unindent_amount);
+        }
+        if full_selection.start.row + line_num == new_selection.end.row {
+            new_selection.end.col = new_selection.end.col.saturating_sub(unindent_amount);
+        }
+    }
+
+    (
+        TextEdit::new(Cow::Owned(new_text.to_string()), full_selection),
+        new_selection,
+    )
+}
+
+impl TextEditor {
+    fn apply_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
+        // update buffer and tree
+        edit.apply(source, &mut self.tree_manager);
 
         // show cursor whenever text changes
         self.cursor_visible = true;
-
-        // set selection if should
-        if change_selection {
-            self.selection = TextRange::new_cursor(new_end);
-        }
-
-        // notify vscode if should
-        // (conditional to prevent infinite loops)
-        if notify_vscode {
-            // TODO: this is a pretty major bottleneck in the extension
-            vscode::edited(
-                new,
-                range.start.row,
-                range.start.col,
-                range.end.row,
-                range.end.col,
-            )
-        }
 
         // will need to redraw because of edits
         self.text_changed = true;
@@ -89,252 +427,262 @@ impl TextEditor {
         self.find_pseudo_selection(source);
     }
 
-    /// Apply an edit that originated from vscode (so does not notify vscode of the edit)
-    pub fn apply_vscode_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
-        self.replace_range(source, &edit.text, edit.range, true, false);
+    /// Apply an edit that originated from Lilypad
+    pub fn apply_edit_from_lilypad(&mut self, source: &mut Rope, edit: &TextEdit) {
+        self.apply_edit(source, edit);
+        self.selection = TextRange::new_cursor(edit.new_end());
+        edit.notify_vscode();
     }
 
-    pub fn apply_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
-        self.replace_range(source, &edit.text, edit.range, true, true)
+    /// Apply an edit that originated from vscode (so does not notify vscode of the edit)
+    pub fn apply_edit_from_vscode(&mut self, source: &mut Rope, edit: &TextEdit) {
+        self.apply_edit(source, edit);
+        self.selection = TextRange::new_cursor(edit.new_end());
     }
 
     /// Handle inserting a string at the current selection
     pub fn insert_str(&mut self, source: &mut Rope, add: &str) {
         let old_selection = self.selection.ordered();
-        self.replace_range(source, add, old_selection, true, true);
+        let edit = TextEdit::new(Cow::Borrowed(add), old_selection);
+        self.apply_edit(source, &edit);
+        edit.notify_vscode();
     }
 
     /// Handle typing a single character
     /// (separate from `insert_str` because it also handles paired completion)
     pub fn insert_char(&mut self, source: &mut Rope, add: &str) {
-        let old_selection = self.selection.ordered();
+        let (edit, new_selection) = edit_for_insert_char(
+            self.selection,
+            source,
+            add,
+            &mut self.input_ignore_stack,
+            &mut self.paired_delete_stack,
+        );
 
-        // move cursor
-        self.selection = TextRange::new_cursor(TextPoint::new(
-            old_selection.start.col + add.chars().count(),
-            old_selection.start.row,
-        ));
+        self.selection = new_selection;
 
-        // don't insert if previously automatically inserted
-        // this is cleared whenever the cursor is manually moved
-        if Some(add) == self.input_ignore_stack.last().copied() {
-            self.input_ignore_stack.pop();
-            self.paired_delete_stack.clear();
-
-            return;
+        if let Some(edit) = edit {
+            self.apply_edit(source, &edit);
+            edit.notify_vscode();
         }
-
-        // (what is added, full insertion, string)
-        let pair_completion = match add {
-            "'" => Some(("'", "''", true)),
-            "\"" => Some(("\"", "\"\"", true)),
-            "(" => Some((")", "()", false)),
-            "[" => Some(("]", "[]", false)),
-            "{" => Some(("}", "{}", false)),
-            _ => None,
-        };
-
-        let actual_add = if let Some((additional, full_add, for_string)) = pair_completion {
-            // only insert if the previous and next characters meet the conditions
-            // (different conditions for string or not)
-            let start_char = old_selection.start.char_idx_in(source);
-            let (prev_char, next_char) = source.surrounding_chars(start_char);
-
-            let should_insert = if for_string {
-                let add_char = add.chars().next().unwrap();
-                // if there is a character before, they probably want that to be inside (& allow f strings)
-                !(prev_char.is_alphanumeric() && prev_char != 'f')
-                    // if there is a character following, they probably want that to be inside
-                    && !next_char.is_alphanumeric()
-                    // multiline strings are 3 long, this prevents jumping to 4
-                    && prev_char != add_char
-                    && next_char != add_char
-            } else {
-                // only care about next character because parenthesis and brackets
-                // can be attached to the character before
-                !next_char.is_alphanumeric()
-            };
-
-            if should_insert {
-                self.input_ignore_stack.push(additional);
-                self.paired_delete_stack.push(true);
-                full_add
-            } else {
-                if !self.paired_delete_stack.is_empty() {
-                    self.paired_delete_stack.push(false);
-                }
-                add
-            }
-        } else {
-            if !self.paired_delete_stack.is_empty() {
-                self.paired_delete_stack.push(false);
-            }
-            add
-        };
-
-        self.replace_range(source, actual_add, old_selection, false, true);
     }
 
     pub fn insert_newline(&mut self, source: &mut Rope) {
-        // find linebreak used in source
-        let linebreak = source.detect_linebreak();
-
-        // find previous indent level and set new line to that many spaces
-        let old_selection = self.selection.ordered();
-        let curr_line = source.line(old_selection.start.row);
-        let prev_indent = curr_line.whitespace_at_start();
-
-        let middle_of_bracket = self.language.new_scope_char == NewScopeChar::Brace && {
-            if old_selection.start.col > 1 {
-                let char_before_cursor = curr_line.char(old_selection.start.col - 1);
-                let char_after_cursor = curr_line.char(old_selection.start.col);
-                char_before_cursor == '{' && char_after_cursor == '}'
-            } else {
-                false
-            }
-        };
-
-        // find the indent level of the next line
-        // (same as current line & increase if character before cursor is a scope char)
-        let indent_inc = if old_selection.start.col > 1 {
-            let char_before_cursor = curr_line.char(old_selection.start.col - 1);
-            if char_before_cursor == self.language.new_scope_char.char() {
-                4
-            } else {
-                0
-            }
-        } else {
-            0
-        };
-        let next_indent = prev_indent + indent_inc;
-
-        // update source
-        let indent: &str = &" ".repeat(next_indent);
-        let to_insert = format!("{}{}", linebreak, indent);
-
-        if !middle_of_bracket {
-            self.replace_range(source, &to_insert, old_selection, true, true);
-        } else {
-            // if in the middle of a bracket, insert an extra linebreak and indent
-            // but only move the cursor to the newline in the middle
-            let following_indent = " ".repeat(prev_indent);
-            let extra_to_insert = format!("{}{}{}", to_insert, linebreak, following_indent);
-            self.replace_range(source, &extra_to_insert, old_selection, false, true);
-
-            let new_cursor = TextPoint::new(next_indent, old_selection.start.row + 1);
-            self.selection = TextRange::new_cursor(new_cursor);
-        }
+        let (edit, new_selection) =
+            edit_for_insert_newline(self.selection, source, self.language.new_scope_char);
+        self.selection = new_selection;
+        self.apply_edit(source, &edit);
+        edit.notify_vscode();
     }
 
     pub fn backspace(&mut self, source: &mut Rope, movement: Movement) {
-        let old_selection = self.selection.ordered();
-
-        let delete_selection = if let Some(pseudo_selection) = self.pseudo_selection {
-            // reset pair stacks because this could be deleting what they cover
-            self.input_ignore_stack.clear();
-            self.paired_delete_stack.clear();
-
-            pseudo_selection
-        } else if old_selection.is_cursor() {
-            // if single character not at start of line, backspace apply de-indent and paired delete
-            if old_selection.start.col != 0
-                && (movement == Movement::Grapheme(Direction::Upstream)
-                    || movement == Movement::Grapheme(Direction::Left))
-            {
-                // unindent if at start of line
-                let line_indent = source.line(old_selection.start.row).whitespace_at_start();
-                let at_indent = old_selection.start.col == line_indent;
-                if at_indent {
-                    self.unindent(source);
-                    return;
-                }
-
-                // see if there is a paired character to delete
-                let paired = self.paired_delete_stack.pop().unwrap_or(false);
-                let after_delete_amount = if paired {
-                    // pop because we're going to delete the character to ignore
-                    self.input_ignore_stack.pop();
-                    1
-                } else {
-                    0
-                };
-
-                TextRange::new(
-                    TextPoint::new(old_selection.start.col - 1, old_selection.start.row),
-                    TextPoint::new(
-                        old_selection.start.col + after_delete_amount,
-                        old_selection.start.row,
-                    ),
-                )
-            } else {
-                self.expand_selection_by(movement, source)
-            }
-        } else {
-            // if a selection, delete the whole selection (applying a movement if necessary)
-            if let Movement::Grapheme(_) = movement {
-                // if just a single character, delete the current selection
-                old_selection
-            } else {
-                // if more, delete the selection and the movement
-                self.expand_selection_by(movement, source)
-            }
-        };
-
-        self.replace_range(source, "", delete_selection, true, true);
+        let (edit, new_selection) = edit_for_backspace(
+            self.selection,
+            source,
+            movement,
+            self.pseudo_selection,
+            &mut self.input_ignore_stack,
+            &mut self.paired_delete_stack,
+        );
+        self.selection = new_selection;
+        if let Some(edit) = edit {
+            self.apply_edit(source, &edit);
+            edit.notify_vscode();
+        }
     }
 
     pub fn indent(&mut self, source: &mut Rope) {
-        // apply to every line of selection
-        let ordered = self.selection.ordered();
-        let lines = ordered.start.row..=ordered.end.row;
-
-        for line_num in lines {
-            // get current indent of line
-            let line = source.line(line_num);
-            let curr_indent = line.whitespace_at_start();
-
-            // make what to add to start of line
-            let indent_amount = 4 - (curr_indent % 4);
-            let indent = &" ".repeat(indent_amount);
-
-            // add it
-            let start_of_line = TextRange::new_cursor(TextPoint::new(0, line_num));
-            self.replace_range(source, indent, start_of_line, false, true);
-
-            // adjust selection if first or last line
-            if line_num == ordered.start.row {
-                self.selection.start.col += indent_amount;
-            }
-            if line_num == ordered.end.row {
-                self.selection.end.col += indent_amount;
-            }
-        }
+        let (edit, new_selection) = edit_for_indent(self.selection, source);
+        self.apply_edit(source, &edit);
+        self.selection = new_selection;
+        edit.notify_vscode();
     }
 
     pub fn unindent(&mut self, source: &mut Rope) {
-        // apply to every line of selection
-        let ordered = self.selection.ordered();
-        let lines = ordered.start.row..=ordered.end.row;
+        let (edit, new_selection) = edit_for_unindent(self.selection, source);
+        self.apply_edit(source, &edit);
+        self.selection = new_selection;
+        edit.notify_vscode();
+    }
+}
 
-        for line_num in lines {
-            // get current indent of line
-            let line = source.line(line_num);
-            let curr_indent = line.whitespace_at_start();
-            if curr_indent == 0 {
-                continue;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_insert() {
+        // insert single line
+        plan_insert_test("print('hell→←')", "o", "print('hello→←')");
+
+        // replace single line
+        plan_insert_test("print('wo→rld←')", "o", "print('woo→←')");
+
+        // replace multi line
+        plan_insert_test(
+            "print('hell→a world')\nprint('hello← world')",
+            "o",
+            "print('hello→← world')",
+        );
+    }
+
+    #[test]
+    fn test_indent() {
+        // indent single line normally
+        indent_test("print('hello world→←')", "    print('hello world→←')");
+
+        // indent single line with existing indent
+        indent_test(
+            "    print('hello world→←')",
+            "        print('hello world→←')",
+        );
+
+        // indent unaligned single line
+        indent_test("  print('hello world→←')", "    print('hello world→←')");
+
+        // indent multiple lines
+        indent_test(
+            "→print('hello world')\nprint('hello world')←",
+            "→    print('hello world')\n    print('hello world')←",
+        );
+
+        // when selection in text, it should travel with the line
+        indent_test(
+            "print('hello→ world')\nprint('hello← world')",
+            "    print('hello→ world')\n    print('hello← world')",
+        );
+
+        // when selection is in the indent, it should not move
+        indent_test(
+            "  →  print('hello world')\n  ←  print('hello world')",
+            "  →      print('hello world')\n  ←      print('hello world')",
+        );
+
+        // ...that is independent for the start and end.
+        // and should preserve inverted selections
+        indent_test(
+            "  ←  print('hello world')\n    print('hello→ world')",
+            "  ←      print('hello world')\n        print('hello→ world')",
+        );
+
+        // indent multiple lines with different existing indents
+        indent_test(
+            "→print('hello world')\n  print('hello world')\n    print('hello world')←",
+            "→    print('hello world')\n    print('hello world')\n        print('hello world')←",
+        );
+    }
+
+    #[test]
+    fn test_unindent() {
+        // unindent single line normally
+        unindent_test("    print('hello world→←')", "print('hello world→←')");
+
+        // unindent single line with existing indent
+        unindent_test(
+            "        print('hello world→←')",
+            "    print('hello world→←')",
+        );
+
+        // unindent unaligned single line
+        unindent_test("   print('hello world→←')", "print('hello world→←')");
+
+        // unindent multiple lines
+        unindent_test(
+            "→    print('hello world')\n    print('hello world')←",
+            "→print('hello world')\nprint('hello world')←",
+        );
+
+        // when selection in text, it should travel with the line
+        unindent_test(
+            "    print('hello→ world')\n    print('hello← world')",
+            "print('hello→ world')\nprint('hello← world')",
+        );
+
+        // when selection is in the indent, it should move too
+        unindent_test(
+            "  →      print('hello world')\n  ←      print('hello world')",
+            "→    print('hello world')\n←    print('hello world')",
+        );
+
+        // it should preserve inverted selections
+        unindent_test(
+            "  ←      print('hello world')\n        print('hello→ world')",
+            "←    print('hello world')\n    print('hello→ world')",
+        );
+
+        // unindent multiple lines with different existing indents
+        unindent_test(
+            "→    print('hello world')\n    print('hello world')\n        print('hello world')←",
+            "→print('hello world')\nprint('hello world')\n    print('hello world')←",
+        );
+    }
+
+    /* --------------------------------- helpers -------------------------------- */
+    fn plan_insert_test(start: &str, add: &str, target: &str) {
+        let (mut src, start_sel) = generate_state(start);
+        let (target_src, target_sel) = generate_state(target);
+        let (edit, end_sel) =
+            edit_for_insert_char(start_sel, &src, add, &mut Vec::new(), &mut Vec::new());
+
+        edit.unwrap().apply_to_rope(&mut src);
+
+        assert_eq!(src, target_src);
+        assert_eq!(end_sel, target_sel);
+    }
+
+    fn indent_test(start: &str, target: &str) {
+        let (mut src, start_sel) = generate_state(start);
+        let (target_src, target_sel) = generate_state(target);
+        let (edit, end_sel) = edit_for_indent(start_sel, &src);
+
+        edit.apply_to_rope(&mut src);
+
+        assert_eq!(src, target_src);
+        assert_eq!(end_sel, target_sel);
+    }
+
+    fn unindent_test(start: &str, target: &str) {
+        let (mut src, start_sel) = generate_state(start);
+        let (target_src, target_sel) = generate_state(target);
+        let (edit, end_sel) = edit_for_unindent(start_sel, &src);
+
+        edit.apply_to_rope(&mut src);
+
+        assert_eq!(src, target_src);
+        assert_eq!(end_sel, target_sel);
+    }
+
+    /// Generates a rope and selection from a string for testing.
+    /// The start of a selection is marked with a → (u2192) and the end of a selection is marked with a ← (u2190).
+    /// The arrows are removed from the returned rope.
+    fn generate_state(str: &str) -> (Rope, TextRange) {
+        let mut sel_start = TextPoint::ZERO;
+        let mut sel_end = TextPoint::ZERO;
+        for (line_num, line) in str.lines().enumerate() {
+            let start = line.chars().position(|c| c == '→');
+            let end = line.chars().position(|c| c == '←');
+
+            if let Some(start) = start {
+                sel_start = TextPoint::new(start, line_num);
+            }
+            if let Some(end) = end {
+                sel_end = TextPoint::new(end, line_num);
             }
 
-            // remove start of line
-            let unindent_amount = cmp::min(4 - (curr_indent % 4), curr_indent);
-            let remove_range = TextRange::new(
-                TextPoint::new(0, line_num),
-                TextPoint::new(unindent_amount, line_num),
-            );
-            self.replace_range(source, "", remove_range, false, true);
+            // if on the same line, adjust the second to account for the first being removed
+            if start.is_some() && end.is_some() {
+                if sel_start.col < sel_end.col {
+                    sel_end.col -= 1;
+                } else {
+                    sel_start.col -= 1;
+                }
+            }
         }
 
-        // adjust selection
-        self.selection.start.col = self.selection.start.col.saturating_sub(4);
-        self.selection.end.col = self.selection.end.col.saturating_sub(4);
+        let source_no_markers = str.replace("→", "").replace("←", "");
+        (
+            Rope::from(source_no_markers),
+            TextRange::new(sel_start, sel_end),
+        )
     }
 }

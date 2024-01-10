@@ -9,7 +9,7 @@ use druid::{AppLauncher, ExtEventSink, PlatformError, Target, WindowDesc};
 use std::sync::{Arc, Mutex, OnceLock};
 use wasm_bindgen::prelude::*;
 
-use block_editor::{commands, text_range::TextEdit, EditorModel};
+use block_editor::{commands, text_editor::TextEdit, EditorModel};
 use lsp::{
     completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCodeAction},
@@ -59,10 +59,20 @@ pub fn set_file(file_name: String) {
 
 #[wasm_bindgen]
 pub fn apply_edit(json: JsValue) {
-    let edits: TextEdit = serde_wasm_bindgen::from_value(json).expect("Could not deserialize edit");
+    #[derive(serde::Deserialize)]
+    struct VSCodeEdit {
+        text: String,
+        range: block_editor::text_range::TextRange,
+    }
+    let edit: VSCodeEdit =
+        serde_wasm_bindgen::from_value(json).expect("Could not deserialize edit");
     if let Some(sink) = EVENT_SINK.get() {
-        sink.submit_command(commands::APPLY_VSCODE_EDIT, edits, Target::Global)
-            .unwrap();
+        sink.submit_command(
+            commands::APPLY_VSCODE_EDIT,
+            TextEdit::new(std::borrow::Cow::Owned(edit.text), edit.range),
+            Target::Global,
+        )
+        .unwrap();
     } else {
         console_log!("could not get sink");
     }

@@ -1,6 +1,6 @@
 use druid::Selector;
 
-use crate::block_editor::text_range::TextEdit;
+use crate::block_editor::text_editor::TextEdit;
 use crate::lsp::{
     completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCodeAction},

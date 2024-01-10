@@ -1,14 +1,17 @@
+use std::borrow::Cow;
+
 use druid::{
     piet::{PietTextLayout, Text, TextLayoutBuilder},
     Color, Event, MouseButton, PaintCtx, Point, Rect, RenderContext, Size, Widget,
 };
 use ropey::Rope;
 
+use super::TextEdit;
 use crate::{
     block_editor::{
         commands,
         rope_ext::RopeSliceExt,
-        text_range::{TextEdit, TextPoint, TextRange},
+        text_range::{TextPoint, TextRange},
         EditorModel, FONT_FAMILY, FONT_HEIGHT, FONT_SIZE, FONT_WIDTH, TOTAL_TEXT_X_OFFSET,
     },
     lsp::completion::VSCodeCompletionItem,
@@ -91,7 +94,7 @@ impl CompletionPopup {
         }
     }
 
-    fn edit_for_completion(&self, completion: String, source: &Rope) -> TextEdit {
+    fn edit_for_completion<'a>(&self, completion: String, source: &Rope) -> TextEdit<'a> {
         // select the word before the cursor
         // (so what was typed so far is replaced by the completion)
         let range = self.range_of_word_before_cursor(source);
@@ -104,7 +107,7 @@ impl CompletionPopup {
             text = text.replace('\n', newline_with_indent);
         }
 
-        TextEdit { text, range }
+        TextEdit::new(Cow::Owned(text), range)
     }
 
     fn range_of_word_before_cursor(&self, source: &Rope) -> TextRange {

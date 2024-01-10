@@ -146,20 +146,3 @@ impl From<TextPoint> for tree_sitter_c2rust::Point {
         }
     }
 }
-
-/* ---------------------------------- Extra --------------------------------- */
-
-#[derive(serde::Deserialize, Debug)]
-pub struct TextEdit {
-    pub text: String,
-    pub range: TextRange,
-}
-
-impl TextEdit {
-    pub fn delete(range: TextRange) -> Self {
-        TextEdit {
-            text: "".to_string(),
-            range,
-        }
-    }
-}

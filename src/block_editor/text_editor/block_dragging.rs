@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use druid::{
     text::{Direction, Movement},
@@ -6,12 +6,12 @@ use druid::{
 };
 use ropey::Rope;
 
-use super::TextEditor;
+use super::{TextEdit, TextEditor};
 use crate::{
     block_editor::{
         block_drawer::Block,
         rope_ext::RopeSliceExt,
-        text_range::{TextEdit, TextPoint, TextRange},
+        text_range::{TextPoint, TextRange},
         BlockType, DragSession, FONT_HEIGHT, FONT_WIDTH, GUTTER_WIDTH, OUTER_PAD,
     },
     lang::NewScopeChar,
@@ -64,7 +64,7 @@ impl TextEditor {
             });
 
             // remove dragged block from source
-            self.apply_edit(source, &TextEdit::delete(text_range));
+            self.apply_edit_from_lilypad(source, &TextEdit::delete(text_range));
 
             // re-layout the dragging popup
             ctx.children_changed();
@@ -87,11 +87,11 @@ impl TextEditor {
                 col: 0,
                 row: insertion_point.row,
             };
-            let edit = TextEdit {
-                range: TextRange::new_cursor(insert_point),
-                text: indented_text,
-            };
-            self.apply_edit(source, &edit);
+            let edit = TextEdit::new(
+                Cow::Owned(indented_text),
+                TextRange::new_cursor(insert_point),
+            );
+            self.apply_edit_from_lilypad(source, &edit);
 
             // move the cursor from the line after the block to the end of the text
             self.move_cursor(Movement::Grapheme(Direction::Upstream), source);
@@ -199,7 +199,8 @@ fn block_for_point<'a>(
     curr_block
 }
 
-/// Reduces the indent of the block such that the first line has no indent
+/// Reduces the indent of the block such that the first line has no indent.
+/// Assumes the indents of all lines are aligned.
 fn normalize_indent(mut block: String) -> String {
     // set indent of string to the insertion point row
     // all lines after the first are indented relative to the first
@@ -210,12 +211,14 @@ fn normalize_indent(mut block: String) -> String {
     block = block.replacen(&existing_indent, "", 1);
 
     // replace all other indents
+    // works for both lf and crlf because they both end with lf
     block = block.replace(&format!("\n{}", existing_indent), "\n");
 
     block
 }
 
 /// Increases the indent of a *normalized* block so the first line is indented to new_indent_count
+/// Assumes the indents of all lines are aligned.
 fn set_indent(block: &str, new_indent_count: usize) -> String {
     // get the new indent
     let new_indent = " ".repeat(new_indent_count);

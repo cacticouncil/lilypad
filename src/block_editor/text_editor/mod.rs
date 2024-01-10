@@ -23,7 +23,9 @@ use completion_popup::CompletionPopup;
 use diagnostics_popup::DiagnosticPopup;
 use ime::ImeComponent;
 
-pub const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(700);
+pub use text_editing::TextEdit;
+
+const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(700);
 
 pub struct TextEditor {
     /// generates syntax tree from source code

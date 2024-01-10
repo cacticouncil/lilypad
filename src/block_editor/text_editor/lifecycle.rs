@@ -217,7 +217,7 @@ impl Widget<EditorModel> for TextEditor {
 
                     ctx.set_handled();
                 } else if let Some(edit) = command.get(commands::APPLY_VSCODE_EDIT) {
-                    self.apply_vscode_edit(&mut data.source.lock().unwrap(), edit);
+                    self.apply_edit_from_vscode(&mut data.source.lock().unwrap(), edit);
 
                     ctx.request_layout();
                     ctx.request_paint();
@@ -295,7 +295,7 @@ impl Widget<EditorModel> for TextEditor {
                 }
                 // Applying an edit from elsewhere (that's not VSCode)
                 else if let Some(edit) = command.get(commands::APPLY_EDIT) {
-                    self.apply_edit(&mut data.source.lock().unwrap(), edit);
+                    self.apply_edit_from_lilypad(&mut data.source.lock().unwrap(), edit);
                     ctx.set_handled();
                 }
                 // Cancelling a drag by dropping on on another view

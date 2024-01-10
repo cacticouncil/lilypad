@@ -122,7 +122,7 @@ pub fn blocks_for_tree(
     if lang.new_scope_char == crate::lang::NewScopeChar::Brace {
         adjust_block_starts(&mut blocks);
     }
-    
+
     blocks
 }
 
@@ -171,9 +171,9 @@ fn merge_comments(blocks: &mut Vec<Block>, source: &ropey::Rope) {
             let next = &blocks[i + 1];
 
             // touches the next block
-            if curr.line + curr.height == next.line 
+            if curr.line + curr.height == next.line
                 // don't merge with dividers
-                && next.syntax_type != BlockType::Divider 
+                && next.syntax_type != BlockType::Divider
                 // not sharing a line with code
                 && source.line(curr.line).whitespace_at_start() == curr.col
             {
@@ -299,7 +299,7 @@ fn adjust_block_starts(blocks: &mut Vec<Block>) -> usize {
         if child_max < block.col {
             block.col = child_max;
         }
-        
+
         // min the max column for this layer with this block
         if block.col < max_col {
             max_col = block.col;
@@ -332,16 +332,30 @@ fn draw_blocks_helper(
     for block in blocks {
         if block.syntax_type == BlockType::Divider {
             // do not draw this block
-            total_padding = draw_blocks_helper(&block.children, level, total_padding, offset, width, ctx);
+            total_padding =
+                draw_blocks_helper(&block.children, level, total_padding, offset, width, ctx);
         } else {
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
 
             // draw children first to get total size
-            let inside_padding =
-                draw_blocks_helper(&block.children, level + 1, total_padding, offset, width, ctx)
-                    - total_padding;
+            let inside_padding = draw_blocks_helper(
+                &block.children,
+                level + 1,
+                total_padding,
+                offset,
+                width,
+                ctx,
+            ) - total_padding;
 
-            draw_block(block, level, total_padding, inside_padding, offset, width, ctx);
+            draw_block(
+                block,
+                level,
+                total_padding,
+                inside_padding,
+                offset,
+                width,
+                ctx,
+            );
             total_padding += inside_padding;
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
         }
@@ -374,8 +388,7 @@ fn draw_block(
     );
 
     // determine the margin based on level
-    let margin =
-        (start_pt.x) + ((level as f64) * (BLOCK_INNER_PAD + BLOCK_STROKE_WIDTH));
+    let margin = (start_pt.x) + ((level as f64) * (BLOCK_INNER_PAD + BLOCK_STROKE_WIDTH));
 
     // get the size of the rectangle to draw
     let size = Size::new(

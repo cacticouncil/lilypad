@@ -12,7 +12,7 @@ mod dragging;
 mod highlighter;
 mod rope_ext;
 mod text_drawer;
-mod text_editor;
+pub mod text_editor;
 pub mod text_range;
 
 pub use block_drawer::BlockType;

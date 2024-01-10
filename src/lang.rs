@@ -23,7 +23,7 @@ pub struct LanguageConfig {
     pub palette: &'static [&'static str],
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum NewScopeChar {
     Colon,
     Brace,
