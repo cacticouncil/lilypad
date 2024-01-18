@@ -330,6 +330,7 @@ fn edit_for_indent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, Te
         // get current indent of line
         let line = new_text.line(line_num);
         let curr_indent = line.whitespace_at_start();
+        let line_len = line.len_chars_no_linebreak();
 
         // make what to add to start of line
         let indent_amount = TAB_SIZE - (curr_indent % TAB_SIZE);
@@ -339,15 +340,16 @@ fn edit_for_indent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, Te
         let start_of_line = TextPoint::new(0, line_num);
         new_text.insert(start_of_line.char_idx_in(&new_text), &indent);
 
-        // adjust selection if first or last line if the cursor for that line is in the text.
-        // this is more complicated than a single comparison because new_selection can be inverted.
+        // Adjust selection if first or last line if the cursor for that line is in the text.
+        // If the line is entirely whitespace, move the cursor anyway.
+        // This is more complicated than a single comparison because new_selection can be inverted.
         if full_selection.start.row + line_num == new_selection.start.row
-            && new_selection.start.col > curr_indent
+            && (new_selection.start.col > curr_indent || line_len == curr_indent)
         {
             new_selection.start.col += indent_amount;
         }
         if full_selection.start.row + line_num == new_selection.end.row
-            && new_selection.end.col > curr_indent
+            && (new_selection.end.col > curr_indent || line_len == curr_indent)
         {
             new_selection.end.col += indent_amount;
         }
@@ -528,6 +530,10 @@ mod tests {
 
     #[test]
     fn test_indent() {
+        // indent empty line
+        indent_test("→←\n", "    →←\n");
+        indent_test("    →←\n", "        →←\n");
+
         // indent single line normally
         indent_test("print('hello world→←')", "    print('hello world→←')");
 
@@ -574,6 +580,11 @@ mod tests {
 
     #[test]
     fn test_unindent() {
+        // unindent empty line
+        unindent_test("→←", "→←");
+        unindent_test("    →←", "→←");
+        unindent_test("        →←", "    →←");
+
         // unindent single line normally
         unindent_test("    print('hello world→←')", "print('hello world→←')");
 
