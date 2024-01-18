@@ -21,6 +21,13 @@ pub struct TextEdit<'a> {
     text: Cow<'a, str>,
     range: TextRange,
     new_end_point: TextPoint,
+    origin: TextEditOrigin,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum TextEditOrigin {
+    Lilypad,
+    Vscode,
 }
 
 impl<'a> TextEdit<'a> {
@@ -31,6 +38,7 @@ impl<'a> TextEdit<'a> {
             text,
             range: ordered,
             new_end_point,
+            origin: TextEditOrigin::Lilypad,
         }
     }
 
@@ -39,6 +47,20 @@ impl<'a> TextEdit<'a> {
             text: Cow::Borrowed(""),
             range: range.ordered(),
             new_end_point: range.start,
+            origin: TextEditOrigin::Lilypad,
+        }
+    }
+
+    /// Creates a new TextEdit that does not notify VSCode when it is applied
+    #[allow(dead_code)]
+    pub fn new_from_vscode(text: Cow<'a, str>, range: TextRange) -> Self {
+        let ordered = range.ordered();
+        let new_end_point = Self::find_new_end_point(&text, ordered);
+        Self {
+            text,
+            range: ordered,
+            new_end_point,
+            origin: TextEditOrigin::Vscode,
         }
     }
 
@@ -60,17 +82,18 @@ impl<'a> TextEdit<'a> {
             new_end_position: self.new_end().into(),
         };
         tree_manager.update(source, tree_edit);
-    }
 
-    pub fn notify_vscode(&self) {
+        // update vscode if not from vscode
         // TODO: this is a pretty major bottleneck in the extension due to javascript overhead
-        vscode::edited(
-            &self.text,
-            self.range.start.row,
-            self.range.start.col,
-            self.range.end.row,
-            self.range.end.col,
-        );
+        if self.origin != TextEditOrigin::Vscode {
+            vscode::edited(
+                &self.text,
+                self.range.start.row,
+                self.range.start.col,
+                self.range.end.row,
+                self.range.end.col,
+            );
+        }
     }
 
     pub fn new_end(&self) -> TextPoint {
@@ -415,7 +438,7 @@ fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, 
 }
 
 impl TextEditor {
-    fn apply_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
+    fn apply_edit_helper(&mut self, source: &mut Rope, edit: &TextEdit) {
         // update buffer and tree
         edit.apply(source, &mut self.tree_manager);
 
@@ -429,16 +452,10 @@ impl TextEditor {
         self.find_pseudo_selection(source);
     }
 
-    /// Apply an edit that originated from Lilypad
-    pub fn apply_edit_from_lilypad(&mut self, source: &mut Rope, edit: &TextEdit) {
-        self.apply_edit(source, edit);
-        self.selection = TextRange::new_cursor(edit.new_end());
-        edit.notify_vscode();
-    }
-
-    /// Apply an edit that originated from vscode (so does not notify vscode of the edit)
-    pub fn apply_edit_from_vscode(&mut self, source: &mut Rope, edit: &TextEdit) {
-        self.apply_edit(source, edit);
+    /// Apply an edit to the source and selection.
+    /// Notifies vscode depending on the origin property of the TextEdit.
+    pub fn apply_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
+        self.apply_edit_helper(source, edit);
         self.selection = TextRange::new_cursor(edit.new_end());
     }
 
@@ -446,8 +463,7 @@ impl TextEditor {
     pub fn insert_str(&mut self, source: &mut Rope, add: &str) {
         let old_selection = self.selection.ordered();
         let edit = TextEdit::new(Cow::Borrowed(add), old_selection);
-        self.apply_edit(source, &edit);
-        edit.notify_vscode();
+        self.apply_edit_helper(source, &edit);
     }
 
     /// Handle typing a single character
@@ -464,8 +480,7 @@ impl TextEditor {
         self.selection = new_selection;
 
         if let Some(edit) = edit {
-            self.apply_edit(source, &edit);
-            edit.notify_vscode();
+            self.apply_edit_helper(source, &edit);
         }
     }
 
@@ -473,8 +488,7 @@ impl TextEditor {
         let (edit, new_selection) =
             edit_for_insert_newline(self.selection, source, self.language.new_scope_char);
         self.selection = new_selection;
-        self.apply_edit(source, &edit);
-        edit.notify_vscode();
+        self.apply_edit_helper(source, &edit);
     }
 
     pub fn backspace(&mut self, source: &mut Rope, movement: Movement) {
@@ -488,23 +502,20 @@ impl TextEditor {
         );
         self.selection = new_selection;
         if let Some(edit) = edit {
-            self.apply_edit(source, &edit);
-            edit.notify_vscode();
+            self.apply_edit_helper(source, &edit);
         }
     }
 
     pub fn indent(&mut self, source: &mut Rope) {
         let (edit, new_selection) = edit_for_indent(self.selection, source);
-        self.apply_edit(source, &edit);
+        self.apply_edit_helper(source, &edit);
         self.selection = new_selection;
-        edit.notify_vscode();
     }
 
     pub fn unindent(&mut self, source: &mut Rope) {
         let (edit, new_selection) = edit_for_unindent(self.selection, source);
-        self.apply_edit(source, &edit);
+        self.apply_edit_helper(source, &edit);
         self.selection = new_selection;
-        edit.notify_vscode();
     }
 }
 

@@ -216,13 +216,6 @@ impl Widget<EditorModel> for TextEditor {
                     ctx.request_paint();
 
                     ctx.set_handled();
-                } else if let Some(edit) = command.get(commands::APPLY_VSCODE_EDIT) {
-                    self.apply_edit_from_vscode(&mut data.source.lock().unwrap(), edit);
-
-                    ctx.request_layout();
-                    ctx.request_paint();
-
-                    ctx.set_handled();
                 }
                 // New file name from the native file picker
                 else if let Some(file_name) = command.get(commands::SET_FILE_NAME) {
@@ -293,9 +286,11 @@ impl Widget<EditorModel> for TextEditor {
 
                     ctx.set_handled()
                 }
-                // Applying an edit from elsewhere (that's not VSCode)
+                // Applying an edit
                 else if let Some(edit) = command.get(commands::APPLY_EDIT) {
-                    self.apply_edit_from_lilypad(&mut data.source.lock().unwrap(), edit);
+                    self.apply_edit(&mut data.source.lock().unwrap(), edit);
+                    ctx.request_layout();
+                    ctx.request_paint();
                     ctx.set_handled();
                 }
                 // Cancelling a drag by dropping on on another view

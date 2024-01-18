@@ -68,8 +68,8 @@ pub fn apply_edit(json: JsValue) {
         serde_wasm_bindgen::from_value(json).expect("Could not deserialize edit");
     if let Some(sink) = EVENT_SINK.get() {
         sink.submit_command(
-            commands::APPLY_VSCODE_EDIT,
-            TextEdit::new(std::borrow::Cow::Owned(edit.text), edit.range),
+            commands::APPLY_EDIT,
+            TextEdit::new_from_vscode(std::borrow::Cow::Owned(edit.text), edit.range),
             Target::Global,
         )
         .unwrap();

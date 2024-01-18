@@ -12,7 +12,6 @@ pub const SET_FILE_NAME: Selector<String> = Selector::new("set_file_name");
 
 // external edits
 pub const APPLY_EDIT: Selector<TextEdit> = Selector::new("apply_edit");
-pub const APPLY_VSCODE_EDIT: Selector<TextEdit> = Selector::new("apply_vscode_edit");
 pub const PASTE: Selector<String> = Selector::new("paste");
 
 // lsp connection
