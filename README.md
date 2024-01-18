@@ -5,7 +5,7 @@ A text-based visual code editor architected to supported multiple languages and 
 ## Using It
 
 - [Web](https://lilypad.cacticouncil.org/lilypad.html)
-- VSCode Extension To Be Released
+- [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=CactiCouncil.lilypad-vscode)
 - Native App To Be Released
 
 ## Development

@@ -1,14 +1,20 @@
 {
   "name": "lilypad-vscode",
-  "publisher": "Cacti Council",
+  "publisher": "CactiCouncil",
   "displayName": "Lilypad",
   "description": "Lilypad editor for VSCode",
   "repository": "https://github.com/cacticouncil/lilypad",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "icon": "lilypadIcon.png",
+  "extensionKind": [
+    "ui"
+  ],
+  "extensionDependencies": ["ms-python.python"],
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": [
+    "Visualization",
     "Other"
   ],
   "activationEvents": [],

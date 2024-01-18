@@ -3,3 +3,4 @@ out/
 
 static/*
 !static/run.js
+*.vsix
