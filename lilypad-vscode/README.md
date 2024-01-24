@@ -5,7 +5,7 @@ Lilypad, an experimental text-based visual code editor, running as a VSCode exte
 ## Features
 
 - Surrounds code blocks in outlines for visualization
-- Dragging blocks them by holding option/alt and dragging
+- Drag blocks by option/alt clicking
 - Code block palette
 - Languages
   - Python
