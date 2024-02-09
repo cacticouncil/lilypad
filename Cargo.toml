@@ -20,7 +20,7 @@ druid = "0.8"
 
 # wasm stuff
 wasm-bindgen = "0.2"
-serde-wasm-bindgen = "0.5"
+serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1"
 getrandom = { version = "*", features = ["js"] } # for serde-wasm-bindgen
 
@@ -43,8 +43,6 @@ tree-sitter-c2rust = "0.20"
 [dependencies.tree-sitter-python]
 git = "https://github.com/liamrosenfeld/tree-sitter-python/"
 branch = "wasm"
-default-features = false
-features = ["wasm"]
 
 [dependencies.tree-sitter-java]
 git = "https://github.com/liamrosenfeld/tree-sitter-java/"

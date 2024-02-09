@@ -20,7 +20,7 @@ A text-based visual code editor architected to supported multiple languages and 
 - Web
   - [wasm-pack](https://rustwasm.github.io/wasm-pack/)
   - LLVM (using the language grammars with wasm requires `llvm-ar`)
-  - [Just Command Runner](https://github.com/casey/just) (optional)
+  - [Just Command Runner](https://github.com/casey/just)
   - [Host These Things Please](https://crates.io/crates/https) (optional)
 
 ### Running

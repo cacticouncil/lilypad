@@ -1,3 +1,7 @@
+# clang environment variables for web assembly
+export AR := "llvm-ar"
+export CFLAGS_wasm32_unknown_unknown := `echo "-I$(pwd)/wasm-sysroot"`
+
 wasm-vscode:
     wasm-pack build --target web --release --no-typescript --out-dir lilypad-vscode/static
 

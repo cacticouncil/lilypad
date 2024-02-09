@@ -15,6 +15,10 @@ use lsp::{
     diagnostics::{Diagnostic, VSCodeCodeAction},
 };
 
+// provide rust implementation of stdlib functions to our C grammars if on wasm
+#[cfg(target_arch = "wasm32")]
+pub mod c_shim;
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
