@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 use druid::{
     text::{Direction, Movement},
@@ -15,7 +15,7 @@ use crate::{
         BlockType, DragSession, FONT_HEIGHT, FONT_WIDTH, GUTTER_WIDTH, OUTER_PAD,
     },
     lang::NewScopeChar,
-    theme,
+    theme, vscode,
 };
 
 impl TextEditor {
@@ -30,6 +30,14 @@ impl TextEditor {
 
         if let Some(block) = block_for_point(&self.blocks, cursor_pos, source) {
             let mut text_range = block.text_range();
+
+            vscode::log_event(
+                "editor-block-drag",
+                HashMap::from([
+                    ("type", block.syntax_type.to_str()),
+                    ("lang", self.language.name),
+                ]),
+            );
 
             // select the whole first line (to get all the indent)
             text_range.start.col = 0;

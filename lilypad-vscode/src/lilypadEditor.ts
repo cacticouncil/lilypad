@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { logger } from "./extension";
 
 export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
     internalEdit = false;
@@ -133,6 +134,18 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     }
                     break;
                 }
+                case "telemetry_log": {
+                    logger.logUsage(message.cat, message.info);
+                    break;
+                }
+                case "telemetry_crash": {
+                    logger.logError(new Error(message.msg));
+
+                    // reload the page if crashed
+                    vscode.commands.executeCommand("workbench.action.webview.reloadWebviewAction");
+
+                    break;
+                }
             }
         });
     }
@@ -213,5 +226,4 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         </html>
         `;
     }
-
 }

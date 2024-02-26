@@ -67,6 +67,21 @@ export function executeWorkspaceEdit(edit) {
   });
 }
 
+export function telemetryEvent(cat, info) {
+  vscode.postMessage({
+    type: "telemetry_log",
+    cat: cat,
+    info: Object.fromEntries(info) 
+  });
+}
+
+export function telemetryCrash(msg) {
+  vscode.postMessage({
+    type: "telemetry_crash",
+    msg: msg,
+  });
+}
+
 // extension -> web view messages
 window.addEventListener("message", event => {
   const message = event.data;

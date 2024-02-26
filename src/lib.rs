@@ -5,8 +5,11 @@ mod parse;
 mod theme;
 mod util;
 
-use druid::{AppLauncher, ExtEventSink, PlatformError, Target, WindowDesc};
-use std::sync::{Arc, Mutex, OnceLock};
+use druid::{AppLauncher, Application, ExtEventSink, PlatformError, Target, WindowDesc};
+use std::{
+    panic::{self, PanicInfo},
+    sync::{Arc, Mutex, OnceLock},
+};
 use wasm_bindgen::prelude::*;
 
 use block_editor::{commands, text_editor::TextEdit, EditorModel};
@@ -19,23 +22,11 @@ use lsp::{
 #[cfg(target_arch = "wasm32")]
 pub mod c_shim;
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    pub(crate) fn log(s: &str);
-}
-
-macro_rules! console_log {
-    ($($t:tt)*) => (crate::log(&format_args!($($t)*).to_string()))
-}
-
-pub(crate) use console_log;
-
 /* ----- Javascript -> WASM ----- */
 #[wasm_bindgen]
 pub fn run_editor(file_name: String, font_name: String, font_size: f64) {
-    // This hook is necessary to get panic messages in the console
-    console_error_panic_hook::set_once();
+    // send panic messages to console + telemetry
+    panic::set_hook(Box::new(panic_hook));
     main(file_name, font_name, font_size).expect("could not launch")
 }
 
@@ -153,11 +144,13 @@ pub fn set_completions(json: JsValue) {
 
 /* ----- WASM -> Javascript ----- */
 pub mod vscode {
+    use std::collections::HashMap;
     use wasm_bindgen::prelude::*;
 
     #[wasm_bindgen(raw_module = "./run.js")]
     extern "C" {
         pub fn started();
+
         pub fn edited(
             new_text: &str,
             start_line: usize,
@@ -165,17 +158,60 @@ pub mod vscode {
             end_line: usize,
             end_col: usize,
         );
+
         #[wasm_bindgen(js_name = setClipboard)]
         pub fn set_clipboard(text: String);
+
         #[wasm_bindgen(js_name = requestQuickFixes)]
         pub fn request_quick_fixes(line: usize, col: usize);
+
         #[wasm_bindgen(js_name = requestCompletions)]
         pub fn request_completions(line: usize, col: usize);
+
         #[wasm_bindgen(js_name = executeCommand)]
         pub fn execute_command(command: String, args: JsValue);
+
         #[wasm_bindgen(js_name = executeWorkspaceEdit)]
         pub fn execute_workspace_edit(edit: JsValue);
+
+        #[wasm_bindgen(js_name = telemetryEvent)]
+        fn telemetry_event(cat: String, info: JsValue);
+
+        #[wasm_bindgen(js_name = telemetryCrash)]
+        pub fn telemetry_crash(msg: String);
     }
+
+    pub fn log_event(cat: &'static str, info: HashMap<&'static str, &str>) {
+        telemetry_event(
+            cat.to_string(),
+            serde_wasm_bindgen::to_value(&info).unwrap(),
+        );
+    }
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    pub(crate) fn log(s: &str);
+}
+
+macro_rules! console_log {
+    ($($t:tt)*) => (crate::log(&format_args!($($t)*).to_string()))
+}
+
+pub(crate) use console_log;
+
+fn panic_hook(info: &PanicInfo) {
+    console_error_panic_hook::hook(info);
+
+    vscode::telemetry_crash(
+        info.to_string()
+            .replace("/", ">") // workaround to avoid vscode redacting a non-sensitive path
+            .replace("\\", ">"),
+    );
+
+    // don't continue in a broken state
+    Application::global().quit();
 }
 
 /* ----- Interface ----- */

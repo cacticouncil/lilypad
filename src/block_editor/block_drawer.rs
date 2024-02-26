@@ -53,6 +53,22 @@ impl BlockType {
 
         lang.categorize_node(node)
     }
+
+    pub const fn to_str(&self) -> &'static str {
+        use BlockType::*;
+        match self {
+            Object => "Object",
+            FunctionDef => "FunctionDef",
+            While => "While",
+            If => "If",
+            For => "For",
+            Try => "Try",
+            Generic => "Generic",
+            Comment => "Comment",
+            Error => "Error",
+            Divider => "Divider",
+        }
+    }
 }
 
 pub struct Block {

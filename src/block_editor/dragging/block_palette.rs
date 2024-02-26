@@ -1,8 +1,11 @@
 use druid::{piet::PietText, Event, LifeCycle, MouseButton, Point, RenderContext, Size, Widget};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::loose_block::LooseBlock;
 use crate::block_editor::{commands, DragSession, EditorModel};
+use crate::lang::Snippet;
+use crate::vscode;
 use crate::{
     lang::{lang_for_file, LanguageConfig},
     theme,
@@ -11,7 +14,21 @@ use crate::{
 
 pub struct BlockPalette {
     lang: &'static LanguageConfig,
-    items: Vec<LooseBlock>,
+    items: Vec<PaletteItem>,
+}
+
+struct PaletteItem {
+    id: &'static str,
+    block: LooseBlock,
+}
+
+impl PaletteItem {
+    fn new(snippet: &Snippet, lang: &'static LanguageConfig, piet_text: &mut PietText) -> Self {
+        Self {
+            id: snippet.id,
+            block: LooseBlock::make_from_text(snippet.source, lang, 10.0, piet_text),
+        }
+    }
 }
 
 impl BlockPalette {
@@ -27,7 +44,7 @@ impl BlockPalette {
             .lang
             .palette
             .iter()
-            .map(|text| LooseBlock::make_from_text(text, self.lang, 10.0, piet_text))
+            .map(|snippet| PaletteItem::new(snippet, self.lang, piet_text))
             .collect();
     }
 
@@ -55,15 +72,20 @@ impl Widget<EditorModel> for BlockPalette {
                     // start dragging the selected item
                     let mut y = HEADING_PADDING;
                     for item in self.items.iter() {
-                        if mouse.pos.y >= y && mouse.pos.y <= y + item.size().height {
+                        if mouse.pos.y >= y && mouse.pos.y <= y + item.block.size().height {
+                            vscode::log_event(
+                                "palette-blog-drag",
+                                HashMap::from([("type", item.id), ("lang", self.lang.name)]),
+                            );
+
                             data.drag_block = Some(Arc::new(DragSession {
-                                text: item.text().to_string(),
+                                text: item.block.text().to_string(),
                                 offset: Point::new(mouse.pos.x - H_PADDING, mouse.pos.y - y),
                             }));
                             break;
                         }
 
-                        y += item.size().height + V_PADDING;
+                        y += item.block.size().height + V_PADDING;
                     }
                 }
             }
@@ -121,8 +143,8 @@ impl Widget<EditorModel> for BlockPalette {
         let mut size = Size::ZERO;
 
         for item in &self.items {
-            size.width = f64::max(size.width, item.size().width);
-            size.height += item.size().height + V_PADDING;
+            size.width = f64::max(size.width, item.block.size().width);
+            size.height += item.block.size().height + V_PADDING;
         }
 
         bc.constrain(size)
@@ -143,8 +165,8 @@ impl Widget<EditorModel> for BlockPalette {
         // draw palettes
         for item in &self.items {
             let offset = Point::new(H_PADDING, y);
-            item.draw(offset, ctx.size().width - H_PADDING, ctx);
-            y += item.size().height + V_PADDING;
+            item.block.draw(offset, ctx.size().width - H_PADDING, ctx);
+            y += item.block.size().height + V_PADDING;
         }
     }
 }

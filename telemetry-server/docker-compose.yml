@@ -1,0 +1,30 @@
+version: "3"
+services:
+  api:
+    build: .
+    ports:
+      - ${PORT}:${PORT}
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5433
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+    depends_on:
+      - db
+    volumes:
+    - .:/usr/src/app
+
+  db:
+    image: postgres:latest
+    ports:
+      - 5433:5433
+    volumes:
+      - data:/data/db
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+
+volumes: 
+ data: {}
