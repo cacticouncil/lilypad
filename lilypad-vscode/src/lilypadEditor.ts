@@ -77,6 +77,11 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                         type: "set_text",
                         text: document.getText(),
                     });
+                    // send initial diagnostics
+                    webviewPanel.webview.postMessage({
+                        type: "new_diagnostics",
+                        diagnostics: vscode.languages.getDiagnostics(document.uri)
+                    });
                     break;
                 }
                 case "edited": {
