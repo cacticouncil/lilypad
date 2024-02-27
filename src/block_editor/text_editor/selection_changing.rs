@@ -131,34 +131,37 @@ impl TextEditor {
 
     /* -------------------- UI <-> Text Coordinate Conversion ------------------- */
     pub fn mouse_to_coord(&self, point: Point, source: &Rope) -> TextPoint {
+        let font_height = *FONT_HEIGHT.get().unwrap();
+        let font_width = *FONT_WIDTH.get().unwrap();
+
         // find the line clicked on by finding the next one and then going back one
-        let mut y: usize = 0;
+        let mut line: usize = 0;
         let mut total_pad = 0.0;
-        for row_pad in &self.padding {
-            total_pad += row_pad;
-            let curr_line_start = total_pad + (y as f64 * FONT_HEIGHT.get().unwrap());
+        for line_pad in &self.padding {
+            total_pad += line_pad;
+            let curr_line_start = total_pad + (line as f64 * font_height);
             let raw_y = point.y - OUTER_PAD;
             if raw_y <= curr_line_start {
                 break;
             }
-            y += 1;
+            line += 1;
         }
-        y = y.saturating_sub(1);
+        line = line.saturating_sub(1);
 
         // double check that we are in bounds
         // (clicking and deleting at the same time can cause the padding to not be updated yet)
         let line_count = source.len_lines();
-        if y >= line_count {
-            y = line_count - 1;
+        if line >= line_count {
+            line = line_count - 1;
         }
 
         // TODO: if past last line, move to end of last line
 
-        let x_raw = ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / FONT_WIDTH.get().unwrap())
-            .round() as usize;
-        let x_bound = clamp_col(y, x_raw, source);
+        let col_raw =
+            ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / font_width).round() as usize;
+        let col_bound = clamp_col(line, col_raw, source);
 
-        TextPoint::new(x_bound, y)
+        TextPoint::new(line, col_bound)
     }
 
     /// Finds the text coordinate that the mouse is over, without clamping to a valid position within the text
@@ -167,26 +170,26 @@ impl TextEditor {
         let font_width = *FONT_WIDTH.get().unwrap();
 
         // find the line clicked on by finding the next one and then going back one
-        let mut y: usize = 0;
+        let mut line: usize = 0;
         let mut total_pad = 0.0;
-        for row_pad in &self.padding {
-            total_pad += row_pad;
-            let curr_line_start = total_pad + (y as f64 * font_height);
+        for line_pad in &self.padding {
+            total_pad += line_pad;
+            let curr_line_start = total_pad + (line as f64 * font_height);
             let raw_y = point.y - OUTER_PAD;
             if raw_y <= curr_line_start {
                 break;
             }
-            y += 1;
+            line += 1;
         }
 
         // add any remaining lines past the last line
-        y += ((point.y - (total_pad + (y as f64 * font_height))) / font_height) as usize;
+        line += ((point.y - (total_pad + (line as f64 * font_height))) / font_height) as usize;
 
-        y = y.saturating_sub(1);
+        line = line.saturating_sub(1);
 
-        let x = ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / font_width).round() as usize;
+        let col = ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / font_width).round() as usize;
 
-        TextPoint::new(x, y)
+        TextPoint::new(line, col)
     }
 
     pub fn coord_to_mouse(&self, coord: TextPoint) -> Point {
@@ -194,8 +197,8 @@ impl TextEditor {
         let font_width = *FONT_WIDTH.get().unwrap();
 
         let y = OUTER_PAD
-            + (coord.row as f64 * font_height)
-            + self.padding.iter().take(coord.row).sum::<f64>();
+            + (coord.line as f64 * font_height)
+            + self.padding.iter().take(coord.line).sum::<f64>();
         let x = TOTAL_TEXT_X_OFFSET + (coord.col as f64 * font_width);
 
         Point::new(x, y)
@@ -249,15 +252,15 @@ impl TextRange {
         // when moving up, use top of selection
         let cursor_pos = self.ordered().start;
 
-        if cursor_pos.row == 0 {
+        if cursor_pos.line == 0 {
             TextPoint::ZERO
         } else {
             // TODO: the normal text editor experience has a "memory" of how far right
             // the cursor started during a chain for arrow up/down (and then it snaps back there).
             // if that memory is implemented, it can replace self.cursor_pos.x
             TextPoint::new(
-                clamp_col(cursor_pos.row - 1, cursor_pos.col, source),
-                cursor_pos.row - 1,
+                cursor_pos.line - 1,
+                clamp_col(cursor_pos.line - 1, cursor_pos.col, source),
             )
         }
     }
@@ -267,19 +270,19 @@ impl TextRange {
         let cursor_pos = self.ordered().end;
 
         let last_line = source.lines().count() - 1;
-        let next_line = std::cmp::min(cursor_pos.row + 1, last_line);
+        let next_line = std::cmp::min(cursor_pos.line + 1, last_line);
 
-        if cursor_pos.row == last_line {
+        if cursor_pos.line == last_line {
             // if on last line, just move to end of line
             TextPoint::new(
+                last_line,
                 source
                     .get_line(source.len_lines() - 1)
                     .map_or(0, |line| line.len_chars()),
-                last_line,
             )
         } else {
             // same memory thing as above applies here
-            TextPoint::new(clamp_col(next_line, cursor_pos.col, source), next_line)
+            TextPoint::new(next_line, clamp_col(next_line, cursor_pos.col, source))
         }
     }
 
@@ -289,22 +292,22 @@ impl TextRange {
             let cursor_pos = self.end;
             if cursor_pos.col == 0 {
                 // if at start of line, move to end of line above
-                if cursor_pos.row != 0 {
+                if cursor_pos.line != 0 {
                     TextPoint::new(
-                        source.line(cursor_pos.row - 1).len_chars_no_linebreak(),
-                        cursor_pos.row - 1,
+                        cursor_pos.line - 1,
+                        source.line(cursor_pos.line - 1).len_chars_no_linebreak(),
                     )
                 } else {
                     // already at top left
                     self.start
                 }
             } else {
-                TextPoint::new(cursor_pos.col - 1, cursor_pos.row)
+                TextPoint::new(cursor_pos.line, cursor_pos.col - 1)
             }
         } else {
             // just move cursor to start of selection
             let start = self.ordered().start;
-            TextPoint::new(start.col, start.row)
+            TextPoint::new(start.line, start.col)
         }
     }
 
@@ -312,23 +315,23 @@ impl TextRange {
         if self.is_cursor() || expanding {
             // actually move if cursor
             let cursor_pos = self.end;
-            let curr_line_len = source.line(cursor_pos.row).len_chars_no_linebreak();
+            let curr_line_len = source.line(cursor_pos.line).len_chars_no_linebreak();
             if cursor_pos.col == curr_line_len {
                 // if at end of current line, go to next line
                 let last_line = source.len_lines() - 1;
-                if cursor_pos.row != last_line {
-                    TextPoint::new(0, cursor_pos.row + 1)
+                if cursor_pos.line != last_line {
+                    TextPoint::new(cursor_pos.line + 1, 0)
                 } else {
                     // already at end
                     self.start
                 }
             } else {
-                TextPoint::new(cursor_pos.col + 1, cursor_pos.row)
+                TextPoint::new(cursor_pos.line, cursor_pos.col + 1)
             }
         } else {
             // just move cursor to end of selection
             let end = self.ordered().end;
-            TextPoint::new(end.col, end.row)
+            TextPoint::new(end.line, end.col)
         }
     }
 
@@ -338,13 +341,13 @@ impl TextRange {
         // move to line above if at start of line
         let at_start = cursor_pos.col == 0;
         if at_start {
-            if cursor_pos.row == 0 {
+            if cursor_pos.line == 0 {
                 return TextPoint::ZERO;
             } else {
-                cursor_pos.row -= 1;
+                cursor_pos.line -= 1;
             }
         }
-        let line = source.line(cursor_pos.row);
+        let line = source.line(cursor_pos.line);
         if at_start {
             cursor_pos.col = line.len_chars_no_linebreak();
         }
@@ -378,17 +381,17 @@ impl TextRange {
         // TODO: handle special characters more like vscode
 
         let mut cursor_pos = self.end;
-        let line = source.line(cursor_pos.row);
+        let line = source.line(cursor_pos.line);
         let mut chars = line.chars_at(cursor_pos.col);
 
         // find start of word (if not already in one)
         while let Some(c) = chars.next() {
             if c == '\n' || c == '\r' {
                 // move to the next line if we hit it
-                cursor_pos.row += 1;
+                cursor_pos.line += 1;
                 cursor_pos.col = 0;
 
-                let line = source.line(cursor_pos.row);
+                let line = source.line(cursor_pos.line);
                 chars = line.chars_at(cursor_pos.col);
             } else {
                 // always shift bc we are consuming chars here
@@ -415,32 +418,32 @@ impl TextRange {
 
     fn cursor_to_line_start(&self, source: &Rope) -> TextPoint {
         let cursor_pos = self.end;
-        let indent = source.line(cursor_pos.row).whitespace_at_start();
+        let indent = source.line(cursor_pos.line).whitespace_at_start();
 
         if cursor_pos.col > indent {
             // move to indented start
-            TextPoint::new(indent, cursor_pos.row)
+            TextPoint::new(cursor_pos.line, indent)
         } else {
             // already at indented start, so move to true start
-            TextPoint::new(0, cursor_pos.row)
+            TextPoint::new(cursor_pos.line, 0)
         }
     }
 
     fn cursor_to_line_end(&self, source: &Rope) -> TextPoint {
         let cursor_pos = self.end;
         TextPoint::new(
-            source.line(cursor_pos.row).len_chars_no_linebreak(),
-            cursor_pos.row,
+            cursor_pos.line,
+            source.line(cursor_pos.line).len_chars_no_linebreak(),
         )
     }
 
     fn cursor_to_doc_end(&self, source: &Rope) -> TextPoint {
         let last_line = source.len_lines() - 1;
         let last_line_len = source.line(last_line).len_chars_no_linebreak();
-        TextPoint::new(last_line_len, last_line)
+        TextPoint::new(last_line, last_line_len)
     }
 }
 
-fn clamp_col(row: usize, col: usize, source: &Rope) -> usize {
-    std::cmp::min(col, source.line(row).len_chars_no_linebreak())
+fn clamp_col(line: usize, col: usize, source: &Rope) -> usize {
+    std::cmp::min(col, source.line(line).len_chars_no_linebreak())
 }

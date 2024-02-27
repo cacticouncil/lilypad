@@ -54,7 +54,7 @@ impl TextEditor {
             // offset the dragging popup so it matches where the mouse picked up the block
             let block_corner = self.coord_to_mouse(TextPoint {
                 col: block.col,
-                row: block.line,
+                line: block.line,
             });
             let relative_pos =
                 Point::new(mouse_pos.x - block_corner.x, mouse_pos.y - block_corner.y);
@@ -66,10 +66,7 @@ impl TextEditor {
             }));
 
             // set the insertion point to where the block initially was
-            self.drag_insertion_line = Some(TextPoint {
-                col: block.col,
-                row: block.line,
-            });
+            self.drag_insertion_line = Some(TextPoint::new(block.line, block.col));
 
             // remove dragged block from source
             self.apply_edit(source, &TextEdit::delete(text_range));
@@ -91,15 +88,12 @@ impl TextEditor {
             let mut indented_text = set_indent(&drag_block.text, insertion_point.col);
 
             // if at the end of the file, and the last line doesn't have a newline, add one
-            if insertion_point.row == source.len_lines() {
+            if insertion_point.line == source.len_lines() {
                 indented_text.insert_str(0, source.detect_linebreak());
             }
 
             // apply edit
-            let insert_point = TextPoint {
-                col: 0,
-                row: insertion_point.row,
-            };
+            let insert_point = TextPoint::new(insertion_point.line, 0);
             let edit = TextEdit::new(
                 Cow::Owned(indented_text),
                 TextRange::new_cursor(insert_point),
@@ -122,8 +116,8 @@ impl TextEditor {
             let font_height = *FONT_HEIGHT.get().unwrap();
             let font_width = *FONT_WIDTH.get().unwrap();
 
-            let line_padding_above = self.padding.iter().take(insertion_line.row).sum::<f64>();
-            let y = (insertion_line.row as f64) * font_height + OUTER_PAD + line_padding_above;
+            let line_padding_above = self.padding.iter().take(insertion_line.line).sum::<f64>();
+            let y = (insertion_line.line as f64) * font_height + OUTER_PAD + line_padding_above;
             let x = (insertion_line.col as f64) * font_width + OUTER_PAD + GUTTER_WIDTH;
             let rect = Rect::new(x, y, ctx.size().width - OUTER_PAD, y + THICKNESS);
             ctx.fill(rect, &theme::CURSOR);
@@ -138,34 +132,36 @@ impl TextEditor {
         );
         let coord = self.mouse_to_raw_coord(adj_pos);
 
-        // clamp row to end of source
-        let row = coord.row.min(source.len_lines());
+        // clamp line to end of source
+        let line = coord.line.min(source.len_lines());
 
         // limit to the first non-empty above line's level
         // (or 1 more if it ends in a new scope character)
-        let mut relative_whitespace_row = row;
+        let mut relative_whitespace_line = line;
         let allowed_indent = loop {
-            if relative_whitespace_row == 0 {
+            if relative_whitespace_line == 0 {
                 break 0;
-            } else {
-                let line_above = source.line(relative_whitespace_row - 1);
-                let above_indent = line_above.whitespace_at_start();
-
-                if above_indent == line_above.len_chars_no_linebreak() {
-                    // if the line above is entirely whitespace, move to the line above
-                    relative_whitespace_row -= 1;
-                    continue;
-                } else if line_above
-                    .excluding_linebreak()
-                    .ends_with(self.language.new_scope_char.char())
-                {
-                    // if the line above ends in a new scope character, allow one more indent
-                    break above_indent + 4;
-                } else {
-                    // otherwise, allow up to the same indent as the line above
-                    break above_indent;
-                }
             }
+
+            let line_above = source.line(relative_whitespace_line - 1);
+            let above_indent = line_above.whitespace_at_start();
+
+            // if the line above is entirely whitespace, move to the line above
+            if above_indent == line_above.len_chars_no_linebreak() {
+                relative_whitespace_line -= 1;
+                continue;
+            }
+
+            // if the line above ends in a new scope character, allow one more indent
+            if line_above
+                .excluding_linebreak()
+                .ends_with(self.language.new_scope_char.char())
+            {
+                break above_indent + 4;
+            }
+
+            // otherwise, allow up to the same indent as the line above
+            break above_indent;
         };
         let indent = match self.language.new_scope_char {
             // when scope is indent based, allow reducing scope when dragging
@@ -174,7 +170,7 @@ impl TextEditor {
             NewScopeChar::Brace => allowed_indent,
         };
 
-        self.drag_insertion_line = Some(TextPoint { col: indent, row });
+        self.drag_insertion_line = Some(TextPoint::new(line, indent));
     }
 }
 

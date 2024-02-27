@@ -51,9 +51,9 @@ impl DiagnosticPopup {
         }
 
         // find the vertical start by finding top of line and then subtracting box size
-        let total_padding: f64 = padding.iter().take(diagnostic.range.start.row + 1).sum();
+        let total_padding: f64 = padding.iter().take(diagnostic.range.start.line + 1).sum();
         let y =
-            total_padding + (diagnostic.range.start.row as f64 * font_height) + OUTER_PAD - height;
+            total_padding + (diagnostic.range.start.line as f64 * font_height) + OUTER_PAD - height;
 
         // find the horizontal start
         let x =
@@ -213,9 +213,9 @@ impl Diagnostic {
         // could probably share the same logic as selections
 
         // find bottom of current line
-        let total_padding: f64 = padding.iter().take(self.range.start.row + 1).sum();
+        let total_padding: f64 = padding.iter().take(self.range.start.line + 1).sum();
         let y = total_padding
-            + ((self.range.start.row + 1) as f64 * FONT_HEIGHT.get().unwrap())
+            + ((self.range.start.line + 1) as f64 * FONT_HEIGHT.get().unwrap())
             + OUTER_PAD;
 
         // find the start and end of the line

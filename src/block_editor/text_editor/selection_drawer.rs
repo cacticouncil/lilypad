@@ -15,13 +15,13 @@ impl TextEditor {
     pub fn draw_cursor(&self, ctx: &mut PaintCtx) {
         if self.cursor_visible {
             // we want to draw the cursor where the mouse has last been (selection end)
-            let total_pad: f64 = self.padding.iter().take(self.selection.end.row + 1).sum();
+            let total_pad: f64 = self.padding.iter().take(self.selection.end.line + 1).sum();
             let block = Rect::from_origin_size(
                 Point::new(
                     TOTAL_TEXT_X_OFFSET
                         + (self.selection.end.col as f64) * FONT_WIDTH.get().unwrap(),
                     OUTER_PAD
-                        + (self.selection.end.row as f64) * FONT_HEIGHT.get().unwrap()
+                        + (self.selection.end.line as f64) * FONT_HEIGHT.get().unwrap()
                         + total_pad,
                 ),
                 Size::new(2.0, *FONT_HEIGHT.get().unwrap()),
@@ -50,18 +50,18 @@ impl TextEditor {
         color: &Color,
         ctx: &mut PaintCtx,
     ) {
-        let start_row = selection.start.row;
-        let end_row = selection.end.row;
+        let start_line = selection.start.line;
+        let end_line = selection.end.line;
 
-        match end_row.cmp(&start_row) {
+        match end_line.cmp(&start_line) {
             Ordering::Greater => {
                 // Forward selection, multiple lines
                 // Fill first line from cursor to end
                 // 1 is added to the width to include the newline
                 self.draw_selection_block(
                     selection.start.col,
-                    selection.start.row,
-                    source.line(start_row).len_chars_no_linebreak() - selection.start.col + 1,
+                    selection.start.line,
+                    source.line(start_line).len_chars_no_linebreak() - selection.start.col + 1,
                     false,
                     color,
                     ctx,
@@ -69,7 +69,7 @@ impl TextEditor {
 
                 // fill in any in between lines
                 // 1 is added to the width to include the newline
-                for line in (start_row + 1)..end_row {
+                for line in (start_line + 1)..end_line {
                     self.draw_selection_block(
                         0,
                         line,
@@ -83,7 +83,7 @@ impl TextEditor {
                 // Fill last line from the left until cursor
                 self.draw_selection_block(
                     0,
-                    selection.end.row,
+                    selection.end.line,
                     selection.end.col,
                     true,
                     color,
@@ -96,7 +96,7 @@ impl TextEditor {
                 // Fill first line from cursor to beginning
                 self.draw_selection_block(
                     0,
-                    selection.start.row,
+                    selection.start.line,
                     selection.start.col,
                     true,
                     color,
@@ -105,7 +105,7 @@ impl TextEditor {
 
                 // fill in between lines
                 // 1 is added to the width to include the newline
-                for line in (end_row + 1)..start_row {
+                for line in (end_line + 1)..start_line {
                     self.draw_selection_block(
                         0,
                         line,
@@ -120,8 +120,9 @@ impl TextEditor {
                 // 1 is added to the width to include the newline
                 self.draw_selection_block(
                     selection.end.col,
-                    selection.end.row,
-                    source.line(selection.end.row).len_chars_no_linebreak() - selection.end.col + 1,
+                    selection.end.line,
+                    source.line(selection.end.line).len_chars_no_linebreak() - selection.end.col
+                        + 1,
                     false,
                     color,
                     ctx,
@@ -132,7 +133,7 @@ impl TextEditor {
                 let ord_sel = selection.ordered();
                 self.draw_selection_block(
                     ord_sel.start.col,
-                    ord_sel.start.row,
+                    ord_sel.start.line,
                     ord_sel.end.col - ord_sel.start.col,
                     false,
                     color,

@@ -88,9 +88,9 @@ impl<'a> TextEdit<'a> {
         if self.origin != TextEditOrigin::Vscode {
             vscode::edited(
                 &self.text,
-                self.range.start.row,
+                self.range.start.line,
                 self.range.start.col,
-                self.range.end.row,
+                self.range.end.line,
                 self.range.end.col,
             );
         }
@@ -127,8 +127,8 @@ impl<'a> TextEdit<'a> {
         } else {
             0
         } + last_line_len;
-        let end_row = text_range.start.row + line_count - 1;
-        TextPoint::new(end_col, end_row)
+        let end_line = text_range.start.line + line_count - 1;
+        TextPoint::new(end_line, end_col)
     }
 }
 
@@ -144,8 +144,8 @@ fn edit_for_insert_char<'a>(
 
     // move cursor
     let new_selection = TextRange::new_cursor(TextPoint::new(
+        old_selection.start.line,
         old_selection.start.col + add.chars().count(),
-        old_selection.start.row,
     ));
 
     // don't insert if previously automatically inserted
@@ -219,7 +219,7 @@ fn edit_for_insert_newline<'a>(
 
     // find previous indent level and set new line to that many spaces
     let old_selection = selection.ordered();
-    let curr_line = source.line(old_selection.start.row);
+    let curr_line = source.line(old_selection.start.line);
     let prev_indent = curr_line.whitespace_at_start();
 
     let middle_of_bracket = new_scope_char == NewScopeChar::Brace && {
@@ -262,7 +262,7 @@ fn edit_for_insert_newline<'a>(
 
         let edit = TextEdit::new(Cow::Owned(extra_to_insert), old_selection);
         let new_selection =
-            TextRange::new_cursor(TextPoint::new(next_indent, old_selection.start.row + 1));
+            TextRange::new_cursor(TextPoint::new(old_selection.start.line + 1, next_indent));
         (edit, new_selection)
     }
 }
@@ -290,7 +290,7 @@ fn edit_for_backspace<'a>(
                 || movement == Movement::Grapheme(Direction::Left))
         {
             // unindent if at start of line
-            let line_indent = source.line(old_selection.start.row).whitespace_at_start();
+            let line_indent = source.line(old_selection.start.line).whitespace_at_start();
             let at_indent = old_selection.start.col == line_indent;
             if at_indent {
                 let (edit, new_selection) = edit_for_unindent(old_selection, source);
@@ -308,10 +308,10 @@ fn edit_for_backspace<'a>(
             };
 
             TextRange::new(
-                TextPoint::new(old_selection.start.col - 1, old_selection.start.row),
+                TextPoint::new(old_selection.start.line, old_selection.start.col - 1),
                 TextPoint::new(
+                    old_selection.start.line,
                     old_selection.start.col + after_delete_amount,
-                    old_selection.start.row,
                 ),
             )
         } else {
@@ -338,10 +338,10 @@ fn edit_for_indent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, Te
 
     // expand selection to include entire lines
     let full_selection = TextRange::new(
-        TextPoint::new(0, ordered.start.row),
+        TextPoint::new(ordered.start.line, 0),
         TextPoint::new(
-            source.line(ordered.end.row).len_chars_no_linebreak(),
-            ordered.end.row,
+            ordered.end.line,
+            source.line(ordered.end.line).len_chars_no_linebreak(),
         ),
     );
     let mut new_text: Rope = source.slice(full_selection.char_range_in(source)).into();
@@ -360,18 +360,18 @@ fn edit_for_indent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, Te
         let indent = " ".repeat(indent_amount);
 
         // add it
-        let start_of_line = TextPoint::new(0, line_num);
+        let start_of_line = TextPoint::new(line_num, 0);
         new_text.insert(start_of_line.char_idx_in(&new_text), &indent);
 
         // Adjust selection if first or last line if the cursor for that line is in the text.
         // If the line is entirely whitespace, move the cursor anyway.
         // This is more complicated than a single comparison because new_selection can be inverted.
-        if full_selection.start.row + line_num == new_selection.start.row
+        if full_selection.start.line + line_num == new_selection.start.line
             && (new_selection.start.col > curr_indent || line_len == curr_indent)
         {
             new_selection.start.col += indent_amount;
         }
-        if full_selection.start.row + line_num == new_selection.end.row
+        if full_selection.start.line + line_num == new_selection.end.line
             && (new_selection.end.col > curr_indent || line_len == curr_indent)
         {
             new_selection.end.col += indent_amount;
@@ -390,10 +390,10 @@ fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, 
 
     // expand selection to include entire lines
     let full_selection = TextRange::new(
-        TextPoint::new(0, ordered.start.row),
+        TextPoint::new(ordered.start.line, 0),
         TextPoint::new(
-            source.line(ordered.end.row).len_chars_no_linebreak(),
-            ordered.end.row,
+            ordered.end.line,
+            source.line(ordered.end.line).len_chars_no_linebreak(),
         ),
     );
     let mut new_text: Rope = source
@@ -417,16 +417,16 @@ fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, 
             curr_indent % TAB_SIZE
         };
         let remove_range = TextRange::new(
-            TextPoint::new(0, line_num),
-            TextPoint::new(unindent_amount, line_num),
+            TextPoint::new(line_num, 0),
+            TextPoint::new(line_num, unindent_amount),
         );
         new_text.remove(remove_range.char_range_in(&new_text));
 
         // adjust selection if first or last line
-        if full_selection.start.row + line_num == new_selection.start.row {
+        if full_selection.start.line + line_num == new_selection.start.line {
             new_selection.start.col = new_selection.start.col.saturating_sub(unindent_amount);
         }
-        if full_selection.start.row + line_num == new_selection.end.row {
+        if full_selection.start.line + line_num == new_selection.end.line {
             new_selection.end.col = new_selection.end.col.saturating_sub(unindent_amount);
         }
     }
@@ -685,10 +685,10 @@ mod tests {
             let end = line.chars().position(|c| c == '←');
 
             if let Some(start) = start {
-                sel_start = TextPoint::new(start, line_num);
+                sel_start = TextPoint::new(line_num, start);
             }
             if let Some(end) = end {
-                sel_end = TextPoint::new(end, line_num);
+                sel_end = TextPoint::new(line_num, end);
             }
 
             // if on the same line, adjust the second to account for the first being removed

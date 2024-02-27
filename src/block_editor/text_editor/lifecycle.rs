@@ -421,7 +421,7 @@ impl Widget<EditorModel> for TextEditor {
         self.completion_popup.paint(ctx, data, env);
 
         // draw gutter
-        gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.row, ctx);
+        gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.line, ctx);
 
         // draw cursor
         if ctx.has_focus() {

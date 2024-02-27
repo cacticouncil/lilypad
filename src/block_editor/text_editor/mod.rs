@@ -65,7 +65,7 @@ pub struct TextEditor {
     /// the pair down with them if they are deleted
     paired_delete_stack: Vec<bool>,
 
-    /// The row is where to draw the drag insertion line. The column is how much indent to add.
+    /// The line is where to draw the drag insertion line. The column is how much indent the insertion should have.
     drag_insertion_line: Option<TextPoint>,
 
     /// overlay view for diagnostics

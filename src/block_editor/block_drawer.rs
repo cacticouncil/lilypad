@@ -100,16 +100,10 @@ impl Block {
     }
 
     pub fn text_range(&self) -> TextRange {
-        TextRange {
-            start: TextPoint {
-                col: self.col,
-                row: self.line,
-            },
-            end: TextPoint {
-                col: 0,
-                row: self.line + self.height,
-            },
-        }
+        TextRange::new(
+            TextPoint::new(self.line, self.col),
+            TextPoint::new(self.line + self.height, 0),
+        )
     }
 }
 
@@ -442,9 +436,9 @@ fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
         if block.syntax_type != BlockType::Divider {
             padding[block.line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
 
-            let end_row = block.line + block.height;
-            if end_row < padding.len() {
-                padding[end_row] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
+            let end_line = block.line + block.height;
+            if end_line < padding.len() {
+                padding[end_line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
             }
         }
         padding_helper(&block.children, padding);

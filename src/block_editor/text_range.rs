@@ -31,12 +31,12 @@ impl TextRange {
     }
 
     pub fn ordered(&self) -> TextRange {
-        if self.start.row < self.end.row {
+        if self.start.line < self.end.line {
             TextRange {
                 start: self.start,
                 end: self.end,
             }
-        } else if self.start.row > self.end.row {
+        } else if self.start.line > self.end.line {
             TextRange {
                 start: self.end,
                 end: self.start,
@@ -63,21 +63,23 @@ impl TextRange {
     }
 
     pub fn contains(&self, point: TextPoint, source: &Rope) -> bool {
-        if self.start.row == self.end.row {
+        if self.start.line == self.end.line {
             // if a single line, can just check the column
-            point.row == self.start.row && point.col >= self.start.col && point.col <= self.end.col
-        } else if point.row == self.start.row {
-            // if on the first row, check that the column is greater than the start
+            point.line == self.start.line
+                && point.col >= self.start.col
+                && point.col <= self.end.col
+        } else if point.line == self.start.line {
+            // if on the first line, check that the column is greater than the start
             point.col >= self.start.col
-        } else if point.row == self.end.row {
-            // if on the last row, check that the column is less than the end
+        } else if point.line == self.end.line {
+            // if on the last line, check that the column is less than the end
             point.col <= self.end.col
-        } else if point.row < self.start.row || point.row > self.end.row {
-            // if outside the range of rows, it is false
+        } else if point.line < self.start.line || point.line > self.end.line {
+            // if outside the range of lines, it is false
             false
         } else {
             // if somewhere in the middle, check the length of the line
-            point.col <= source.line(point.row).len_chars()
+            point.col <= source.line(point.line).len_chars()
         }
     }
 }
@@ -92,12 +94,12 @@ impl<'de> Deserialize<'de> for TextRange {
         let arr = json.as_array().unwrap();
         Ok(TextRange::new(
             TextPoint::new(
-                arr[0].get("character").unwrap().as_u64().unwrap() as usize,
                 arr[0].get("line").unwrap().as_u64().unwrap() as usize,
+                arr[0].get("character").unwrap().as_u64().unwrap() as usize,
             ),
             TextPoint::new(
-                arr[1].get("character").unwrap().as_u64().unwrap() as usize,
                 arr[1].get("line").unwrap().as_u64().unwrap() as usize,
+                arr[1].get("character").unwrap().as_u64().unwrap() as usize,
             ),
         ))
     }
@@ -107,33 +109,32 @@ impl<'de> Deserialize<'de> for TextRange {
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct TextPoint {
-    // TODO: flip these
+    pub line: usize,
     pub col: usize,
-    pub row: usize,
 }
 
 impl TextPoint {
-    pub const ZERO: Self = TextPoint { col: 0, row: 0 };
+    pub const ZERO: Self = TextPoint { line: 0, col: 0 };
 
-    pub fn new(col: usize, row: usize) -> TextPoint {
-        TextPoint { col, row }
+    pub fn new(line: usize, col: usize) -> TextPoint {
+        TextPoint { line, col }
     }
 
     pub fn byte_idx_in(&self, source: &Rope) -> usize {
-        let char_idx = source.line_to_char(self.row) + self.col;
+        let char_idx = source.line_to_char(self.line) + self.col;
         source.char_to_byte(char_idx)
     }
 
     pub fn char_idx_in(&self, source: &Rope) -> usize {
-        source.line_to_char(self.row) + self.col
+        source.line_to_char(self.line) + self.col
     }
 }
 
 impl From<tree_sitter_c2rust::Point> for TextPoint {
     fn from(ts_pt: tree_sitter_c2rust::Point) -> Self {
         TextPoint {
+            line: ts_pt.row,
             col: ts_pt.column,
-            row: ts_pt.row,
         }
     }
 }
@@ -141,7 +142,7 @@ impl From<tree_sitter_c2rust::Point> for TextPoint {
 impl From<TextPoint> for tree_sitter_c2rust::Point {
     fn from(text_pt: TextPoint) -> Self {
         Self {
-            row: text_pt.row,
+            row: text_pt.line,
             column: text_pt.col,
         }
     }
