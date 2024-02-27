@@ -438,6 +438,8 @@ fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, 
 }
 
 impl TextEditor {
+    /// Apply an edit to the source. Leaves selection unchanged.
+    /// NOTE: requires selection to be updated before calling because it updates the pseudo selection based on that.
     fn apply_edit_helper(&mut self, source: &mut Rope, edit: &TextEdit) {
         // update buffer and tree
         edit.apply(source, &mut self.tree_manager);
@@ -455,14 +457,15 @@ impl TextEditor {
     /// Apply an edit to the source and selection.
     /// Notifies vscode depending on the origin property of the TextEdit.
     pub fn apply_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
-        self.apply_edit_helper(source, edit);
         self.selection = TextRange::new_cursor(edit.new_end());
+        self.apply_edit_helper(source, edit);
     }
 
     /// Handle inserting a string at the current selection
     pub fn insert_str(&mut self, source: &mut Rope, add: &str) {
         let old_selection = self.selection.ordered();
         let edit = TextEdit::new(Cow::Borrowed(add), old_selection);
+        self.selection = TextRange::new_cursor(edit.new_end());
         self.apply_edit_helper(source, &edit);
     }
 
@@ -508,14 +511,14 @@ impl TextEditor {
 
     pub fn indent(&mut self, source: &mut Rope) {
         let (edit, new_selection) = edit_for_indent(self.selection, source);
-        self.apply_edit_helper(source, &edit);
         self.selection = new_selection;
+        self.apply_edit_helper(source, &edit);
     }
 
     pub fn unindent(&mut self, source: &mut Rope) {
         let (edit, new_selection) = edit_for_unindent(self.selection, source);
-        self.apply_edit_helper(source, &edit);
         self.selection = new_selection;
+        self.apply_edit_helper(source, &edit);
     }
 }
 
@@ -524,15 +527,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_insert() {
+    fn test_char_insert() {
         // insert single line
-        plan_insert_test("print('hell→←')", "o", "print('hello→←')");
+        char_insert_test("print('hell→←')", "o", "print('hello→←')");
 
         // replace single line
-        plan_insert_test("print('wo→rld←')", "o", "print('woo→←')");
+        char_insert_test("print('wo→rld←')", "o", "print('woo→←')");
 
         // replace multi line
-        plan_insert_test(
+        char_insert_test(
             "print('hell→a world')\nprint('hello← world')",
             "o",
             "print('hello→← world')",
@@ -640,7 +643,7 @@ mod tests {
     }
 
     /* --------------------------------- helpers -------------------------------- */
-    fn plan_insert_test(start: &str, add: &str, target: &str) {
+    fn char_insert_test(start: &str, add: &str, target: &str) {
         let (mut src, start_sel) = generate_state(start);
         let (target_src, target_sel) = generate_state(target);
         let (edit, end_sel) =
