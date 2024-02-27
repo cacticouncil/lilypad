@@ -411,7 +411,7 @@ impl Widget<EditorModel> for TextEditor {
         // draw diagnostics
         // TODO: draw higher priorities on top
         for diagnostic in &*data.diagnostics {
-            diagnostic.draw(&self.padding, ctx);
+            diagnostic.draw(&self.padding, &source, ctx);
         }
 
         // draw diagnostic popup (if any)

@@ -2,6 +2,8 @@ use ropey::Rope;
 use serde::{Deserialize, Deserializer};
 use std::ops::Range;
 
+use super::rope_ext::RopeSliceExt;
+
 /* ------------------------------- Text Range ------------------------------- */
 
 /// An range of text points. Half open: [start, end).
@@ -68,19 +70,55 @@ impl TextRange {
             point.line == self.start.line
                 && point.col >= self.start.col
                 && point.col <= self.end.col
-        } else if point.line == self.start.line {
-            // if on the first line, check that the column is greater than the start
-            point.col >= self.start.col
-        } else if point.line == self.end.line {
-            // if on the last line, check that the column is less than the end
-            point.col <= self.end.col
         } else if point.line < self.start.line || point.line > self.end.line {
             // if outside the range of lines, it is false
             false
+        } else if point.line == self.end.line {
+            // if on the last line, check that the column is less than the end
+            point.col <= self.end.col
+        } else if point.line == self.start.line {
+            // if on the first line, check that the column is greater than the start
+            // and less than the end of the line
+            point.col >= self.start.col
+                && point.line < source.len_lines() // make sure the line is in the source
+                && point.col <= source.line(point.line).len_chars()
         } else {
-            // if somewhere in the middle, check the length of the line
-            point.col <= source.line(point.line).len_chars()
+            // if somewhere in the middle, check it is before the end of the line
+            point.line < source.len_lines() // make sure the line is in the source
+                && point.col <= source.line(point.line).len_chars()
         }
+    }
+
+    /// An individual visual text range for each line, with respect to the source rope.
+    /// Note: these ranges are the visual ranges so they leave out the newline characters.
+    pub fn individual_lines(&self, source: &Rope) -> Vec<TextRange> {
+        let mut ranges = Vec::new();
+        let ordered = self.ordered();
+        for line in ordered.start.line..=ordered.end.line {
+            // if the line is outside of the source, don't include it
+            if line >= source.len_lines() {
+                break;
+            }
+
+            // if the line is the start, start at the start of the range
+            // otherwise, start at the beginning of the line
+            let start = if line == ordered.start.line {
+                ordered.start
+            } else {
+                TextPoint::new(line, 0)
+            };
+
+            // if the line is the end, end at the end of the range
+            // otherwise, end at the end of the line
+            let end = if line == ordered.end.line {
+                ordered.end
+            } else {
+                TextPoint::new(line, source.line(line).len_chars_no_linebreak())
+            };
+
+            ranges.push(TextRange::new(start, end));
+        }
+        ranges
     }
 }
 

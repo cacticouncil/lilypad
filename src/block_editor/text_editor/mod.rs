@@ -55,7 +55,7 @@ pub struct TextEditor {
     /// blocks to draw
     blocks: Vec<block_drawer::Block>,
 
-    /// padding between each line
+    /// the padding above each individual line
     padding: Vec<f64>,
 
     /// pairs that were inserted and should be ignored on the next input
