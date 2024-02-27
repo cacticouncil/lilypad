@@ -10,7 +10,7 @@ use super::{TextEdit, TextEditor};
 use crate::{
     block_editor::{
         block_drawer::Block,
-        rope_ext::RopeSliceExt,
+        rope_ext::{RopeExt, RopeSliceExt},
         text_range::{TextPoint, TextRange},
         BlockType, DragSession, FONT_HEIGHT, FONT_WIDTH, GUTTER_WIDTH, OUTER_PAD,
     },
@@ -88,7 +88,12 @@ impl TextEditor {
         if let (Some(drag_block), Some(insertion_point)) =
             (drag_block.take(), self.drag_insertion_line.take())
         {
-            let indented_text = set_indent(&drag_block.text, insertion_point.col);
+            let mut indented_text = set_indent(&drag_block.text, insertion_point.col);
+
+            // if at the end of the file, and the last line doesn't have a newline, add one
+            if insertion_point.row == source.len_lines() {
+                indented_text.insert_str(0, source.detect_linebreak());
+            }
 
             // apply edit
             let insert_point = TextPoint {
@@ -134,7 +139,7 @@ impl TextEditor {
         let coord = self.mouse_to_raw_coord(adj_pos);
 
         // clamp row to end of source
-        let row = coord.row.min(source.len_lines() - 1);
+        let row = coord.row.min(source.len_lines());
 
         // limit to the first non-empty above line's level
         // (or 1 more if it ends in a new scope character)
