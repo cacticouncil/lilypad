@@ -168,6 +168,15 @@ impl TextPoint {
     }
 }
 
+impl PartialOrd for TextPoint {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.line.partial_cmp(&other.line) {
+            Some(core::cmp::Ordering::Equal) => self.col.partial_cmp(&other.col),
+            ord => ord,
+        }
+    }
+}
+
 impl From<tree_sitter_c2rust::Point> for TextPoint {
     fn from(ts_pt: tree_sitter_c2rust::Point) -> Self {
         TextPoint {

@@ -142,6 +142,26 @@ pub fn set_completions(json: JsValue) {
     }
 }
 
+#[wasm_bindgen]
+pub fn undo() {
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(druid::commands::UNDO, (), Target::Global)
+            .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
+#[wasm_bindgen]
+pub fn redo() {
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(druid::commands::REDO, (), Target::Global)
+            .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
 /* ----- WASM -> Javascript ----- */
 pub mod vscode {
     use std::collections::HashMap;

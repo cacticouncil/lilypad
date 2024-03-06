@@ -12,7 +12,9 @@ mod lifecycle;
 mod selection_changing;
 mod selection_drawer;
 mod text_editing;
+mod undo_manager;
 
+use self::undo_manager::UndoManager;
 use super::block_drawer;
 use super::text_drawer::*;
 use super::text_range::*;
@@ -33,6 +35,9 @@ pub struct TextEditor {
 
     /// the current language used by the editor
     language: &'static LanguageConfig,
+
+    /// handles undo/redo
+    undo_manager: UndoManager,
 
     /// the currently selected text
     selection: TextRange,
@@ -83,6 +88,7 @@ impl TextEditor {
         TextEditor {
             tree_manager: TreeManager::new(lang),
             language: lang,
+            undo_manager: UndoManager::new(),
             selection: TextRange::ZERO,
             pseudo_selection: None,
             cursor_timer: TimerToken::INVALID,

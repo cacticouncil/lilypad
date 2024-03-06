@@ -3,7 +3,10 @@ use ropey::Rope;
 use std::borrow::Cow;
 use tree_sitter_c2rust::InputEdit;
 
-use super::TextEditor;
+use super::{
+    undo_manager::UndoStopCondition::{self, *},
+    TextEditor,
+};
 use crate::{
     block_editor::{
         rope_ext::{RopeExt, RopeSliceExt},
@@ -16,7 +19,7 @@ use crate::{
 
 const TAB_SIZE: usize = 4;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TextEdit<'a> {
     text: Cow<'a, str>,
     range: TextRange,
@@ -24,7 +27,7 @@ pub struct TextEdit<'a> {
     origin: TextEditOrigin,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum TextEditOrigin {
     Lilypad,
     Vscode,
@@ -64,11 +67,36 @@ impl<'a> TextEdit<'a> {
         }
     }
 
-    pub fn apply(&self, source: &mut Rope, tree_manager: &mut crate::parse::TreeManager) {
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn range(&self) -> TextRange {
+        self.range
+    }
+
+    // cannot be an implementation of ToOwned because of existing blanked implementation:
+    // https://stackoverflow.com/questions/72385586/implementing-toowned-a-static-for-an-enum-containing-cowa-str-causes
+    pub fn owned_text(&self) -> TextEdit<'static> {
+        TextEdit {
+            text: Cow::Owned(self.text.to_string()),
+            range: self.range,
+            new_end_point: self.new_end_point,
+            origin: self.origin,
+        }
+    }
+
+    /// Apply the text edit on the rope and tree manager. Returns the inverse text edit.
+    pub fn apply(
+        &self,
+        source: &mut Rope,
+        tree_manager: &mut crate::parse::TreeManager,
+    ) -> TextEdit {
         let char_range = self.range.char_range_in(source);
         let byte_range = self.range.byte_range_in(source);
 
         // update buffer
+        let removed = source.get_slice(char_range.clone()).map(|x| x.to_string());
         source.remove(char_range.clone());
         source.insert(char_range.start, &self.text);
 
@@ -93,6 +121,13 @@ impl<'a> TextEdit<'a> {
                 self.range.end.line,
                 self.range.end.col,
             );
+        }
+
+        let affected_range = TextRange::new(self.range.start, self.new_end_point);
+        if let Some(removed) = removed {
+            TextEdit::new(Cow::Owned(removed), affected_range)
+        } else {
+            TextEdit::delete(affected_range)
         }
     }
 
@@ -440,9 +475,20 @@ fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, 
 impl TextEditor {
     /// Apply an edit to the source. Leaves selection unchanged.
     /// NOTE: requires selection to be updated before calling because it updates the pseudo selection based on that.
-    fn apply_edit_helper(&mut self, source: &mut Rope, edit: &TextEdit) {
+    fn apply_edit_helper(
+        &mut self,
+        source: &mut Rope,
+        edit: &TextEdit,
+        undo_stop_before: UndoStopCondition,
+        undo_stop_after: bool,
+    ) {
         // update buffer and tree
-        edit.apply(source, &mut self.tree_manager);
+        let undo = edit.apply(source, &mut self.tree_manager);
+
+        // update undo manager
+        self.undo_manager
+            .add_undo(&undo, edit, undo_stop_before, undo_stop_after);
+        self.undo_manager.clear_redos();
 
         // show cursor whenever text changes
         self.cursor_visible = true;
@@ -456,9 +502,15 @@ impl TextEditor {
 
     /// Apply an edit to the source and selection.
     /// Notifies vscode depending on the origin property of the TextEdit.
-    pub fn apply_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
+    pub fn apply_edit(
+        &mut self,
+        source: &mut Rope,
+        edit: &TextEdit,
+        undo_stop_before: UndoStopCondition,
+        undo_stop_after: bool,
+    ) {
         self.selection = TextRange::new_cursor(edit.new_end());
-        self.apply_edit_helper(source, edit);
+        self.apply_edit_helper(source, edit, undo_stop_before, undo_stop_after);
     }
 
     /// Handle inserting a string at the current selection
@@ -466,7 +518,7 @@ impl TextEditor {
         let old_selection = self.selection.ordered();
         let edit = TextEdit::new(Cow::Borrowed(add), old_selection);
         self.selection = TextRange::new_cursor(edit.new_end());
-        self.apply_edit_helper(source, &edit);
+        self.apply_edit_helper(source, &edit, Always, true);
     }
 
     /// Handle typing a single character
@@ -483,7 +535,7 @@ impl TextEditor {
         self.selection = new_selection;
 
         if let Some(edit) = edit {
-            self.apply_edit_helper(source, &edit);
+            self.apply_edit_helper(source, &edit, IfNotMerged, false);
         }
     }
 
@@ -491,7 +543,7 @@ impl TextEditor {
         let (edit, new_selection) =
             edit_for_insert_newline(self.selection, source, self.language.new_scope_char);
         self.selection = new_selection;
-        self.apply_edit_helper(source, &edit);
+        self.apply_edit_helper(source, &edit, Always, false);
     }
 
     pub fn backspace(&mut self, source: &mut Rope, movement: Movement) {
@@ -505,20 +557,42 @@ impl TextEditor {
         );
         self.selection = new_selection;
         if let Some(edit) = edit {
-            self.apply_edit_helper(source, &edit);
+            self.apply_edit_helper(source, &edit, IfNotMerged, false);
         }
     }
 
     pub fn indent(&mut self, source: &mut Rope) {
         let (edit, new_selection) = edit_for_indent(self.selection, source);
         self.selection = new_selection;
-        self.apply_edit_helper(source, &edit);
+        self.apply_edit_helper(source, &edit, Always, true);
     }
 
     pub fn unindent(&mut self, source: &mut Rope) {
         let (edit, new_selection) = edit_for_unindent(self.selection, source);
         self.selection = new_selection;
-        self.apply_edit_helper(source, &edit);
+        self.apply_edit_helper(source, &edit, Always, true);
+    }
+
+    pub fn undo(&mut self, source: &mut Rope) {
+        if let Some(new_selection) = self.undo_manager.apply_undo(source, &mut self.tree_manager) {
+            self.selection = new_selection;
+
+            // same as apply_edit_helper
+            self.cursor_visible = true;
+            self.text_changed = true;
+            self.find_pseudo_selection(source);
+        }
+    }
+
+    pub fn redo(&mut self, source: &mut Rope) {
+        if let Some(new_selection) = self.undo_manager.apply_redo(source, &mut self.tree_manager) {
+            self.selection = new_selection;
+
+            // same as apply_edit_helper
+            self.cursor_visible = true;
+            self.text_changed = true;
+            self.find_pseudo_selection(source);
+        }
     }
 }
 

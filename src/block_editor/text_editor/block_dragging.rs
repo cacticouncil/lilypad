@@ -6,7 +6,7 @@ use druid::{
 };
 use ropey::Rope;
 
-use super::{TextEdit, TextEditor};
+use super::{undo_manager::UndoStopCondition, TextEdit, TextEditor};
 use crate::{
     block_editor::{
         block_drawer::Block,
@@ -69,7 +69,12 @@ impl TextEditor {
             self.drag_insertion_line = Some(TextPoint::new(block.line, block.col));
 
             // remove dragged block from source
-            self.apply_edit(source, &TextEdit::delete(text_range));
+            self.apply_edit(
+                source,
+                &TextEdit::delete(text_range),
+                UndoStopCondition::Always,
+                false,
+            );
 
             // re-layout the dragging popup
             ctx.children_changed();
@@ -98,7 +103,7 @@ impl TextEditor {
                 Cow::Owned(indented_text),
                 TextRange::new_cursor(insert_point),
             );
-            self.apply_edit(source, &edit);
+            self.apply_edit(source, &edit, UndoStopCondition::Never, true);
 
             // move the cursor from the line after the block to the end of the text
             self.move_cursor(Movement::Grapheme(Direction::Upstream), source);

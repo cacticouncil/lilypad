@@ -12,6 +12,7 @@ use crate::block_editor::{
 };
 
 impl TextEditor {
+    // Set the selection as a result of user input
     fn set_selection(&mut self, selection: TextRange, source: &Rope) {
         self.selection = selection;
         self.find_pseudo_selection(source);
@@ -22,6 +23,9 @@ impl TextEditor {
         // clear input ignore stack
         self.input_ignore_stack.clear();
         self.paired_delete_stack.clear();
+
+        // add a separator to the undo stack
+        self.undo_manager.add_undo_stop()
     }
 
     pub fn find_pseudo_selection(&mut self, source: &Rope) {

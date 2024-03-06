@@ -27,7 +27,7 @@ pub struct ImeComponent {
 impl Default for ImeComponent {
     fn default() -> Self {
         let session = ImeSession {
-            orgin: Point::ZERO,
+            origin: Point::ZERO,
             external_text_change: None,
             external_action: None,
         };
@@ -83,7 +83,7 @@ impl ImeHandlerRef for ImeSessionRef {
 /* --------------------------------- Session -------------------------------- */
 
 pub struct ImeSession {
-    orgin: Point,
+    origin: Point,
     external_text_change: Option<String>,
     external_action: Option<TextAction>,
 }
@@ -156,7 +156,7 @@ impl InputHandler for ImeSessionHandle {
     }
 
     fn slice_bounding_box(&self, _range: std::ops::Range<usize>) -> Option<Rect> {
-        Some(Rect::ZERO.with_origin(self.inner.borrow().orgin))
+        Some(Rect::ZERO.with_origin(self.inner.borrow().origin))
     }
 
     fn handle_action(&mut self, action: druid::text::TextAction) {
