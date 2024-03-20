@@ -1,7 +1,7 @@
 use std::{
     cell::{Cell, RefCell, RefMut},
     ops::Range,
-    sync::{Arc, Weak},
+    rc::{Rc, Weak},
 };
 
 use druid::{
@@ -20,8 +20,8 @@ enum ImeLock {
 /* -------------------------------- Component ------------------------------- */
 
 pub struct ImeComponent {
-    ime_session: Arc<RefCell<ImeSession>>,
-    lock: Arc<Cell<ImeLock>>,
+    ime_session: Rc<RefCell<ImeSession>>,
+    lock: Rc<Cell<ImeLock>>,
 }
 
 impl Default for ImeComponent {
@@ -32,8 +32,8 @@ impl Default for ImeComponent {
             external_action: None,
         };
         ImeComponent {
-            ime_session: Arc::new(RefCell::new(session)),
-            lock: Arc::new(Cell::new(ImeLock::None)),
+            ime_session: Rc::new(RefCell::new(session)),
+            lock: Rc::new(Cell::new(ImeLock::None)),
         }
     }
 }
@@ -41,7 +41,7 @@ impl Default for ImeComponent {
 impl ImeComponent {
     pub fn ime_handler(&self) -> impl ImeHandlerRef {
         ImeSessionRef {
-            inner: Arc::downgrade(&self.ime_session),
+            inner: Rc::downgrade(&self.ime_session),
             lock: self.lock.clone(),
         }
     }
@@ -55,7 +55,7 @@ impl ImeComponent {
 
 struct ImeSessionRef {
     inner: Weak<RefCell<ImeSession>>,
-    lock: Arc<Cell<ImeLock>>,
+    lock: Rc<Cell<ImeLock>>,
 }
 
 impl ImeHandlerRef for ImeSessionRef {
@@ -101,11 +101,11 @@ impl ImeSession {
 /* --------------------------------- Handle --------------------------------- */
 
 struct ImeSessionHandle {
-    inner: Arc<RefCell<ImeSession>>,
+    inner: Rc<RefCell<ImeSession>>,
 }
 
 impl ImeSessionHandle {
-    fn new(inner: Arc<RefCell<ImeSession>>) -> Self {
+    fn new(inner: Rc<RefCell<ImeSession>>) -> Self {
         ImeSessionHandle { inner }
     }
 }

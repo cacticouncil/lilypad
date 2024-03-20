@@ -8,7 +8,7 @@ use crate::{
     theme,
 };
 
-pub fn draw_line_numbers(padding: &Vec<f64>, curr_line: usize, ctx: &mut PaintCtx) {
+pub fn draw_line_numbers(padding: &[f64], curr_line: usize, ctx: &mut PaintCtx) {
     // if document is empty
     if padding.is_empty() {
         let text = make_num_text(1, true, ctx);

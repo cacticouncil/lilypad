@@ -56,20 +56,17 @@ impl UndoManager {
                 }
             }
             // should add a stop before certain characters
-            else if orig_edit.text().starts_with('(')
-                || orig_edit.text().starts_with('[')
-                || orig_edit.text().starts_with('{')
-                || orig_edit.text().starts_with(':')
-                || orig_edit.text().starts_with('"')
-                || orig_edit.text().starts_with('\'')
+            else if ['(', '[', '{', ':', '"', '\'', '.']
+                .iter()
+                .any(|c| orig_edit.text().starts_with(*c))
             {
                 self.add_undo_stop();
             }
         }
 
         // the fewer edits we apply when undoing the better, so try to merge adjacent edits
-        let merged = if let Some(UndoItem::Edit(prev_undo)) = self.undo_stack.last().clone() {
-            Self::merge_edits(&prev_undo, &undo_edit)
+        let merged = if let Some(UndoItem::Edit(prev_undo)) = self.undo_stack.last() {
+            Self::merge_edits(prev_undo, undo_edit)
         } else {
             None
         };

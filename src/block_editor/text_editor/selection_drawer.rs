@@ -1,7 +1,7 @@
 use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
 use ropey::Rope;
 
-use super::TextEditor;
+use super::{TextEditor, TextPoint};
 use crate::{
     block_editor::{
         text_range::TextRange, FONT_HEIGHT, FONT_WIDTH, OUTER_PAD, TOTAL_TEXT_X_OFFSET,
@@ -64,8 +64,7 @@ impl TextEditor {
                 + if line_num != selection.end.line { 1 } else { 0 }; // 1 is added to the width to include the newline
 
             self.draw_selection_block(
-                line_num,
-                line_range.start.col,
+                TextPoint::new(line_num, line_range.start.col),
                 width,
                 total_padding,
                 line_num != selection.start.line,
@@ -82,8 +81,7 @@ impl TextEditor {
 
     fn draw_selection_block(
         &self,
-        line: usize,
-        col: usize,
+        start: TextPoint,
         width: usize,
         padding_above: f64,
         has_block_above: bool,
@@ -94,15 +92,15 @@ impl TextEditor {
         let font_height = *FONT_HEIGHT.get().unwrap();
 
         let line_padding = if has_block_above {
-            self.padding[line]
+            self.padding[start.line]
         } else {
             0.0
         };
 
         let block = Rect::from_origin_size(
             Point::new(
-                (col as f64 * font_width) + TOTAL_TEXT_X_OFFSET,
-                (line as f64 * font_height) + OUTER_PAD + padding_above,
+                (start.col as f64 * font_width) + TOTAL_TEXT_X_OFFSET,
+                (start.line as f64 * font_height) + OUTER_PAD + padding_above,
             ),
             Size::new(width as f64 * font_width, font_height + line_padding),
         );

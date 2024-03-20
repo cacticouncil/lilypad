@@ -34,7 +34,7 @@ impl TextEditor {
             vscode::log_event(
                 "editor-block-drag",
                 HashMap::from([
-                    ("type", block.syntax_type.to_str()),
+                    ("type", block.syntax_type.as_str()),
                     ("lang", self.language.name),
                 ]),
             );

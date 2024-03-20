@@ -208,12 +208,12 @@ fn edit_for_insert_char<'a>(
         let start_char = old_selection.start.char_idx_in(source);
         let (prev_char, next_char) = source.surrounding_chars(start_char);
 
-        let should_insert = if for_string {
+        let should_insert_pair = if for_string {
             let add_char = add.chars().next().unwrap();
-            // if there is a character before, they probably want that to be inside (& allow f strings)
-            !(prev_char.is_alphanumeric() && prev_char != 'f')
-                // if there is a character following, they probably want that to be inside
-                && !next_char.is_alphanumeric()
+
+            // if the user is typing a quote adjacent to an alphanumeric character (excluding f strings),
+            // they are probably closing a string instead of creating a new one, so don't insert a pair
+            !(next_char.is_alphanumeric() || prev_char.is_alphanumeric() && prev_char != 'f')
                 // multiline strings are 3 long, this prevents jumping to 4
                 && prev_char != add_char
                 && next_char != add_char
@@ -223,7 +223,7 @@ fn edit_for_insert_char<'a>(
             !next_char.is_alphanumeric()
         };
 
-        if should_insert {
+        if should_insert_pair {
             input_ignore_stack.push(additional);
             paired_delete_stack.push(true);
             full_add
@@ -778,7 +778,7 @@ mod tests {
             }
         }
 
-        let source_no_markers = str.replace("→", "").replace("←", "");
+        let source_no_markers = str.replace(['→', '←'], "");
         (
             Rope::from(source_no_markers),
             TextRange::new(sel_start, sel_end),

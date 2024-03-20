@@ -54,7 +54,7 @@ impl BlockType {
         lang.categorize_node(node)
     }
 
-    pub const fn to_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         use BlockType::*;
         match self {
             Object => "Object",
@@ -448,11 +448,11 @@ fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
 /* -------------------------------- debugging ------------------------------- */
 
 #[allow(dead_code)]
-pub fn print_blocks_debug(blocks: &Vec<Block>) {
+pub fn print_blocks_debug(blocks: &[Block]) {
     print_blocks_debug_helper(blocks, "", true);
 }
 
-fn print_blocks_debug_helper(blocks: &Vec<Block>, indent: &str, last: bool) {
+fn print_blocks_debug_helper(blocks: &[Block], indent: &str, last: bool) {
     let join_symbol = if last { "└─ " } else { "├─ " };
 
     let new_indent = format!("{}{}", indent, if last { "    " } else { "│  " });

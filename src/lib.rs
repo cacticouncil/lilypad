@@ -224,11 +224,7 @@ pub(crate) use console_log;
 fn panic_hook(info: &PanicInfo) {
     console_error_panic_hook::hook(info);
 
-    vscode::telemetry_crash(
-        info.to_string()
-            .replace("/", ">") // workaround to avoid vscode redacting a non-sensitive path
-            .replace("\\", ">"),
-    );
+    vscode::telemetry_crash(info.to_string().replace(['/', '\\'], ">"));
 
     // don't continue in a broken state
     Application::global().quit();
