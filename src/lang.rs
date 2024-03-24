@@ -69,6 +69,7 @@ pub fn lang_for_file(file_name: &str) -> &'static LanguageConfig {
     match file_name.split('.').last() {
         Some("py") => &PYTHON_LANGUAGE,
         Some("java") => &JAVA_LANGUAGE,
+        Some("cpp") => &CPP_LANGUAGE,
         _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
     }
 }
@@ -154,6 +155,57 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
                     Some(If)
                 }
             }
+            "for_statement" => Some(For),
+            "try_statement" => Some(Try),
+
+            // normal expressions (incomplete)
+            "import_declaration" => Some(Generic),
+            "expression_statement" => Some(Generic),
+            "local_variable_declaration" => {
+                // don't create a block for a for loop's variable declaration
+                if node.parent().map_or("", |p| p.kind()) == "for_statement" {
+                    None
+                } else {
+                    Some(Generic)
+                }
+            }
+            "field_declaration" => Some(Generic),
+            "return_statement" => Some(Generic),
+            "assert_statement" => Some(Generic),
+
+            // comments
+            "line_comment" => Some(Comment),
+            "block_comment" => Some(Comment),
+
+            // dividers to keep generics from merging
+            "block" => Some(Divider),
+
+            // do not handle the rest
+            _ => None,
+        }
+    },
+    string_node_ids: StringNodeIDs {
+        string: 141,
+        string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
+    },
+    palette: &[],
+};
+
+const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
+    name: "cpp",
+    ts_lang: tree_sitter_cpp::language,
+    highlight_query: tree_sitter_cpp::HIGHLIGHT_QUERY,
+    new_scope_char: NewScopeChar::Brace,
+    node_categorizer: |node| {
+        use BlockType::*;
+
+        match node.kind() {
+            // scopes
+            "class_declaration" => Some(Object),
+            "_abstract_declarator" => Some(Object),
+            "function_declarator" => Some(FunctionDef),
+            "while_statement" => Some(While),
+            "if_statement" => Some(If),
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
 
