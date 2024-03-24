@@ -800,6 +800,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "tree-sitter-c2rust",
+ "tree-sitter-cpp",
  "tree-sitter-java",
  "tree-sitter-python",
  "wasm-bindgen",
@@ -1468,6 +1469,15 @@ dependencies = [
  "c2rust-bitfields",
  "once_cell",
  "regex",
+]
+
+[[package]]
+name = "tree-sitter-cpp"
+version = "0.20.5"
+source = "git+https://github.com/singh-maya/tree-sitter-cpp/?branch=wasm#94c6117553e674d7cba5e3d7a92e4c09f1443a7e"
+dependencies = [
+ "cc",
+ "tree-sitter-c2rust",
 ]
 
 [[package]]
