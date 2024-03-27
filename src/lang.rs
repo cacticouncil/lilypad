@@ -188,10 +188,25 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 141,
         string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
     },
-    palette: &[],
+    palette: &[
+        Snippet::new(
+            "if",
+            "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
+        ),
+        Snippet::new(
+            "class",
+            "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
+        ),
+        Snippet::new("while", "while (condition) {\n    \n}\n"),
+        Snippet::new("method", "public void myMethod() {\n    \n}\n"),
+        Snippet::new(
+            "try",
+            "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
+        ),
+    ],
 };
 
-const CS_LANGUAGE: LanguageConfig = LanguageConfig{
+const CS_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "c#",
     ts_lang: tree_sitter_c_sharp::language,
     highlight_query: tree_sitter_c_sharp::HIGHLIGHT_QUERY,
@@ -248,10 +263,19 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig{
         string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
     },
     palette: &[
-        "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
-        "while (condition) {\n    \n}\n",
-        "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
-        "public void myFunction() {\n    \n}\n",
-        "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
+        Snippet::new(
+            "if",
+            "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
+        ),
+        Snippet::new(
+            "class",
+            "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
+        ),
+        Snippet::new("while", "while (condition) {\n    \n}\n"),
+        Snippet::new("func", "public void myFunction() {\n    \n}\n"),
+        Snippet::new(
+            "try",
+            "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
+        ),
     ],
 };
