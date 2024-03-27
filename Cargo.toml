@@ -47,3 +47,7 @@ branch = "wasm"
 [dependencies.tree-sitter-java]
 git = "https://github.com/liamrosenfeld/tree-sitter-java/"
 branch = "wasm"
+
+[dependencies.tree-sitter-c-sharp]
+git = "https://github.com/Alex-Aron/tree-sitter-c-sharp/"
+branch = "new-wasm"
