@@ -6,7 +6,7 @@ use druid::{
 };
 use ropey::Rope;
 
-use super::{gutter_drawer, TextEditor, CURSOR_BLINK_INTERVAL};
+use super::{gutter_drawer, undo_manager::UndoStopCondition, TextEditor, CURSOR_BLINK_INTERVAL};
 use crate::{
     block_editor::{
         self, block_drawer, commands, text_range::TextRange, EditorModel, FONT_HEIGHT, FONT_WIDTH,
@@ -288,7 +288,12 @@ impl Widget<EditorModel> for TextEditor {
                 }
                 // Applying an edit
                 else if let Some(edit) = command.get(commands::APPLY_EDIT) {
-                    self.apply_edit(&mut data.source.lock().unwrap(), edit);
+                    self.apply_edit(
+                        &mut data.source.lock().unwrap(),
+                        edit,
+                        UndoStopCondition::Always,
+                        true,
+                    );
                     ctx.request_layout();
                     ctx.request_paint();
                     ctx.set_handled();
@@ -296,6 +301,18 @@ impl Widget<EditorModel> for TextEditor {
                 // Cancelling a drag by dropping on on another view
                 else if command.get(commands::DRAG_CANCELLED).is_some() {
                     self.drag_insertion_line = None;
+                    ctx.request_paint();
+                    ctx.set_handled();
+                }
+                // Undo/Redo
+                else if command.get(druid::commands::UNDO).is_some() {
+                    self.undo(&mut data.source.lock().unwrap());
+                    ctx.request_layout();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                } else if command.get(druid::commands::REDO).is_some() {
+                    self.redo(&mut data.source.lock().unwrap());
+                    ctx.request_layout();
                     ctx.request_paint();
                     ctx.set_handled();
                 }
@@ -411,7 +428,7 @@ impl Widget<EditorModel> for TextEditor {
         // draw diagnostics
         // TODO: draw higher priorities on top
         for diagnostic in &*data.diagnostics {
-            diagnostic.draw(&self.padding, ctx);
+            diagnostic.draw(&self.padding, &source, ctx);
         }
 
         // draw diagnostic popup (if any)
@@ -421,7 +438,7 @@ impl Widget<EditorModel> for TextEditor {
         self.completion_popup.paint(ctx, data, env);
 
         // draw gutter
-        gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.row, ctx);
+        gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.line, ctx);
 
         // draw cursor
         if ctx.has_focus() {

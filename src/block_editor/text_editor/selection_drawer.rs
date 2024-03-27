@@ -1,12 +1,10 @@
 use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
 use ropey::Rope;
-use std::cmp::Ordering;
 
-use super::TextEditor;
+use super::{TextEditor, TextPoint};
 use crate::{
     block_editor::{
-        rope_ext::RopeSliceExt, text_range::TextRange, FONT_HEIGHT, FONT_WIDTH, OUTER_PAD,
-        TOTAL_TEXT_X_OFFSET,
+        text_range::TextRange, FONT_HEIGHT, FONT_WIDTH, OUTER_PAD, TOTAL_TEXT_X_OFFSET,
     },
     theme,
 };
@@ -15,13 +13,13 @@ impl TextEditor {
     pub fn draw_cursor(&self, ctx: &mut PaintCtx) {
         if self.cursor_visible {
             // we want to draw the cursor where the mouse has last been (selection end)
-            let total_pad: f64 = self.padding.iter().take(self.selection.end.row + 1).sum();
+            let total_pad: f64 = self.padding.iter().take(self.selection.end.line + 1).sum();
             let block = Rect::from_origin_size(
                 Point::new(
                     TOTAL_TEXT_X_OFFSET
                         + (self.selection.end.col as f64) * FONT_WIDTH.get().unwrap(),
                     OUTER_PAD
-                        + (self.selection.end.row as f64) * FONT_HEIGHT.get().unwrap()
+                        + (self.selection.end.line as f64) * FONT_HEIGHT.get().unwrap()
                         + total_pad,
                 ),
                 Size::new(2.0, *FONT_HEIGHT.get().unwrap()),
@@ -50,127 +48,63 @@ impl TextEditor {
         color: &Color,
         ctx: &mut PaintCtx,
     ) {
-        let start_row = selection.start.row;
-        let end_row = selection.end.row;
+        let selection = selection.ordered();
+        let line_ranges = selection.individual_lines(source);
 
-        match end_row.cmp(&start_row) {
-            Ordering::Greater => {
-                // Forward selection, multiple lines
-                // Fill first line from cursor to end
-                // 1 is added to the width to include the newline
-                self.draw_selection_block(
-                    selection.start.col,
-                    selection.start.row,
-                    source.line(start_row).len_chars_no_linebreak() - selection.start.col + 1,
-                    false,
-                    color,
-                    ctx,
-                );
+        // start the the total padding through the first line so the selection
+        // block is placed on the text of the first line (instead of the padding above it)
+        let mut total_padding: f64 = self.padding.iter().take(selection.start.line + 1).sum();
 
-                // fill in any in between lines
-                // 1 is added to the width to include the newline
-                for line in (start_row + 1)..end_row {
-                    self.draw_selection_block(
-                        0,
-                        line,
-                        source.line(line).len_chars_no_linebreak() + 1,
-                        true,
-                        color,
-                        ctx,
-                    );
-                }
+        for line_range in line_ranges {
+            // one line per range so the line number is the start of the range
+            let line_num = line_range.start.line;
 
-                // Fill last line from the left until cursor
-                self.draw_selection_block(
-                    0,
-                    selection.end.row,
-                    selection.end.col,
-                    true,
-                    color,
-                    ctx,
-                );
-            }
-            Ordering::Less => {
-                // Backwards selection, multiple lines
+            // find width of selection block in chars
+            let width = line_range.end.col - line_range.start.col
+                + if line_num != selection.end.line { 1 } else { 0 }; // 1 is added to the width to include the newline
 
-                // Fill first line from cursor to beginning
-                self.draw_selection_block(
-                    0,
-                    selection.start.row,
-                    selection.start.col,
-                    true,
-                    color,
-                    ctx,
-                );
+            self.draw_selection_block(
+                TextPoint::new(line_num, line_range.start.col),
+                width,
+                total_padding,
+                line_num != selection.start.line,
+                color,
+                ctx,
+            );
 
-                // fill in between lines
-                // 1 is added to the width to include the newline
-                for line in (end_row + 1)..start_row {
-                    self.draw_selection_block(
-                        0,
-                        line,
-                        source.line(line).len_chars_no_linebreak() + 1,
-                        true,
-                        color,
-                        ctx,
-                    );
-                }
-
-                // Fill last line from the right until cursor
-                // 1 is added to the width to include the newline
-                self.draw_selection_block(
-                    selection.end.col,
-                    selection.end.row,
-                    source.line(selection.end.row).len_chars_no_linebreak() - selection.end.col + 1,
-                    false,
-                    color,
-                    ctx,
-                );
-            }
-            Ordering::Equal => {
-                // Just one line
-                let ord_sel = selection.ordered();
-                self.draw_selection_block(
-                    ord_sel.start.col,
-                    ord_sel.start.row,
-                    ord_sel.end.col - ord_sel.start.col,
-                    false,
-                    color,
-                    ctx,
-                );
+            // the padding for the first line was adding before the loop
+            if line_num != selection.start.line {
+                total_padding += self.padding[line_num];
             }
         }
     }
 
     fn draw_selection_block(
         &self,
-        x: usize,
-        y: usize,
+        start: TextPoint,
         width: usize,
-        chained_below: bool,
+        padding_above: f64,
+        has_block_above: bool,
         color: &Color,
         ctx: &mut PaintCtx,
     ) {
-        // TODO: don't calculate every time
-        let total_pad: f64 = self
-            .padding
-            .iter()
-            .take(if chained_below { y } else { y + 1 })
-            .sum();
-
         let font_width = *FONT_WIDTH.get().unwrap();
         let font_height = *FONT_HEIGHT.get().unwrap();
 
+        let line_padding = if has_block_above {
+            self.padding[start.line]
+        } else {
+            0.0
+        };
+
         let block = Rect::from_origin_size(
             Point::new(
-                (x as f64 * font_width) + TOTAL_TEXT_X_OFFSET,
-                (y as f64 * font_height) + OUTER_PAD + total_pad,
+                (start.col as f64 * font_width) + TOTAL_TEXT_X_OFFSET,
+                (start.line as f64 * font_height) + OUTER_PAD + padding_above,
             ),
-            Size::new(
-                width as f64 * font_width,
-                font_height + if chained_below { self.padding[y] } else { 0.0 },
-            ),
+            Size::new(width as f64 * font_width, font_height + line_padding),
         );
+
         ctx.fill(block, color);
     }
 }

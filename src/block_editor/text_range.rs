@@ -2,6 +2,8 @@ use ropey::Rope;
 use serde::{Deserialize, Deserializer};
 use std::ops::Range;
 
+use super::rope_ext::RopeSliceExt;
+
 /* ------------------------------- Text Range ------------------------------- */
 
 /// An range of text points. Half open: [start, end).
@@ -31,12 +33,12 @@ impl TextRange {
     }
 
     pub fn ordered(&self) -> TextRange {
-        if self.start.row < self.end.row {
+        if self.start.line < self.end.line {
             TextRange {
                 start: self.start,
                 end: self.end,
             }
-        } else if self.start.row > self.end.row {
+        } else if self.start.line > self.end.line {
             TextRange {
                 start: self.end,
                 end: self.start,
@@ -63,22 +65,60 @@ impl TextRange {
     }
 
     pub fn contains(&self, point: TextPoint, source: &Rope) -> bool {
-        if self.start.row == self.end.row {
+        if self.start.line == self.end.line {
             // if a single line, can just check the column
-            point.row == self.start.row && point.col >= self.start.col && point.col <= self.end.col
-        } else if point.row == self.start.row {
-            // if on the first row, check that the column is greater than the start
-            point.col >= self.start.col
-        } else if point.row == self.end.row {
-            // if on the last row, check that the column is less than the end
-            point.col <= self.end.col
-        } else if point.row < self.start.row || point.row > self.end.row {
-            // if outside the range of rows, it is false
+            point.line == self.start.line
+                && point.col >= self.start.col
+                && point.col <= self.end.col
+        } else if point.line < self.start.line || point.line > self.end.line {
+            // if outside the range of lines, it is false
             false
+        } else if point.line == self.end.line {
+            // if on the last line, check that the column is less than the end
+            point.col <= self.end.col
+        } else if point.line == self.start.line {
+            // if on the first line, check that the column is greater than the start
+            // and less than the end of the line
+            point.col >= self.start.col
+                && point.line < source.len_lines() // make sure the line is in the source
+                && point.col <= source.line(point.line).len_chars()
         } else {
-            // if somewhere in the middle, check the length of the line
-            point.col <= source.line(point.row).len_chars()
+            // if somewhere in the middle, check it is before the end of the line
+            point.line < source.len_lines() // make sure the line is in the source
+                && point.col <= source.line(point.line).len_chars()
         }
+    }
+
+    /// An individual visual text range for each line, with respect to the source rope.
+    /// Note: these ranges are the visual ranges so they leave out the newline characters.
+    pub fn individual_lines(&self, source: &Rope) -> Vec<TextRange> {
+        let mut ranges = Vec::new();
+        let ordered = self.ordered();
+        for line in ordered.start.line..=ordered.end.line {
+            // if the line is outside of the source, don't include it
+            if line >= source.len_lines() {
+                break;
+            }
+
+            // if the line is the start, start at the start of the range
+            // otherwise, start at the beginning of the line
+            let start = if line == ordered.start.line {
+                ordered.start
+            } else {
+                TextPoint::new(line, 0)
+            };
+
+            // if the line is the end, end at the end of the range
+            // otherwise, end at the end of the line
+            let end = if line == ordered.end.line {
+                ordered.end
+            } else {
+                TextPoint::new(line, source.line(line).len_chars_no_linebreak())
+            };
+
+            ranges.push(TextRange::new(start, end));
+        }
+        ranges
     }
 }
 
@@ -92,12 +132,12 @@ impl<'de> Deserialize<'de> for TextRange {
         let arr = json.as_array().unwrap();
         Ok(TextRange::new(
             TextPoint::new(
-                arr[0].get("character").unwrap().as_u64().unwrap() as usize,
                 arr[0].get("line").unwrap().as_u64().unwrap() as usize,
+                arr[0].get("character").unwrap().as_u64().unwrap() as usize,
             ),
             TextPoint::new(
-                arr[1].get("character").unwrap().as_u64().unwrap() as usize,
                 arr[1].get("line").unwrap().as_u64().unwrap() as usize,
+                arr[1].get("character").unwrap().as_u64().unwrap() as usize,
             ),
         ))
     }
@@ -107,33 +147,41 @@ impl<'de> Deserialize<'de> for TextRange {
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct TextPoint {
-    // TODO: flip these
+    pub line: usize,
     pub col: usize,
-    pub row: usize,
 }
 
 impl TextPoint {
-    pub const ZERO: Self = TextPoint { col: 0, row: 0 };
+    pub const ZERO: Self = TextPoint { line: 0, col: 0 };
 
-    pub fn new(col: usize, row: usize) -> TextPoint {
-        TextPoint { col, row }
+    pub fn new(line: usize, col: usize) -> TextPoint {
+        TextPoint { line, col }
     }
 
     pub fn byte_idx_in(&self, source: &Rope) -> usize {
-        let char_idx = source.line_to_char(self.row) + self.col;
+        let char_idx = source.line_to_char(self.line) + self.col;
         source.char_to_byte(char_idx)
     }
 
     pub fn char_idx_in(&self, source: &Rope) -> usize {
-        source.line_to_char(self.row) + self.col
+        source.line_to_char(self.line) + self.col
+    }
+}
+
+impl PartialOrd for TextPoint {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.line.partial_cmp(&other.line) {
+            Some(core::cmp::Ordering::Equal) => self.col.partial_cmp(&other.col),
+            ord => ord,
+        }
     }
 }
 
 impl From<tree_sitter_c2rust::Point> for TextPoint {
     fn from(ts_pt: tree_sitter_c2rust::Point) -> Self {
         TextPoint {
+            line: ts_pt.row,
             col: ts_pt.column,
-            row: ts_pt.row,
         }
     }
 }
@@ -141,7 +189,7 @@ impl From<tree_sitter_c2rust::Point> for TextPoint {
 impl From<TextPoint> for tree_sitter_c2rust::Point {
     fn from(text_pt: TextPoint) -> Self {
         Self {
-            row: text_pt.row,
+            row: text_pt.line,
             column: text_pt.col,
         }
     }

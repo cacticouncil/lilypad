@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
+import { activeLilypadEditor, logger, setActiveLilypadEditor } from "./extension";
 
 export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
-    internalEdit = false;
+    private internalEdit = false;
 
     private static readonly viewType = "lilypad.frameBased";
 
@@ -62,20 +63,40 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             }
         });
 
+        // Tracking which lilypad is active
+        const viewStateSubscription = webviewPanel.onDidChangeViewState(e => {
+            if (e.webviewPanel.active) {
+                setActiveLilypadEditor(webviewPanel.webview);
+            } else if (activeLilypadEditor === e.webviewPanel.webview) {
+                setActiveLilypadEditor(null);
+            }
+        });
+
         // Get rid of the listeners when our editor is closed.
         webviewPanel.onDidDispose(() => {
             changeDocumentSubscription.dispose();
             changeDiagnosticsSubscription.dispose();
+            viewStateSubscription.dispose();
         });
 
         // Receive message from the webview.
         webviewPanel.webview.onDidReceiveMessage(message => {
             switch (message.type) {
                 case "started": {
+                    // give initial text
                     webviewPanel.webview.postMessage({
                         type: "set_text",
                         text: document.getText(),
                     });
+
+                    // send initial diagnostics
+                    webviewPanel.webview.postMessage({
+                        type: "new_diagnostics",
+                        diagnostics: vscode.languages.getDiagnostics(document.uri)
+                    });
+
+                    // set the new webview as the current webview
+                    setActiveLilypadEditor(webviewPanel.webview);
                     break;
                 }
                 case "edited": {
@@ -94,7 +115,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                 }
                 case "get_quick_fixes": {
                     const cursor = new vscode.Range(message.line, message.col,
-                                                    message.line, message.col);
+                        message.line, message.col);
                     vscode.commands.executeCommand<vscode.CodeAction[]>(
                         "vscode.executeCodeActionProvider",
                         document.uri,
@@ -133,37 +154,62 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     }
                     break;
                 }
+                case "telemetry_log": {
+                    logger.logUsage(message.cat, message.info);
+                    break;
+                }
+                case "telemetry_crash": {
+                    logger.logError(new Error(message.msg));
+
+                    // reload the page if crashed
+                    vscode.commands.executeCommand("workbench.action.webview.reloadWebviewAction");
+
+                    break;
+                }
             }
         });
     }
 
+    private editQueue: vscode.WorkspaceEdit[] = [];
+    private applyingEdit = false;
+
     private updateTextDocument(document: vscode.TextDocument, newText: string, range: vscode.Range) {
         const edit = new vscode.WorkspaceEdit();
-        // apply with the correct action
-        // (in case VSCode internals treat them differently)
-        if (range.start.isEqual(range.end)) {
-            // if cursor, do an insert
-            edit.insert(
-                document.uri,
-                range.start,
-                newText
-            );
-        } else if (newText === "") {
-            // if replacing with an empty string, do a delete
-            edit.delete(
-                document.uri,
-                range
-            );
-        } else {
-            // otherwise, do a replace
-            edit.replace(
-                document.uri,
-                range,
-                newText
-            );
+        edit.replace(
+            document.uri,
+            range,
+            newText
+        );
+        this.editQueue.push(edit);
+        this.applyQueueEdit();
+    }
+
+    private applyQueueEdit() {
+        // do nothing if already applying edits
+        if (this.applyingEdit) {
+            return;
         }
-        this.internalEdit = true;
-        return vscode.workspace.applyEdit(edit);
+
+        // apply first element in queue, if it exists
+        let nextEdit = this.editQueue.shift();
+        if (nextEdit) {
+            // don't allow another edit to be applied until this finishes
+            this.applyingEdit = true; 
+
+            // don't cause edit notification cycle
+            this.internalEdit = true; 
+
+            // apply edit, and then trigger the next edit after that
+            vscode.workspace.applyEdit(nextEdit)
+                .then(res => {
+                    if (res) {
+                        this.applyingEdit = false;
+                        this.applyQueueEdit();
+                    } else {
+                        console.error("Failed to apply edit");
+                    }
+                });
+        }
     }
 
     private getHtml(webview: vscode.Webview, document: vscode.TextDocument): string {
@@ -213,5 +259,4 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         </html>
         `;
     }
-
 }

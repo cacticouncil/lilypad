@@ -17,14 +17,14 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn request_fixes(&self) {
-        crate::vscode::request_quick_fixes(self.range.start.row, self.range.start.col);
+        crate::vscode::request_quick_fixes(self.range.start.line, self.range.start.col);
     }
 
     #[allow(dead_code)]
     pub fn example() -> Diagnostic {
         Diagnostic {
             message: "example diagnostic".to_string(),
-            range: TextRange::new(TextPoint::new(18, 2), TextPoint::new(25, 2)),
+            range: TextRange::new(TextPoint::new(2, 18), TextPoint::new(2, 25)),
             severity: DiagnosticSeverity::Error,
             source: "example".to_string(),
             id: rand_u64(),

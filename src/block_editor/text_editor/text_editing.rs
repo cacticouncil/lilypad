@@ -3,7 +3,10 @@ use ropey::Rope;
 use std::borrow::Cow;
 use tree_sitter_c2rust::InputEdit;
 
-use super::TextEditor;
+use super::{
+    undo_manager::UndoStopCondition::{self, *},
+    TextEditor,
+};
 use crate::{
     block_editor::{
         rope_ext::{RopeExt, RopeSliceExt},
@@ -16,7 +19,7 @@ use crate::{
 
 const TAB_SIZE: usize = 4;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TextEdit<'a> {
     text: Cow<'a, str>,
     range: TextRange,
@@ -24,7 +27,7 @@ pub struct TextEdit<'a> {
     origin: TextEditOrigin,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum TextEditOrigin {
     Lilypad,
     Vscode,
@@ -64,11 +67,36 @@ impl<'a> TextEdit<'a> {
         }
     }
 
-    pub fn apply(&self, source: &mut Rope, tree_manager: &mut crate::parse::TreeManager) {
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn range(&self) -> TextRange {
+        self.range
+    }
+
+    // cannot be an implementation of ToOwned because of existing blanked implementation:
+    // https://stackoverflow.com/questions/72385586/implementing-toowned-a-static-for-an-enum-containing-cowa-str-causes
+    pub fn owned_text(&self) -> TextEdit<'static> {
+        TextEdit {
+            text: Cow::Owned(self.text.to_string()),
+            range: self.range,
+            new_end_point: self.new_end_point,
+            origin: self.origin,
+        }
+    }
+
+    /// Apply the text edit on the rope and tree manager. Returns the inverse text edit.
+    pub fn apply(
+        &self,
+        source: &mut Rope,
+        tree_manager: &mut crate::parse::TreeManager,
+    ) -> TextEdit {
         let char_range = self.range.char_range_in(source);
         let byte_range = self.range.byte_range_in(source);
 
         // update buffer
+        let removed = source.get_slice(char_range.clone()).map(|x| x.to_string());
         source.remove(char_range.clone());
         source.insert(char_range.start, &self.text);
 
@@ -88,11 +116,18 @@ impl<'a> TextEdit<'a> {
         if self.origin != TextEditOrigin::Vscode {
             vscode::edited(
                 &self.text,
-                self.range.start.row,
+                self.range.start.line,
                 self.range.start.col,
-                self.range.end.row,
+                self.range.end.line,
                 self.range.end.col,
             );
+        }
+
+        let affected_range = TextRange::new(self.range.start, self.new_end_point);
+        if let Some(removed) = removed {
+            TextEdit::new(Cow::Owned(removed), affected_range)
+        } else {
+            TextEdit::delete(affected_range)
         }
     }
 
@@ -127,8 +162,8 @@ impl<'a> TextEdit<'a> {
         } else {
             0
         } + last_line_len;
-        let end_row = text_range.start.row + line_count - 1;
-        TextPoint::new(end_col, end_row)
+        let end_line = text_range.start.line + line_count - 1;
+        TextPoint::new(end_line, end_col)
     }
 }
 
@@ -144,8 +179,8 @@ fn edit_for_insert_char<'a>(
 
     // move cursor
     let new_selection = TextRange::new_cursor(TextPoint::new(
+        old_selection.start.line,
         old_selection.start.col + add.chars().count(),
-        old_selection.start.row,
     ));
 
     // don't insert if previously automatically inserted
@@ -173,12 +208,12 @@ fn edit_for_insert_char<'a>(
         let start_char = old_selection.start.char_idx_in(source);
         let (prev_char, next_char) = source.surrounding_chars(start_char);
 
-        let should_insert = if for_string {
+        let should_insert_pair = if for_string {
             let add_char = add.chars().next().unwrap();
-            // if there is a character before, they probably want that to be inside (& allow f strings)
-            !(prev_char.is_alphanumeric() && prev_char != 'f')
-                // if there is a character following, they probably want that to be inside
-                && !next_char.is_alphanumeric()
+
+            // if the user is typing a quote adjacent to an alphanumeric character (excluding f strings),
+            // they are probably closing a string instead of creating a new one, so don't insert a pair
+            !(next_char.is_alphanumeric() || prev_char.is_alphanumeric() && prev_char != 'f')
                 // multiline strings are 3 long, this prevents jumping to 4
                 && prev_char != add_char
                 && next_char != add_char
@@ -188,7 +223,7 @@ fn edit_for_insert_char<'a>(
             !next_char.is_alphanumeric()
         };
 
-        if should_insert {
+        if should_insert_pair {
             input_ignore_stack.push(additional);
             paired_delete_stack.push(true);
             full_add
@@ -219,7 +254,7 @@ fn edit_for_insert_newline<'a>(
 
     // find previous indent level and set new line to that many spaces
     let old_selection = selection.ordered();
-    let curr_line = source.line(old_selection.start.row);
+    let curr_line = source.line(old_selection.start.line);
     let prev_indent = curr_line.whitespace_at_start();
 
     let middle_of_bracket = new_scope_char == NewScopeChar::Brace && {
@@ -262,7 +297,7 @@ fn edit_for_insert_newline<'a>(
 
         let edit = TextEdit::new(Cow::Owned(extra_to_insert), old_selection);
         let new_selection =
-            TextRange::new_cursor(TextPoint::new(next_indent, old_selection.start.row + 1));
+            TextRange::new_cursor(TextPoint::new(old_selection.start.line + 1, next_indent));
         (edit, new_selection)
     }
 }
@@ -290,7 +325,7 @@ fn edit_for_backspace<'a>(
                 || movement == Movement::Grapheme(Direction::Left))
         {
             // unindent if at start of line
-            let line_indent = source.line(old_selection.start.row).whitespace_at_start();
+            let line_indent = source.line(old_selection.start.line).whitespace_at_start();
             let at_indent = old_selection.start.col == line_indent;
             if at_indent {
                 let (edit, new_selection) = edit_for_unindent(old_selection, source);
@@ -308,10 +343,10 @@ fn edit_for_backspace<'a>(
             };
 
             TextRange::new(
-                TextPoint::new(old_selection.start.col - 1, old_selection.start.row),
+                TextPoint::new(old_selection.start.line, old_selection.start.col - 1),
                 TextPoint::new(
+                    old_selection.start.line,
                     old_selection.start.col + after_delete_amount,
-                    old_selection.start.row,
                 ),
             )
         } else {
@@ -338,10 +373,10 @@ fn edit_for_indent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, Te
 
     // expand selection to include entire lines
     let full_selection = TextRange::new(
-        TextPoint::new(0, ordered.start.row),
+        TextPoint::new(ordered.start.line, 0),
         TextPoint::new(
-            source.line(ordered.end.row).len_chars_no_linebreak(),
-            ordered.end.row,
+            ordered.end.line,
+            source.line(ordered.end.line).len_chars_no_linebreak(),
         ),
     );
     let mut new_text: Rope = source.slice(full_selection.char_range_in(source)).into();
@@ -360,18 +395,18 @@ fn edit_for_indent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, Te
         let indent = " ".repeat(indent_amount);
 
         // add it
-        let start_of_line = TextPoint::new(0, line_num);
+        let start_of_line = TextPoint::new(line_num, 0);
         new_text.insert(start_of_line.char_idx_in(&new_text), &indent);
 
         // Adjust selection if first or last line if the cursor for that line is in the text.
         // If the line is entirely whitespace, move the cursor anyway.
         // This is more complicated than a single comparison because new_selection can be inverted.
-        if full_selection.start.row + line_num == new_selection.start.row
+        if full_selection.start.line + line_num == new_selection.start.line
             && (new_selection.start.col > curr_indent || line_len == curr_indent)
         {
             new_selection.start.col += indent_amount;
         }
-        if full_selection.start.row + line_num == new_selection.end.row
+        if full_selection.start.line + line_num == new_selection.end.line
             && (new_selection.end.col > curr_indent || line_len == curr_indent)
         {
             new_selection.end.col += indent_amount;
@@ -390,10 +425,10 @@ fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, 
 
     // expand selection to include entire lines
     let full_selection = TextRange::new(
-        TextPoint::new(0, ordered.start.row),
+        TextPoint::new(ordered.start.line, 0),
         TextPoint::new(
-            source.line(ordered.end.row).len_chars_no_linebreak(),
-            ordered.end.row,
+            ordered.end.line,
+            source.line(ordered.end.line).len_chars_no_linebreak(),
         ),
     );
     let mut new_text: Rope = source
@@ -417,16 +452,16 @@ fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, 
             curr_indent % TAB_SIZE
         };
         let remove_range = TextRange::new(
-            TextPoint::new(0, line_num),
-            TextPoint::new(unindent_amount, line_num),
+            TextPoint::new(line_num, 0),
+            TextPoint::new(line_num, unindent_amount),
         );
         new_text.remove(remove_range.char_range_in(&new_text));
 
         // adjust selection if first or last line
-        if full_selection.start.row + line_num == new_selection.start.row {
+        if full_selection.start.line + line_num == new_selection.start.line {
             new_selection.start.col = new_selection.start.col.saturating_sub(unindent_amount);
         }
-        if full_selection.start.row + line_num == new_selection.end.row {
+        if full_selection.start.line + line_num == new_selection.end.line {
             new_selection.end.col = new_selection.end.col.saturating_sub(unindent_amount);
         }
     }
@@ -438,9 +473,22 @@ fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'a>, 
 }
 
 impl TextEditor {
-    fn apply_edit_helper(&mut self, source: &mut Rope, edit: &TextEdit) {
+    /// Apply an edit to the source. Leaves selection unchanged.
+    /// NOTE: requires selection to be updated before calling because it updates the pseudo selection based on that.
+    fn apply_edit_helper(
+        &mut self,
+        source: &mut Rope,
+        edit: &TextEdit,
+        undo_stop_before: UndoStopCondition,
+        undo_stop_after: bool,
+    ) {
         // update buffer and tree
-        edit.apply(source, &mut self.tree_manager);
+        let undo = edit.apply(source, &mut self.tree_manager);
+
+        // update undo manager
+        self.undo_manager
+            .add_undo(&undo, edit, undo_stop_before, undo_stop_after);
+        self.undo_manager.clear_redos();
 
         // show cursor whenever text changes
         self.cursor_visible = true;
@@ -454,16 +502,23 @@ impl TextEditor {
 
     /// Apply an edit to the source and selection.
     /// Notifies vscode depending on the origin property of the TextEdit.
-    pub fn apply_edit(&mut self, source: &mut Rope, edit: &TextEdit) {
-        self.apply_edit_helper(source, edit);
+    pub fn apply_edit(
+        &mut self,
+        source: &mut Rope,
+        edit: &TextEdit,
+        undo_stop_before: UndoStopCondition,
+        undo_stop_after: bool,
+    ) {
         self.selection = TextRange::new_cursor(edit.new_end());
+        self.apply_edit_helper(source, edit, undo_stop_before, undo_stop_after);
     }
 
     /// Handle inserting a string at the current selection
     pub fn insert_str(&mut self, source: &mut Rope, add: &str) {
         let old_selection = self.selection.ordered();
         let edit = TextEdit::new(Cow::Borrowed(add), old_selection);
-        self.apply_edit_helper(source, &edit);
+        self.selection = TextRange::new_cursor(edit.new_end());
+        self.apply_edit_helper(source, &edit, Always, true);
     }
 
     /// Handle typing a single character
@@ -480,7 +535,7 @@ impl TextEditor {
         self.selection = new_selection;
 
         if let Some(edit) = edit {
-            self.apply_edit_helper(source, &edit);
+            self.apply_edit_helper(source, &edit, IfNotMerged, false);
         }
     }
 
@@ -488,7 +543,7 @@ impl TextEditor {
         let (edit, new_selection) =
             edit_for_insert_newline(self.selection, source, self.language.new_scope_char);
         self.selection = new_selection;
-        self.apply_edit_helper(source, &edit);
+        self.apply_edit_helper(source, &edit, Always, false);
     }
 
     pub fn backspace(&mut self, source: &mut Rope, movement: Movement) {
@@ -502,20 +557,42 @@ impl TextEditor {
         );
         self.selection = new_selection;
         if let Some(edit) = edit {
-            self.apply_edit_helper(source, &edit);
+            self.apply_edit_helper(source, &edit, IfNotMerged, false);
         }
     }
 
     pub fn indent(&mut self, source: &mut Rope) {
         let (edit, new_selection) = edit_for_indent(self.selection, source);
-        self.apply_edit_helper(source, &edit);
         self.selection = new_selection;
+        self.apply_edit_helper(source, &edit, Always, true);
     }
 
     pub fn unindent(&mut self, source: &mut Rope) {
         let (edit, new_selection) = edit_for_unindent(self.selection, source);
-        self.apply_edit_helper(source, &edit);
         self.selection = new_selection;
+        self.apply_edit_helper(source, &edit, Always, true);
+    }
+
+    pub fn undo(&mut self, source: &mut Rope) {
+        if let Some(new_selection) = self.undo_manager.apply_undo(source, &mut self.tree_manager) {
+            self.selection = new_selection;
+
+            // same as apply_edit_helper
+            self.cursor_visible = true;
+            self.text_changed = true;
+            self.find_pseudo_selection(source);
+        }
+    }
+
+    pub fn redo(&mut self, source: &mut Rope) {
+        if let Some(new_selection) = self.undo_manager.apply_redo(source, &mut self.tree_manager) {
+            self.selection = new_selection;
+
+            // same as apply_edit_helper
+            self.cursor_visible = true;
+            self.text_changed = true;
+            self.find_pseudo_selection(source);
+        }
     }
 }
 
@@ -524,15 +601,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_insert() {
+    fn test_char_insert() {
         // insert single line
-        plan_insert_test("print('hell→←')", "o", "print('hello→←')");
+        char_insert_test("print('hell→←')", "o", "print('hello→←')");
 
         // replace single line
-        plan_insert_test("print('wo→rld←')", "o", "print('woo→←')");
+        char_insert_test("print('wo→rld←')", "o", "print('woo→←')");
 
         // replace multi line
-        plan_insert_test(
+        char_insert_test(
             "print('hell→a world')\nprint('hello← world')",
             "o",
             "print('hello→← world')",
@@ -640,7 +717,7 @@ mod tests {
     }
 
     /* --------------------------------- helpers -------------------------------- */
-    fn plan_insert_test(start: &str, add: &str, target: &str) {
+    fn char_insert_test(start: &str, add: &str, target: &str) {
         let (mut src, start_sel) = generate_state(start);
         let (target_src, target_sel) = generate_state(target);
         let (edit, end_sel) =
@@ -685,10 +762,10 @@ mod tests {
             let end = line.chars().position(|c| c == '←');
 
             if let Some(start) = start {
-                sel_start = TextPoint::new(start, line_num);
+                sel_start = TextPoint::new(line_num, start);
             }
             if let Some(end) = end {
-                sel_end = TextPoint::new(end, line_num);
+                sel_end = TextPoint::new(line_num, end);
             }
 
             // if on the same line, adjust the second to account for the first being removed
@@ -701,7 +778,7 @@ mod tests {
             }
         }
 
-        let source_no_markers = str.replace("→", "").replace("←", "");
+        let source_no_markers = str.replace(['→', '←'], "");
         (
             Rope::from(source_no_markers),
             TextRange::new(sel_start, sel_end),

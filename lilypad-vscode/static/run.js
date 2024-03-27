@@ -1,4 +1,4 @@
-import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, insert_text, new_diagnostics, set_quick_fixes, set_completions } from "./lilypad_web.js";
+import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, insert_text, new_diagnostics, set_quick_fixes, set_completions, undo, redo } from "./lilypad_web.js";
 
 async function run() {
   await init();
@@ -67,6 +67,21 @@ export function executeWorkspaceEdit(edit) {
   });
 }
 
+export function telemetryEvent(cat, info) {
+  vscode.postMessage({
+    type: "telemetry_log",
+    cat: cat,
+    info: Object.fromEntries(info) 
+  });
+}
+
+export function telemetryCrash(msg) {
+  vscode.postMessage({
+    type: "telemetry_crash",
+    msg: msg,
+  });
+}
+
 // extension -> web view messages
 window.addEventListener("message", event => {
   const message = event.data;
@@ -85,6 +100,12 @@ window.addEventListener("message", event => {
       break;
     case "return_completions":
       set_completions(message.completions);
+      break;
+    case "undo":
+      undo();
+      break;
+    case "redo":
+      redo();
       break;
   }
 });

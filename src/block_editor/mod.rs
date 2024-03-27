@@ -5,6 +5,7 @@ use ropey::Rope;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::lang::{lang_for_file, LanguageConfig};
+use crate::vscode;
 
 mod block_drawer;
 pub mod commands;
@@ -103,6 +104,10 @@ pub struct EditorModel {
 impl BlockEditor {
     fn new(file_name: &str) -> Self {
         let lang = lang_for_file(file_name);
+        vscode::log_event(
+            "opened-file",
+            std::collections::HashMap::from([("lang", lang.name)]),
+        );
         BlockEditor {
             language: lang,
             content: WidgetPod::new(Self::make_content(lang)),

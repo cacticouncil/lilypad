@@ -2,6 +2,7 @@ use druid::{
     piet::{PietTextLayout, Text, TextLayoutBuilder},
     Color, Event, MouseButton, PaintCtx, Point, RenderContext, Size, Widget,
 };
+use ropey::Rope;
 
 use crate::{
     block_editor::{
@@ -51,9 +52,9 @@ impl DiagnosticPopup {
         }
 
         // find the vertical start by finding top of line and then subtracting box size
-        let total_padding: f64 = padding.iter().take(diagnostic.range.start.row + 1).sum();
+        let total_padding: f64 = padding.iter().take(diagnostic.range.start.line + 1).sum();
         let y =
-            total_padding + (diagnostic.range.start.row as f64 * font_height) + OUTER_PAD - height;
+            total_padding + (diagnostic.range.start.line as f64 * font_height) + OUTER_PAD - height;
 
         // find the horizontal start
         let x =
@@ -208,23 +209,30 @@ impl Widget<EditorModel> for DiagnosticPopup {
 }
 
 impl Diagnostic {
-    pub fn draw(&self, padding: &[f64], ctx: &mut PaintCtx) {
-        // TODO: multiline diagnostic underlines
-        // could probably share the same logic as selections
+    pub fn draw(&self, padding: &[f64], source: &Rope, ctx: &mut PaintCtx) {
+        let range = self.range.ordered();
+        let line_ranges = range.individual_lines(source);
 
-        // find bottom of current line
-        let total_padding: f64 = padding.iter().take(self.range.start.row + 1).sum();
-        let y = total_padding
-            + ((self.range.start.row + 1) as f64 * FONT_HEIGHT.get().unwrap())
-            + OUTER_PAD;
+        let mut total_padding: f64 = padding.iter().take(range.start.line).sum();
 
-        // find the start and end of the line
-        let x = TOTAL_TEXT_X_OFFSET + (self.range.start.col as f64 * FONT_WIDTH.get().unwrap());
-        let width = (self.range.end.col - self.range.start.col) as f64 * FONT_WIDTH.get().unwrap();
+        for line_range in line_ranges {
+            let line_num = line_range.start.line;
 
-        // draw
-        let line = druid::kurbo::Line::new((x, y), (x + width, y));
-        ctx.stroke(line, &self.severity.color(), 2.0);
+            total_padding += padding[line_num];
+
+            // find bottom of current line
+            let y =
+                total_padding + ((line_num + 1) as f64 * FONT_HEIGHT.get().unwrap()) + OUTER_PAD;
+
+            // find the start and end of the line
+            let x = TOTAL_TEXT_X_OFFSET + (line_range.start.col as f64 * FONT_WIDTH.get().unwrap());
+            let width =
+                (line_range.end.col - line_range.start.col) as f64 * FONT_WIDTH.get().unwrap();
+
+            // draw line
+            let line = druid::kurbo::Line::new((x, y), (x + width, y));
+            ctx.stroke(line, &self.severity.color(), 2.0);
+        }
     }
 }
 

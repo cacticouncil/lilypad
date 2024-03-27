@@ -35,8 +35,8 @@ impl CompletionPopup {
 
     pub fn calc_origin(&self, padding: &[f64], cursor: TextPoint) -> Point {
         // find the bottom of the current selection
-        let total_padding: f64 = padding.iter().take(cursor.row + 1).sum();
-        let y = (cursor.row as f64 + 2.0) * *FONT_HEIGHT.get().unwrap() + total_padding;
+        let total_padding: f64 = padding.iter().take(cursor.line + 1).sum();
+        let y = (cursor.line as f64 + 2.0) * *FONT_HEIGHT.get().unwrap() + total_padding;
         let x = (cursor.col as f64) * *FONT_WIDTH.get().unwrap() + TOTAL_TEXT_X_OFFSET;
         Point::new(x, y)
     }
@@ -54,7 +54,7 @@ impl CompletionPopup {
 
         // if we are at the start of the line, do not do anything
         // return does not trigger, but backspace does
-        if source.line(cursor.row).whitespace_at_start() == cursor.col {
+        if source.line(cursor.line).whitespace_at_start() == cursor.col {
             return;
         }
 
@@ -62,7 +62,7 @@ impl CompletionPopup {
         self.text_cursor = cursor;
 
         // request
-        vscode::request_completions(cursor.row, cursor.col)
+        vscode::request_completions(cursor.line, cursor.col)
     }
 
     fn calc_size(&self) -> Size {
@@ -102,7 +102,7 @@ impl CompletionPopup {
         // indent newlines with the current indentation level
         let mut text = completion.clone();
         if text.contains('\n') {
-            let indent_count = source.line(self.text_cursor.row).whitespace_at_start();
+            let indent_count = source.line(self.text_cursor.line).whitespace_at_start();
             let newline_with_indent = &format!("\n{}", " ".repeat(indent_count));
             text = text.replace('\n', newline_with_indent);
         }
@@ -112,7 +112,7 @@ impl CompletionPopup {
 
     fn range_of_word_before_cursor(&self, source: &Rope) -> TextRange {
         let mut start = self.text_cursor;
-        let curr_line = source.line(start.row);
+        let curr_line = source.line(start.line);
         start.col = start.col.min(curr_line.len_chars());
         while start.col > 0 {
             let c = curr_line.char(start.col - 1);
@@ -208,7 +208,7 @@ impl Widget<EditorModel> for CompletionPopup {
                     let source = &data.source.lock().unwrap();
                     let prefix_range = self.range_of_word_before_cursor(source);
                     let prefix = source
-                        .line(prefix_range.start.row)
+                        .line(prefix_range.start.line)
                         .slice(prefix_range.start.col..prefix_range.end.col)
                         .to_string()
                         .to_lowercase();

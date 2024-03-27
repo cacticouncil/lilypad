@@ -155,6 +155,8 @@ impl AppDelegate<AppModel> for LilypadAppDelegate {
 
 // temp shim
 pub(crate) mod vscode {
+    use std::collections::HashMap;
+
     pub fn started() {}
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
     pub fn set_clipboard(_: String) {}
@@ -162,6 +164,7 @@ pub(crate) mod vscode {
     pub fn request_completions(_: usize, _: usize) {}
     pub fn execute_command(_: String, _: wasm_bindgen::JsValue) {}
     pub fn execute_workspace_edit(_: wasm_bindgen::JsValue) {}
+    pub fn log_event(_: &'static str, _: HashMap<&'static str, &str>) {}
 }
 
 pub(crate) use println as console_log;

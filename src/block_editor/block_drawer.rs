@@ -55,6 +55,22 @@ impl BlockType {
 
         lang.categorize_node(node)
     }
+
+    pub const fn as_str(&self) -> &'static str {
+        use BlockType::*;
+        match self {
+            Object => "Object",
+            FunctionDef => "FunctionDef",
+            While => "While",
+            If => "If",
+            For => "For",
+            Try => "Try",
+            Generic => "Generic",
+            Comment => "Comment",
+            Error => "Error",
+            Divider => "Divider",
+        }
+    }
 }
 
 pub struct Block {
@@ -86,16 +102,10 @@ impl Block {
     }
 
     pub fn text_range(&self) -> TextRange {
-        TextRange {
-            start: TextPoint {
-                col: self.col,
-                row: self.line,
-            },
-            end: TextPoint {
-                col: 0,
-                row: self.line + self.height,
-            },
-        }
+        TextRange::new(
+            TextPoint::new(self.line, self.col),
+            TextPoint::new(self.line + self.height, 0),
+        )
     }
 }
 
@@ -428,9 +438,9 @@ fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
         if block.syntax_type != BlockType::Divider {
             padding[block.line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
 
-            let end_row = block.line + block.height;
-            if end_row < padding.len() {
-                padding[end_row] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
+            let end_line = block.line + block.height;
+            if end_line < padding.len() {
+                padding[end_line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
             }
         }
         padding_helper(&block.children, padding);
@@ -440,11 +450,11 @@ fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
 /* -------------------------------- debugging ------------------------------- */
 
 #[allow(dead_code)]
-pub fn print_blocks_debug(blocks: &Vec<Block>) {
+pub fn print_blocks_debug(blocks: &[Block]) {
     print_blocks_debug_helper(blocks, "", true);
 }
 
-fn print_blocks_debug_helper(blocks: &Vec<Block>, indent: &str, last: bool) {
+fn print_blocks_debug_helper(blocks: &[Block], indent: &str, last: bool) {
     let join_symbol = if last { "└─ " } else { "├─ " };
 
     let new_indent = format!("{}{}", indent, if last { "    " } else { "│  " });

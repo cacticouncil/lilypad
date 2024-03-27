@@ -20,7 +20,7 @@ pub struct LanguageConfig {
     pub string_node_ids: StringNodeIDs,
 
     /// Snippets to use for the palette. Must end with a newline.
-    pub palette: &'static [&'static str],
+    pub palette: &'static [Snippet],
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -42,6 +42,17 @@ impl NewScopeChar {
 pub struct StringNodeIDs {
     pub string: u16,
     pub string_bounds: &'static [u16],
+}
+
+pub struct Snippet {
+    pub id: &'static str,
+    pub source: &'static str,
+}
+
+impl Snippet {
+    pub const fn new(id: &'static str, source: &'static str) -> Snippet {
+        Snippet { id, source }
+    }
 }
 
 impl LanguageConfig {
@@ -104,11 +115,20 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
         string_bounds: &[104, 107], // 104 is string start, 107 is string end
     },
     palette: &[
-        "if condition:\n    pass\nelif condition:\n    pass\nelse:\n    pass\n",
-        "while condition:\n    pass\n",
-        "class Class:\n    def __init__(self):\n        pass\n",
-        "def function():\n    pass\n",
-        "try:\n    pass\nexcept:\n    pass\nelse:\n    pass\nfinally:\n    pass\n",
+        Snippet::new(
+            "if",
+            "if condition:\n    pass\nelif condition:\n    pass\nelse:\n    pass\n",
+        ),
+        Snippet::new("while", "while condition:\n    pass\n"),
+        Snippet::new(
+            "class",
+            "class Class:\n    def __init__(self):\n        pass\n",
+        ),
+        Snippet::new("func", "def function():\n    pass\n"),
+        Snippet::new(
+            "try",
+            "try:\n    pass\nexcept:\n    pass\nelse:\n    pass\nfinally:\n    pass\n",
+        ),
     ],
 };
 
