@@ -26,3 +26,8 @@ pub unsafe extern "C" fn free(ptr: *mut u8) {
     let layout = Layout::from_size_align_unchecked(0, std::mem::align_of::<u8>());
     alloc::dealloc(ptr, layout);
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn iswspace(c: i32) -> bool {
+    char::from_u32(c as u32).map_or(false, |c| c.is_whitespace())
+}
