@@ -8,7 +8,14 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
 
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         const provider = new LilypadEditorProvider(context);
-        const providerRegistration = vscode.window.registerCustomEditorProvider(LilypadEditorProvider.viewType, provider);
+        const options: vscode.WebviewPanelOptions = {
+            retainContextWhenHidden: true,
+        };
+        const providerRegistration = vscode.window.registerCustomEditorProvider(
+            LilypadEditorProvider.viewType,
+            provider,
+            { webviewOptions: options }
+        );
         return providerRegistration;
     }
 
