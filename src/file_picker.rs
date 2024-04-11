@@ -112,7 +112,7 @@ impl Widget<AppModel> for FilePicker {
         }
 
         for (num, file) in self.files.iter().enumerate() {
-            let layout = make_label_text_layout(file, ctx);
+            let layout = make_label_text_layout(file, ctx.text());
 
             let pos = Point::new(0.0, ROW_HEIGHT * num as f64);
 

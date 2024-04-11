@@ -4,7 +4,7 @@
   "displayName": "Lilypad",
   "description": "Lilypad editor for VSCode",
   "repository": "https://github.com/cacticouncil/lilypad",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "icon": "lilypadIcon.png",
   "extensionKind": [
     "ui"
@@ -32,6 +32,9 @@
           },
           {
             "filenamePattern": "*.java"
+          },
+          {
+            "filenamePattern": "*.cs"
           }
         ],
         "priority": "default"

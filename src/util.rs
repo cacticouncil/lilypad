@@ -1,19 +1,18 @@
 use druid::{
-    piet::{PietTextLayout, Text, TextLayoutBuilder},
+    piet::{PietText, PietTextLayout, Text, TextLayoutBuilder},
     text::FontFamily,
-    PaintCtx,
 };
 
 use crate::theme;
 
-pub fn make_label_text_layout(text: &str, ctx: &mut PaintCtx) -> PietTextLayout {
+pub fn make_label_text_layout(text: &str, factory: &mut PietText) -> PietTextLayout {
     let font_family = if cfg!(target_os = "macos") {
         FontFamily::new_unchecked("SF Pro Text")
     } else {
         FontFamily::new_unchecked("Helvetica")
     };
 
-    ctx.text()
+    factory
         .new_text_layout(text.to_string())
         .font(font_family, 15.0)
         .text_color(theme::INTERFACE_TEXT)

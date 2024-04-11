@@ -19,6 +19,7 @@ pub enum BlockType {
     If,
     For,
     Try,
+    Switch,
     Generic,
     Comment,
     Error,
@@ -37,6 +38,7 @@ impl BlockType {
             If => Some(IF),
             For => Some(FOR),
             Try => Some(TRY),
+            Switch => Some(SWITCH),
             Generic => Some(GENERIC),
             Comment => None,
             Error => Some(ERROR),
@@ -63,6 +65,7 @@ impl BlockType {
             If => "If",
             For => "For",
             Try => "Try",
+            Switch => "Switch",
             Generic => "Generic",
             Comment => "Comment",
             Error => "Error",
@@ -81,9 +84,7 @@ pub struct Block {
 
 impl Block {
     fn from_node(node: &Node, lang: &LanguageConfig) -> Option<Self> {
-        let Some(syntax_type) = BlockType::from_node(node, lang) else {
-            return None;
-        };
+        let syntax_type = BlockType::from_node(node, lang)?;
         let start_pos = node.start_position();
         let end_pos = node.end_position();
         Some(Block {

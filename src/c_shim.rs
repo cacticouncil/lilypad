@@ -28,6 +28,6 @@ pub unsafe extern "C" fn free(ptr: *mut u8) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn iswspace(c: char) -> bool {
-    c.is_whitespace()
+pub unsafe extern "C" fn iswspace(c: i32) -> bool {
+    char::from_u32(c as u32).map_or(false, |c| c.is_whitespace())
 }
