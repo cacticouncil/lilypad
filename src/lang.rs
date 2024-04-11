@@ -201,35 +201,27 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
 
         match node.kind() {
             // scopes
-            "class_declaration" => Some(Object),
-            "_abstract_declarator" => Some(Object),
-            "function_declarator" => Some(FunctionDef),
+            "class_specifier" => Some(Object),
+            "abstract_function_declarator" => Some(Object),
+            "function_definition" => Some(FunctionDef),
             "while_statement" => Some(While),
             "if_statement" => Some(If),
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
 
-            // normal expressions (incomplete)
-            "import_declaration" => Some(Generic),
-            "expression_statement" => Some(Generic),
-            "local_variable_declaration" => {
-                // don't create a block for a for loop's variable declaration
-                if node.parent().map_or("", |p| p.kind()) == "for_statement" {
-                    None
-                } else {
-                    Some(Generic)
-                }
-            }
-            "field_declaration" => Some(Generic),
-            "return_statement" => Some(Generic),
-            "assert_statement" => Some(Generic),
+           // normal expressions (incomplete)
+            "preproc_include" => Some(Generic),
+            "expression_statement" =>Some(Generic),
+            "continue_statement" => Some(Generic),
+            "break_statement" => Some(Generic),
+            "pass_statement" => Some(Generic),
 
             // comments
-            "line_comment" => Some(Comment),
-            "block_comment" => Some(Comment),
+            "comment" => Some(Comment),
 
             // dividers to keep generics from merging
-            "block" => Some(Divider),
+            "else_clause" => Some(Divider),
+            "except_clause" => Some(Divider),
 
             // do not handle the rest
             _ => None,
@@ -237,7 +229,7 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
     },
     string_node_ids: StringNodeIDs {
         string: 141,
-        string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
+        string_bounds: &[12], // 11 is single quote, 12 is double quote
     },
     palette: &[],
 };
