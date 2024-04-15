@@ -5,10 +5,12 @@ use crate::lsp::{
     completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCodeAction},
 };
+use crate::theme::blocks_theme::BlocksTheme;
 
 // set up
 pub const SET_TEXT: Selector<String> = Selector::new("set_text");
 pub const SET_FILE_NAME: Selector<String> = Selector::new("set_file_name");
+pub const SET_BLOCK_THEME: Selector<BlocksTheme> = Selector::new("set_block_theme");
 
 // external edits
 pub const APPLY_EDIT: Selector<TextEdit> = Selector::new("apply_edit");

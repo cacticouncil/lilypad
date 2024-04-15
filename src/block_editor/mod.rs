@@ -5,6 +5,7 @@ use ropey::Rope;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::lang::{lang_for_file, LanguageConfig};
+use crate::theme::blocks_theme::BlocksTheme;
 use crate::vscode;
 
 mod block_drawer;
@@ -89,6 +90,10 @@ pub struct DragSession {
 pub struct EditorModel {
     /// the source code to edit
     pub source: Arc<Mutex<Rope>>,
+
+    /// the color theme for the blocks
+    #[data(eq)]
+    pub block_theme: BlocksTheme,
 
     /// diagnostics for current cursor position
     pub diagnostics: Arc<Vec<Diagnostic>>,
@@ -176,6 +181,8 @@ impl Widget<EditorModel> for BlockEditor {
                         self.language = new_lang;
                         self.dragging_popup.widget_mut().change_language(new_lang);
                     }
+                } else if let Some(block_theme) = command.get(commands::SET_BLOCK_THEME) {
+                    data.block_theme = *block_theme;
                 }
             }
 
@@ -197,12 +204,16 @@ impl Widget<EditorModel> for BlockEditor {
     fn update(
         &mut self,
         ctx: &mut druid::UpdateCtx,
-        _old_data: &EditorModel,
+        old_data: &EditorModel,
         data: &EditorModel,
         env: &druid::Env,
     ) {
         self.dragging_popup.update(ctx, data, env);
         self.content.update(ctx, data, env);
+
+        if data.block_theme != old_data.block_theme {
+            ctx.request_paint();
+        }
     }
 
     fn layout(

@@ -10,6 +10,7 @@ use std::{
     panic::{self, PanicInfo},
     sync::{Arc, Mutex, OnceLock},
 };
+use theme::blocks_theme::BlocksTheme;
 use wasm_bindgen::prelude::*;
 
 use block_editor::{commands, text_editor::TextEdit, EditorModel};
@@ -24,10 +25,10 @@ pub mod c_shim;
 
 /* ----- Javascript -> WASM ----- */
 #[wasm_bindgen]
-pub fn run_editor(file_name: String, font_name: String, font_size: f64) {
+pub fn run_editor(file_name: String, font_name: String, font_size: f64, block_theme: &str) {
     // send panic messages to console + telemetry
     panic::set_hook(Box::new(panic_hook));
-    main(file_name, font_name, font_size).expect("could not launch")
+    main(file_name, font_name, font_size, block_theme).expect("could not launch")
 }
 
 #[wasm_bindgen]
@@ -98,6 +99,20 @@ pub fn insert_text(text: String) {
     if let Some(sink) = EVENT_SINK.get() {
         sink.submit_command(commands::PASTE, text, Target::Global)
             .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
+#[wasm_bindgen]
+pub fn set_block_theme(theme: String) {
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(
+            commands::SET_BLOCK_THEME,
+            BlocksTheme::for_str(&theme),
+            Target::Global,
+        )
+        .unwrap();
     } else {
         console_log!("could not get sink");
     }
@@ -236,12 +251,18 @@ static EVENT_SINK: OnceLock<Arc<ExtEventSink>> = OnceLock::new();
 
 pub type GlobalModel = EditorModel;
 
-fn main(file_name: String, font_name: String, font_size: f64) -> Result<(), PlatformError> {
+fn main(
+    file_name: String,
+    font_name: String,
+    font_size: f64,
+    block_theme: &str,
+) -> Result<(), PlatformError> {
     block_editor::configure_font(font_name, font_size);
 
     // start with empty string
     let data = EditorModel {
         source: Arc::new(Mutex::new(ropey::Rope::new())),
+        block_theme: BlocksTheme::for_str(block_theme),
         diagnostics: Arc::new(vec![]),
         diagnostic_selection: None,
         drag_block: None,
