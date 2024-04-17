@@ -1,4 +1,7 @@
-use druid::{piet::PietText, Event, LifeCycle, MouseButton, Point, RenderContext, Size, Widget};
+use druid::{
+    piet::{PietText, TextLayout},
+    Event, LifeCycle, MouseButton, Point, RenderContext, Size, Widget,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -13,6 +16,7 @@ use crate::{
 };
 
 pub struct BlockPalette {
+    shown: bool,
     lang: &'static LanguageConfig,
     items: Vec<PaletteItem>,
 }
@@ -34,6 +38,7 @@ impl PaletteItem {
 impl BlockPalette {
     pub fn new(lang: &'static LanguageConfig) -> Self {
         Self {
+            shown: true,
             lang,
             items: vec![],
         }
@@ -54,9 +59,9 @@ impl BlockPalette {
     }
 }
 
-const H_PADDING: f64 = 5.0;
+const H_PADDING: f64 = 10.0;
 const V_PADDING: f64 = 8.0;
-const HEADING_PADDING: f64 = 25.0;
+const HEADING_HEIGHT: f64 = 30.0;
 
 impl Widget<EditorModel> for BlockPalette {
     fn event(
@@ -69,23 +74,34 @@ impl Widget<EditorModel> for BlockPalette {
         match event {
             Event::MouseDown(mouse) => {
                 if mouse.button == MouseButton::Left {
+                    // toggle shown if clicked on arrow
+                    // sloppy hit box but close enough
+                    if mouse.pos.y <= HEADING_HEIGHT && mouse.pos.x >= ctx.size().width - 30.0 {
+                        self.shown = !self.shown;
+                        ctx.request_layout();
+                        ctx.request_paint();
+                        return;
+                    }
+
                     // start dragging the selected item
-                    let mut y = HEADING_PADDING;
-                    for item in self.items.iter() {
-                        if mouse.pos.y >= y && mouse.pos.y <= y + item.block.size().height {
-                            vscode::log_event(
-                                "palette-blog-drag",
-                                HashMap::from([("type", item.id), ("lang", self.lang.name)]),
-                            );
+                    if self.shown {
+                        let mut y = HEADING_HEIGHT;
+                        for item in self.items.iter() {
+                            if mouse.pos.y >= y && mouse.pos.y <= y + item.block.size().height {
+                                vscode::log_event(
+                                    "palette-blog-drag",
+                                    HashMap::from([("type", item.id), ("lang", self.lang.name)]),
+                                );
 
-                            data.drag_block = Some(Arc::new(DragSession {
-                                text: item.block.text().to_string(),
-                                offset: Point::new(mouse.pos.x - H_PADDING, mouse.pos.y - y),
-                            }));
-                            break;
+                                data.drag_block = Some(Arc::new(DragSession {
+                                    text: item.block.text().to_string(),
+                                    offset: Point::new(mouse.pos.x - H_PADDING, mouse.pos.y - y),
+                                }));
+                                break;
+                            }
+
+                            y += item.block.size().height + V_PADDING;
                         }
-
-                        y += item.block.size().height + V_PADDING;
                     }
                 }
             }
@@ -135,38 +151,65 @@ impl Widget<EditorModel> for BlockPalette {
 
     fn layout(
         &mut self,
-        _ctx: &mut druid::LayoutCtx,
+        ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
         _data: &EditorModel,
         _env: &druid::Env,
     ) -> druid::Size {
-        let mut size = Size::ZERO;
-
-        for item in &self.items {
-            size.width = f64::max(size.width, item.block.size().width);
-            size.height += item.block.size().height + V_PADDING;
-        }
+        let size = if self.shown {
+            let mut size = Size::ZERO;
+            for item in &self.items {
+                size.width = f64::max(size.width, item.block.size().width);
+                size.height += item.block.size().height + V_PADDING;
+            }
+            size
+        } else {
+            let button = make_label_text_layout("⇤", ctx.text());
+            Size::new(button.size().width + (H_PADDING * 2.0), 30.0)
+        };
 
         bc.constrain(size)
     }
 
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, _data: &EditorModel, _env: &druid::Env) {
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &EditorModel, _env: &druid::Env) {
         // set background color
         let bg_rect = ctx.size().to_rect();
         ctx.fill(bg_rect, &theme::POPUP_BACKGROUND);
 
-        let mut y = 0.0;
+        if self.shown {
+            let mut y = 0.0;
 
-        // top label
-        let heading = make_label_text_layout("Palette:", ctx);
-        ctx.draw_text(&heading, Point::new(5.0, 5.0));
-        y += HEADING_PADDING;
+            // top label
+            let heading = make_label_text_layout("Palette:", ctx.text());
+            ctx.draw_text(&heading, Point::new(H_PADDING, V_PADDING));
 
-        // draw palettes
-        for item in &self.items {
-            let offset = Point::new(H_PADDING, y);
-            item.block.draw(offset, ctx.size().width - H_PADDING, ctx);
-            y += item.block.size().height + V_PADDING;
+            let close_btn = make_label_text_layout("⇥", ctx.text());
+            ctx.draw_text(
+                &close_btn,
+                Point::new(
+                    bg_rect.width() - close_btn.size().width - H_PADDING,
+                    V_PADDING,
+                ),
+            );
+
+            y += HEADING_HEIGHT;
+
+            // draw palettes
+            for item in &self.items {
+                let offset = Point::new(H_PADDING, y);
+                item.block
+                    .draw(offset, ctx.size().width - H_PADDING, data.block_theme, ctx);
+                y += item.block.size().height + V_PADDING;
+            }
+        } else {
+            let open_btn = make_label_text_layout("⇤", ctx.text());
+            ctx.draw_text(
+                &open_btn,
+                Point::new(
+                    bg_rect.width() - open_btn.size().width - H_PADDING,
+                    V_PADDING,
+                ),
+            );
         }
     }
 }

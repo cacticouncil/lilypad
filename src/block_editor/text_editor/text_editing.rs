@@ -363,6 +363,11 @@ fn edit_for_backspace<'a>(
         }
     };
 
+    // if deleting nothing (start of file), don't return an edit to prevent adding to the undo stack
+    if delete_selection.is_cursor() {
+        return (None, old_selection);
+    }
+
     let edit = TextEdit::delete(delete_selection);
     let new_selection = TextRange::new_cursor(edit.new_end());
     (Some(edit), new_selection)

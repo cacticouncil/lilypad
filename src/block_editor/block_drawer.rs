@@ -1,9 +1,10 @@
 use druid::kurbo::RoundedRect;
-use druid::{Color, PaintCtx, Point, RenderContext, Size};
+use druid::{PaintCtx, Point, RenderContext, Size};
 use tree_sitter_c2rust::{Node, TreeCursor};
 
 use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 use crate::lang::LanguageConfig;
+use crate::theme::blocks_theme::BlocksTheme;
 
 use super::rope_ext::RopeSliceExt;
 use super::text_range::{TextPoint, TextRange};
@@ -19,6 +20,7 @@ pub enum BlockType {
     If,
     For,
     Try,
+    Switch,
     Generic,
     Comment,
     Error,
@@ -26,24 +28,6 @@ pub enum BlockType {
 }
 
 impl BlockType {
-    const fn color(&self) -> Option<Color> {
-        use crate::theme::blocks::*;
-        use BlockType::*;
-
-        match self {
-            Object => Some(OBJECT),
-            FunctionDef => Some(FUNCTION),
-            While => Some(WHILE),
-            If => Some(IF),
-            For => Some(FOR),
-            Try => Some(TRY),
-            Generic => Some(GENERIC),
-            Comment => None,
-            Error => Some(ERROR),
-            Divider => None,
-        }
-    }
-
     fn from_node(node: &Node, lang: &LanguageConfig) -> Option<Self> {
         use BlockType::*;
 
@@ -63,6 +47,7 @@ impl BlockType {
             If => "If",
             For => "For",
             Try => "Try",
+            Switch => "Switch",
             Generic => "Generic",
             Comment => "Comment",
             Error => "Error",
@@ -81,9 +66,7 @@ pub struct Block {
 
 impl Block {
     fn from_node(node: &Node, lang: &LanguageConfig) -> Option<Self> {
-        let Some(syntax_type) = BlockType::from_node(node, lang) else {
-            return None;
-        };
+        let syntax_type = BlockType::from_node(node, lang)?;
         let start_pos = node.start_position();
         let end_pos = node.end_position();
         Some(Block {
@@ -93,10 +76,6 @@ impl Block {
             syntax_type,
             children: vec![],
         })
-    }
-
-    const fn color(&self) -> Option<Color> {
-        self.syntax_type.color()
     }
 
     pub fn text_range(&self) -> TextRange {
@@ -323,12 +302,18 @@ fn adjust_block_starts(blocks: &mut Vec<Block>) -> usize {
 const OUTER_CORNER_RAD: f64 = 6.0;
 const MIN_CORNER_RAD: f64 = 1.5;
 
-const BLOCK_STROKE_WIDTH: f64 = 2.0;
-const BLOCK_INNER_PAD: f64 = 2.0;
+const BLOCK_STROKE_WIDTH: f64 = 1.5;
+const BLOCK_INNER_PAD: f64 = 3.0;
 const BLOCK_TOP_PAD: f64 = 1.0;
 
-pub fn draw_blocks(blocks: &Vec<Block>, offset: Point, width: f64, ctx: &mut PaintCtx) {
-    draw_blocks_helper(blocks, 0, 0.0, offset, width, ctx);
+pub fn draw_blocks(
+    blocks: &Vec<Block>,
+    offset: Point,
+    width: f64,
+    block_theme: BlocksTheme,
+    ctx: &mut PaintCtx,
+) {
+    draw_blocks_helper(blocks, 0, 0.0, offset, width, block_theme, ctx);
 }
 
 fn draw_blocks_helper(
@@ -337,13 +322,21 @@ fn draw_blocks_helper(
     mut total_padding: f64,
     offset: Point,
     width: f64,
+    block_theme: BlocksTheme,
     ctx: &mut PaintCtx,
 ) -> f64 {
     for block in blocks {
         if block.syntax_type == BlockType::Divider {
             // do not draw this block
-            total_padding =
-                draw_blocks_helper(&block.children, level, total_padding, offset, width, ctx);
+            total_padding = draw_blocks_helper(
+                &block.children,
+                level,
+                total_padding,
+                offset,
+                width,
+                block_theme,
+                ctx,
+            );
         } else {
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
 
@@ -354,6 +347,7 @@ fn draw_blocks_helper(
                 total_padding,
                 offset,
                 width,
+                block_theme,
                 ctx,
             ) - total_padding;
 
@@ -364,6 +358,7 @@ fn draw_blocks_helper(
                 inside_padding,
                 offset,
                 width,
+                block_theme,
                 ctx,
             );
             total_padding += inside_padding;
@@ -381,10 +376,11 @@ fn draw_block(
     padding_inside: f64,
     offset: Point,
     width: f64,
+    block_theme: BlocksTheme,
     ctx: &mut PaintCtx,
 ) {
     // No color for invisible nodes
-    let color = match block.color() {
+    let color = match (block_theme.color_for)(block.syntax_type, level) {
         Some(color) => color,
         None => return,
     };

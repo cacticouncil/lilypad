@@ -4,7 +4,7 @@
   "displayName": "Lilypad",
   "description": "Lilypad editor for VSCode",
   "repository": "https://github.com/cacticouncil/lilypad",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "icon": "lilypadIcon.png",
   "extensionKind": [
     "ui"
@@ -32,11 +32,26 @@
           },
           {
             "filenamePattern": "*.java"
+          },
+          {
+            "filenamePattern": "*.cs"
           }
         ],
         "priority": "default"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Lilypad",
+      "properties": {
+        "lilypad.blocksTheme": {
+          "title": "Blocks Color Theme",
+          "type": "string",
+          "default": "syntax_colored", 
+          "enum": ["syntax_colored", "depth_grayscale"],
+          "enumItemLabels": ["Per block type", "Gray"]
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

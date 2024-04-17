@@ -8,7 +8,14 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
 
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         const provider = new LilypadEditorProvider(context);
-        const providerRegistration = vscode.window.registerCustomEditorProvider(LilypadEditorProvider.viewType, provider);
+        const options: vscode.WebviewPanelOptions = {
+            retainContextWhenHidden: true,
+        };
+        const providerRegistration = vscode.window.registerCustomEditorProvider(
+            LilypadEditorProvider.viewType,
+            provider,
+            { webviewOptions: options }
+        );
         return providerRegistration;
     }
 
@@ -72,11 +79,23 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             }
         });
 
+        // Tracking settings changes
+        const configSubscription = vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration("lilypad.blocksTheme")) {
+                const newTheme = vscode.workspace.getConfiguration("lilypad").get("blocksTheme");
+                webviewPanel.webview.postMessage({
+                    type: "new_blocks_theme",
+                    theme: newTheme
+                });
+            }
+        });
+
         // Get rid of the listeners when our editor is closed.
         webviewPanel.onDidDispose(() => {
             changeDocumentSubscription.dispose();
             changeDiagnosticsSubscription.dispose();
             viewStateSubscription.dispose();
+            configSubscription.dispose();
         });
 
         // Receive message from the webview.
@@ -222,6 +241,9 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         const fontFamily = (editorConfig.get("fontFamily") as string).split(',')[0];
         const fontSize = editorConfig.get("fontSize");
 
+        // get the block theme
+        const blockTheme = vscode.workspace.getConfiguration("lilypad").get("blocksTheme");
+
         return `
         <!DOCTYPE html>
         <html lang="en">
@@ -249,6 +271,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     var fileName = "${document.fileName}"
                     var fontFamily = "${fontFamily}"
                     var fontSize = ${fontSize}
+                    var blockTheme = "${blockTheme}"
                 </script>
                 <script
                     type="module"

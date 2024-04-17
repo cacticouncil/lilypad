@@ -10,3 +10,4 @@ Lilypad, an experimental text-based visual code editor, running as a VSCode exte
 - Languages
   - Python
   - Java
+  - C#
