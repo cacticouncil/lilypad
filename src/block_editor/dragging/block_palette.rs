@@ -171,7 +171,7 @@ impl Widget<EditorModel> for BlockPalette {
         bc.constrain(size)
     }
 
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, _data: &EditorModel, _env: &druid::Env) {
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &EditorModel, _env: &druid::Env) {
         // set background color
         let bg_rect = ctx.size().to_rect();
         ctx.fill(bg_rect, &theme::POPUP_BACKGROUND);
@@ -197,7 +197,8 @@ impl Widget<EditorModel> for BlockPalette {
             // draw palettes
             for item in &self.items {
                 let offset = Point::new(H_PADDING, y);
-                item.block.draw(offset, ctx.size().width - H_PADDING, ctx);
+                item.block
+                    .draw(offset, ctx.size().width - H_PADDING, data.block_theme, ctx);
                 y += item.block.size().height + V_PADDING;
             }
         } else {

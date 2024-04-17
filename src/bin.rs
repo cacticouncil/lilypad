@@ -14,6 +14,7 @@ use druid::{
 use ropey::Rope;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use theme::blocks_theme::BlocksTheme;
 
 use block_editor::{DragSession, EditorModel};
 
@@ -24,6 +25,8 @@ pub struct AppModel {
     pub file: Option<String>,
 
     pub source: Arc<Mutex<Rope>>,
+    #[data(eq)]
+    pub block_theme: BlocksTheme,
     pub diagnostics: Arc<Vec<lsp::diagnostics::Diagnostic>>,
     #[data(eq)]
     pub diagnostic_selection: Option<u64>,
@@ -38,6 +41,7 @@ impl Lens<AppModel, EditorModel> for EditorLens {
     fn with<V, F: FnOnce(&EditorModel) -> V>(&self, data: &AppModel, f: F) -> V {
         f(&EditorModel {
             source: data.source.clone(),
+            block_theme: data.block_theme,
             diagnostics: data.diagnostics.clone(),
             diagnostic_selection: data.diagnostic_selection,
             drag_block: data.drag_block.clone(),
@@ -47,12 +51,14 @@ impl Lens<AppModel, EditorModel> for EditorLens {
     fn with_mut<V, F: FnOnce(&mut EditorModel) -> V>(&self, data: &mut AppModel, f: F) -> V {
         let mut editor_model = EditorModel {
             source: data.source.clone(),
+            block_theme: data.block_theme,
             diagnostics: data.diagnostics.clone(),
             diagnostic_selection: data.diagnostic_selection,
             drag_block: data.drag_block.clone(),
         };
         let val = f(&mut editor_model);
         data.source = editor_model.source;
+        data.block_theme = editor_model.block_theme;
         data.diagnostics = editor_model.diagnostics;
         data.diagnostic_selection = editor_model.diagnostic_selection;
         data.drag_block = editor_model.drag_block;
@@ -72,6 +78,7 @@ fn main() -> Result<(), PlatformError> {
         dir: None,
         file: None,
         source: Arc::new(Mutex::new(Rope::new())),
+        block_theme: BlocksTheme::for_str("syntax_colored"),
         diagnostics: Arc::new(vec![]),
         diagnostic_selection: None,
         drag_block: None,
