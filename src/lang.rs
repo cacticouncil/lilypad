@@ -69,7 +69,7 @@ pub fn lang_for_file(file_name: &str) -> &'static LanguageConfig {
     match file_name.split('.').last() {
         Some("py") => &PYTHON_LANGUAGE,
         Some("java") => &JAVA_LANGUAGE,
-        Some("cpp") => &CPP_LANGUAGE,
+        Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
         Some("cs") => &CS_LANGUAGE,
         _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
     }
@@ -292,12 +292,26 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
         match node.kind() {
             // scopes
             "class_specifier" => Some(Object),
+            "struct_specifier" => Some(Object),
             "abstract_function_declarator" => Some(Object),
-            "function_definition" => Some(FunctionDef),
+            "function_definition" => {
+                if node.parent().map_or("", |s| s.kind()) == "template_declaration" {
+                    None
+                } else {
+                    Some(FunctionDef)
+                }
+            },
             "while_statement" => Some(While),
-            "if_statement" => Some(If),
+            "if_statement" => {
+                if node.prev_sibling().map_or("", |s| s.kind()) == "else" {
+                    None
+                } else {
+                    Some(If)
+                }
+            }
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
+            "template_declaration" => Some(FunctionDef),
 
            // normal expressions (incomplete)
             "preproc_include" => Some(Generic),
@@ -305,6 +319,14 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
             "continue_statement" => Some(Generic),
             "break_statement" => Some(Generic),
             "pass_statement" => Some(Generic),
+            "local_variable_declaration" => {
+                // don't create a block for a for loop's variable declaration
+                if node.parent().map_or("", |p| p.kind()) == "for_statement" {
+                    None
+                } else {
+                    Some(Generic)
+                }
+            }
 
             // comments
             "comment" => Some(Comment),
