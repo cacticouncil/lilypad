@@ -10,6 +10,7 @@ use crate::{
     },
     lang::LanguageConfig,
     parse::TreeManager,
+    theme::blocks_theme::BlocksTheme,
 };
 
 pub struct LooseBlock {
@@ -77,8 +78,8 @@ impl LooseBlock {
         self.padding.clear();
     }
 
-    pub fn draw(&self, offset: Point, width: f64, ctx: &mut PaintCtx) {
-        block_drawer::draw_blocks(&self.blocks, offset, width, ctx);
+    pub fn draw(&self, offset: Point, width: f64, block_theme: BlocksTheme, ctx: &mut PaintCtx) {
+        block_drawer::draw_blocks(&self.blocks, offset, width, block_theme, ctx);
         self.text_drawer.draw(&self.padding, offset, ctx);
     }
 

@@ -1,9 +1,9 @@
-import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, insert_text, new_diagnostics, set_quick_fixes, set_completions, undo, redo } from "./lilypad_web.js";
+import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, insert_text, new_diagnostics, set_quick_fixes, set_completions, set_block_theme, undo, redo } from "./lilypad_web.js";
 
 async function run() {
   await init();
-  // fileName, fontFamily, and fontSize are set in another script tag
-  run_editor(fileName, fontFamily, fontSize);
+  // fileName, fontFamily, fontSize, and blockTheme are set in another script tag
+  run_editor(fileName, fontFamily, fontSize, blockTheme);
 }
 // web view -> extension messages
 const vscode = acquireVsCodeApi();
@@ -94,6 +94,9 @@ window.addEventListener("message", event => {
       break;
     case "new_diagnostics":
       new_diagnostics(message.diagnostics);
+      break;
+    case "new_blocks_theme":
+      set_block_theme(message.theme);
       break;
     case "return_quick_fixes":
       set_quick_fixes(message.actions);

@@ -77,12 +77,13 @@ impl Widget<EditorModel> for DraggingPopup {
         self.block.size()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditorModel, _env: &druid::Env) {
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditorModel, _env: &druid::Env) {
         // draw background (transparent so you can see where you are dropping it)
         let rect = ctx.size().to_rect();
         ctx.fill(rect, &theme::BACKGROUND.with_alpha(0.75));
 
         // draw content
-        self.block.draw(Point::ZERO, ctx.size().width, ctx);
+        self.block
+            .draw(Point::ZERO, ctx.size().width, data.block_theme, ctx);
     }
 }

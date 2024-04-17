@@ -417,6 +417,7 @@ impl Widget<EditorModel> for TextEditor {
             &self.blocks,
             block_offset,
             ctx.size().width - OUTER_PAD,
+            data.block_theme,
             ctx,
         );
         let text_offset = Point::new(TOTAL_TEXT_X_OFFSET, OUTER_PAD);
