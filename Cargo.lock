@@ -1475,9 +1475,8 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-c2rust"
-version = "0.20.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee40a4d9cf5a30c199935f346887588239daceae4d1418d81b789276fffb8d91"
+version = "0.22.4"
+source = "git+https://github.com/liamrosenfeld/tree-sitter?branch=cfg-fix#624081a50018cd516c002dc0cf4f801a234c59e3"
 dependencies = [
  "c2rust-bitfields",
  "once_cell",
@@ -1504,8 +1503,8 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-java"
-version = "0.20.0"
-source = "git+https://github.com/liamrosenfeld/tree-sitter-java/?branch=wasm#5f662e3b13ee9815125c372f4b9a25e6911ba946"
+version = "0.21.0"
+source = "git+https://github.com/liamrosenfeld/tree-sitter-java/?branch=wasm#4e5d1a8dc4346aab2e1859f8a7b895d055c23007"
 dependencies = [
  "cc",
  "tree-sitter-c2rust 0.20.10",

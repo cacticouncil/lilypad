@@ -15,6 +15,12 @@ path = "src/bin.rs"
 [profile.release]
 lto = true
 
+# # uncomment for debugging wasm:
+# debug = true
+
+# [package.metadata.wasm-pack.profile.release]
+# wasm-opt = false
+
 [dependencies]
 druid = "0.8"
 

@@ -14,7 +14,7 @@ impl TreeManager {
     pub fn new(lang: &LanguageConfig) -> TreeManager {
         // Create Parser
         let mut parser = Parser::new();
-        parser.set_language(lang.tree_sitter()).unwrap();
+        parser.set_language(&lang.tree_sitter()).unwrap();
 
         // Parse initial source
         let tree = parser.parse("", None).unwrap();
@@ -23,7 +23,7 @@ impl TreeManager {
     }
 
     pub fn change_language(&mut self, lang: &LanguageConfig) {
-        self.parser.set_language(lang.tree_sitter()).unwrap();
+        self.parser.set_language(&lang.tree_sitter()).unwrap();
     }
 
     pub fn get_cursor(&self) -> TreeCursor {
