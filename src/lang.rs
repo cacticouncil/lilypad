@@ -295,6 +295,7 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
             "struct_specifier" => Some(Object),
             "abstract_function_declarator" => Some(Object),
             "function_definition" => {
+                // create one box around a template function
                 if node.parent().map_or("", |s| s.kind()) == "template_declaration" {
                     None
                 } else {
