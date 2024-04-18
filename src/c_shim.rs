@@ -111,18 +111,6 @@ pub unsafe extern "C" fn memset(s: *mut c_void, c: i32, n: usize) -> *mut c_void
 /* -------------------------------- wctype.h -------------------------------- */
 
 #[no_mangle]
-pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
-    let layout = Layout::from_size_align_unchecked(new_size, std::mem::align_of::<u8>());
-    alloc::realloc(ptr, layout, new_size)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn free(ptr: *mut u8) {
-    let layout = Layout::from_size_align_unchecked(0, std::mem::align_of::<u8>());
-    alloc::dealloc(ptr, layout);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn iswspace(c: char) -> bool {
-    c.is_whitespace()
+pub unsafe extern "C" fn iswspace(c: c_int) -> bool {
+    char::from_u32(c as u32).map_or(false, |c| c.is_whitespace())
 }
