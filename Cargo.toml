@@ -15,6 +15,12 @@ path = "src/bin.rs"
 [profile.release]
 lto = true
 
+# # uncomment for debugging wasm:
+# debug = true
+
+# [package.metadata.wasm-pack.profile.release]
+# wasm-opt = false
+
 [dependencies]
 druid = "0.8"
 
@@ -38,7 +44,7 @@ regex = { version = "1.9", default-features = false, features = [
 ] }
 
 # tree sitter
-tree-sitter-c2rust = "0.20"
+tree-sitter-c2rust = { git = "https://github.com/liamrosenfeld/tree-sitter", branch = "cfg-fix" }
 tree-sitter-python = { git = "https://github.com/liamrosenfeld/tree-sitter-python/", branch = "wasm" }
 tree-sitter-java = { git = "https://github.com/liamrosenfeld/tree-sitter-java/", branch = "wasm" }
 tree-sitter-c-sharp = { git = "https://github.com/liamrosenfeld/tree-sitter-c-sharp/", branch = "wasm" }
