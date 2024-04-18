@@ -77,7 +77,7 @@ pub fn lang_for_file(file_name: &str) -> &'static LanguageConfig {
 const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "python",
     ts_lang: tree_sitter_python::language,
-    highlight_query: tree_sitter_python::HIGHLIGHT_QUERY,
+    highlight_query: tree_sitter_python::HIGHLIGHTS_QUERY,
     new_scope_char: NewScopeChar::Colon,
     node_categorizer: |node| {
         use BlockType::*;
@@ -135,7 +135,7 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
 const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "java",
     ts_lang: tree_sitter_java::language,
-    highlight_query: tree_sitter_java::HIGHLIGHT_QUERY,
+    highlight_query: tree_sitter_java::HIGHLIGHTS_QUERY,
     new_scope_char: NewScopeChar::Brace,
     node_categorizer: |node| {
         use BlockType::*;

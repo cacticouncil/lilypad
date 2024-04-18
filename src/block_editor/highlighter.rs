@@ -63,7 +63,7 @@ struct HighlightIter<'a> {
 
 struct HighlightIterLayer<'a> {
     _cursor: QueryCursor, // needed to keep in memory
-    captures: iter::Peekable<QueryCaptures<'a, 'a, RopeProvider<'a>>>,
+    captures: iter::Peekable<QueryCaptures<'a, 'a, RopeProvider<'a>, &'a [u8]>>,
     config: &'a HighlightConfiguration,
     highlight_end_stack: Vec<usize>,
     scope_stack: Vec<LocalScope<'a>>,
@@ -112,7 +112,7 @@ impl HighlightConfiguration {
 
         // Construct a single query by concatenating the three query strings, but record the
         // range of pattern indices that belong to each individual string.
-        let query = Query::new(language, &query_source)?;
+        let query = Query::new(&language, &query_source)?;
         let mut highlights_pattern_index = 0;
         for i in 0..(query.pattern_count()) {
             let pattern_offset = query.start_byte_for_pattern(i);
@@ -139,7 +139,7 @@ impl HighlightConfiguration {
         let mut local_scope_capture_index = None;
         for (i, name) in query.capture_names().iter().enumerate() {
             let i = Some(i as u32);
-            match name.as_str() {
+            match *name {
                 "local.definition" => local_def_capture_index = i,
                 "local.definition-value" => local_def_value_capture_index = i,
                 "local.reference" => local_ref_capture_index = i,
@@ -164,7 +164,7 @@ impl HighlightConfiguration {
 
     /// Get a slice containing all of the highlight names used in the configuration.
     #[allow(dead_code)]
-    pub fn names(&self) -> &[String] {
+    pub fn names(&self) -> &[&str] {
         self.query.capture_names()
     }
 
@@ -436,7 +436,7 @@ impl<'a> Iterator for HighlightIter<'a> {
 /* ------- Rope + TS Text Provider  ------- */
 struct RopeProvider<'a>(pub RopeSlice<'a>);
 
-impl<'a> TextProvider<'a> for RopeProvider<'a> {
+impl<'a> TextProvider<&'a [u8]> for RopeProvider<'a> {
     type I = ChunksBytes<'a>;
 
     fn text(&mut self, node: Node) -> Self::I {
