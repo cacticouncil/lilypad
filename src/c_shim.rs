@@ -24,7 +24,7 @@ pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut c_void {
         return ptr::null_mut();
     }
 
-    let (layout, offset_to_data) = layout_for_size_prepended(size);
+    let (layout, offset_to_data) = layout_for_size_prepended(size * count);
     let buf = alloc::alloc_zeroed(layout);
     store_layout(buf, layout, offset_to_data)
 }
