@@ -1504,11 +1504,11 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-java"
-version = "0.21.0"
-source = "git+https://github.com/liamrosenfeld/tree-sitter-java/?branch=wasm#4e5d1a8dc4346aab2e1859f8a7b895d055c23007"
+version = "0.20.0"
+source = "git+https://github.com/liamrosenfeld/tree-sitter-java/?branch=wasm#5f662e3b13ee9815125c372f4b9a25e6911ba946"
 dependencies = [
  "cc",
- "tree-sitter-c2rust 0.22.4",
+ "tree-sitter-c2rust 0.20.10",
 ]
 
 [[package]]

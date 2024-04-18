@@ -10,6 +10,13 @@ pub unsafe extern "C" fn memcpy(dest: *mut c_void, src: *const c_void, size: usi
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn memset(s: *mut c_void, c: i32, n: usize) -> *mut c_void {
+    let slice = std::slice::from_raw_parts_mut(s as *mut u8, n);
+    slice.fill(c as u8);
+    s
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut u8 {
     let layout = Layout::from_size_align_unchecked(count * size, std::mem::align_of::<u8>());
     alloc::alloc(layout)
@@ -28,6 +35,6 @@ pub unsafe extern "C" fn free(ptr: *mut u8) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn iswspace(c: i32) -> bool {
-    char::from_u32(c as u32).map_or(false, |c| c.is_whitespace())
+pub unsafe extern "C" fn iswspace(c: char) -> bool {
+    c.is_whitespace()
 }
