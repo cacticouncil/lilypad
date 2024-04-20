@@ -48,4 +48,4 @@ tree-sitter-c2rust = { git = "https://github.com/liamrosenfeld/tree-sitter", bra
 tree-sitter-python = { git = "https://github.com/liamrosenfeld/tree-sitter-python/", branch = "wasm"}
 tree-sitter-java = { git = "https://github.com/liamrosenfeld/tree-sitter-java/", branch = "wasm" }
 tree-sitter-c-sharp = { git = "https://github.com/liamrosenfeld/tree-sitter-c-sharp/", branch = "wasm" }
-tree-sitter-cpp = {git = "https://github.com/singh-maya/tree-sitter-cpp/", branch = "wasm"}
+tree-sitter-cpp = { git = "https://github.com/singh-maya/tree-sitter-cpp/", branch = "wasm" }
