@@ -341,8 +341,8 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
         }
     },
     string_node_ids: StringNodeIDs {
-        string: 141,
-        string_bounds: &[12], // 11 is single quote, 12 is double quote
+        string: 360,
+        string_bounds: &[162],
     },
     palette: &[],
 };
