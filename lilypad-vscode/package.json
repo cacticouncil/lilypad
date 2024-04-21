@@ -1,94 +1,94 @@
 {
-	"name": "lilypad-vscode",
-	"publisher": "CactiCouncil",
-	"displayName": "Lilypad",
-	"description": "Lilypad editor for VSCode",
-	"repository": "https://github.com/cacticouncil/lilypad",
-	"version": "0.1.1",
-	"icon": "lilypadIcon.png",
-	"extensionKind": [
-		"ui"
-	],
-	"extensionDependencies": [
-		"ms-python.python"
-	],
-	"engines": {
-		"vscode": "^1.85.0"
-	},
-	"categories": [
-		"Visualization",
-		"Other"
-	],
-	"activationEvents": [],
-	"main": "./out/extension.js",
-	"contributes": {
-		"customEditors": [
-			{
-				"viewType": "lilypad.frameBased",
-				"displayName": "Lilypad editor",
-				"selector": [
-					{
-						"filenamePattern": "*.py"
-					},
-					{
-						"filenamePattern": "*.java"
-					},
-					{
-						"filenamePattern": "*.cs"
-					},
-					{
-						"filenamePattern": "*.cpp"
-					},
-					{
-						"filenamePattern": "*.h"
-					},
-					{
-						"filenamePattern": "*.hpp"
-					}
-				],
-				"priority": "default"
-			}
-		],
-		"configuration": {
-			"title": "Lilypad",
-			"properties": {
-				"lilypad.blocksTheme": {
-					"title": "Blocks Color Theme",
-					"type": "string",
-					"default": "syntax_colored",
-					"enum": [
-						"syntax_colored",
-						"depth_grayscale"
-					],
-					"enumItemLabels": [
-						"Per block type",
-						"Gray"
-					]
-				}
-			}
-		}
-	},
-	"scripts": {
-		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p ./",
-		"watch": "tsc -watch -p ./",
-		"lint": "eslint src --ext ts"
-	},
-	"devDependencies": {
-		"@types/glob": "^8.1.0",
-		"@types/mocha": "^10.0.1",
-		"@types/node": "16.x",
-		"@types/vscode": "^1.75.0",
-		"@typescript-eslint/eslint-plugin": "^5.53.0",
-		"@typescript-eslint/parser": "^5.53.0",
-		"@vscode/test-electron": "^2.2.3",
-		"eslint": "^8.34.0",
-		"glob": "^8.1.0",
-		"mocha": "^10.2.0",
-		"typescript": "^4.9.5"
-	},
-	"dependencies": {
-		"@types/node-fetch": "^2.6.11",
-		"node-fetch": "^2.7.0"
-	}
+  "name": "lilypad-vscode",
+  "publisher": "CactiCouncil",
+  "displayName": "Lilypad",
+  "description": "Lilypad editor for VSCode",
+  "repository": "https://github.com/cacticouncil/lilypad",
+  "version": "0.1.1",
+  "icon": "lilypadIcon.png",
+  "extensionKind": [
+    "ui"
+  ],
+  "extensionDependencies": [
+    "ms-python.python"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "lilypad.frameBased",
+        "displayName": "Lilypad editor",
+        "selector": [
+          {
+            "filenamePattern": "*.py"
+          },
+          {
+            "filenamePattern": "*.java"
+          },
+          {
+            "filenamePattern": "*.cs"
+          },
+          {
+            "filenamePattern": "*.cpp"
+          },
+          {
+            "filenamePattern": ".h"
+          },
+          {
+            "filenamePattern": ".hpp"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "configuration": {
+      "title": "Lilypad",
+      "properties": {
+        "lilypad.blocksTheme": {
+          "title": "Blocks Color Theme",
+          "type": "string",
+          "default": "syntax_colored",
+          "enum": [
+            "syntax_colored",
+            "depth_grayscale"
+          ],
+          "enumItemLabels": [
+            "Per block type",
+            "Gray"
+          ]
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^5.53.0",
+    "@typescript-eslint/parser": "^5.53.0",
+    "@vscode/test-electron": "^2.2.3",
+    "eslint": "^8.34.0",
+    "glob": "^8.1.0",
+    "mocha": "^10.2.0",
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {
+    "@types/node-fetch": "^2.6.11",
+    "node-fetch": "^2.7.0"
+  }
 }
