@@ -35,6 +35,15 @@
           },
           {
             "filenamePattern": "*.cs"
+          },
+          {
+            "filenamePattern": "*.cpp"
+          },
+          {
+            "filenamePattern": "*.h"
+          },
+          {
+            "filenamePattern": "*.hpp"
           }
         ],
         "priority": "default"
@@ -46,9 +55,15 @@
         "lilypad.blocksTheme": {
           "title": "Blocks Color Theme",
           "type": "string",
-          "default": "syntax_colored", 
-          "enum": ["syntax_colored", "depth_grayscale"],
-          "enumItemLabels": ["Per block type", "Gray"]
+          "default": "syntax_colored",
+          "enum": [
+            "syntax_colored",
+            "depth_grayscale"
+          ],
+          "enumItemLabels": [
+            "Per block type",
+            "Gray"
+          ]
         }
       }
     }

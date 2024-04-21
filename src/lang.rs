@@ -69,6 +69,7 @@ pub fn lang_for_file(file_name: &str) -> &'static LanguageConfig {
     match file_name.split('.').last() {
         Some("py") => &PYTHON_LANGUAGE,
         Some("java") => &JAVA_LANGUAGE,
+        Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
         Some("cs") => &CS_LANGUAGE,
         _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
     }
@@ -278,4 +279,70 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
             "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
         ),
     ],
+};
+
+const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
+    name: "cpp",
+    ts_lang: tree_sitter_cpp::language,
+    highlight_query: tree_sitter_cpp::HIGHLIGHT_QUERY,
+    new_scope_char: NewScopeChar::Brace,
+    node_categorizer: |node| {
+        use BlockType::*;
+
+        match node.kind() {
+            // scopes
+            "class_specifier" => Some(Object),
+            "struct_specifier" => Some(Object),
+            "abstract_function_declarator" => Some(Object),
+            "function_definition" => {
+                // create one box around a template function
+                if node.parent().map_or("", |s| s.kind()) == "template_declaration" {
+                    None
+                } else {
+                    Some(FunctionDef)
+                }
+            },
+            "while_statement" => Some(While),
+            "if_statement" => {
+                if node.prev_sibling().map_or("", |s| s.kind()) == "else" {
+                    None
+                } else {
+                    Some(If)
+                }
+            }
+            "for_statement" => Some(For),
+            "try_statement" => Some(Try),
+            "template_declaration" => Some(FunctionDef),
+
+           // normal expressions (incomplete)
+            "preproc_include" => Some(Generic),
+            "expression_statement" =>Some(Generic),
+            "continue_statement" => Some(Generic),
+            "break_statement" => Some(Generic),
+            "pass_statement" => Some(Generic),
+            "local_variable_declaration" => {
+                // don't create a block for a for loop's variable declaration
+                if node.parent().map_or("", |p| p.kind()) == "for_statement" {
+                    None
+                } else {
+                    Some(Generic)
+                }
+            }
+
+            // comments
+            "comment" => Some(Comment),
+
+            // dividers to keep generics from merging
+            "else_clause" => Some(Divider),
+            "except_clause" => Some(Divider),
+
+            // do not handle the rest
+            _ => None,
+        }
+    },
+    string_node_ids: StringNodeIDs {
+        string: 360,
+        string_bounds: &[162],
+    },
+    palette: &[],
 };
