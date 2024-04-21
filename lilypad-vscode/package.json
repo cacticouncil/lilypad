@@ -40,10 +40,10 @@
             "filenamePattern": "*.cpp"
           },
           {
-            "filenamePattern": ".h"
+            "filenamePattern": "*.h"
           },
           {
-            "filenamePattern": ".hpp"
+            "filenamePattern": "*.hpp"
           }
         ],
         "priority": "default"
