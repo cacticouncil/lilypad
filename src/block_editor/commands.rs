@@ -1,5 +1,6 @@
 use druid::Selector;
 
+use super::text_editor::StackFrameLines;
 use crate::block_editor::text_editor::TextEdit;
 use crate::lsp::{
     completion::VSCodeCompletionItem,
@@ -20,6 +21,10 @@ pub const PASTE: Selector<String> = Selector::new("paste");
 pub const SET_DIAGNOSTICS: Selector<Vec<Diagnostic>> = Selector::new("set_diagnostics");
 pub const SET_QUICK_FIX: Selector<Vec<VSCodeCodeAction>> = Selector::new("set_quick_fix");
 pub const SET_COMPLETIONS: Selector<Vec<VSCodeCompletionItem>> = Selector::new("set_completions");
+
+// debug connections
+pub const SET_BREAKPOINTS: Selector<Vec<usize>> = Selector::new("set_breakpoints");
+pub const SET_STACK_FRAME: Selector<StackFrameLines> = Selector::new("set_stack_frame");
 
 // internal communication
 pub const DRAG_CANCELLED: Selector<()> = Selector::new("drag_cancelled");

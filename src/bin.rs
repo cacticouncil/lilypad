@@ -171,6 +171,7 @@ pub(crate) mod vscode {
     pub fn request_completions(_: usize, _: usize) {}
     pub fn execute_command(_: String, _: wasm_bindgen::JsValue) {}
     pub fn execute_workspace_edit(_: wasm_bindgen::JsValue) {}
+    pub fn register_breakpoints(_: Vec<usize>) {}
     pub fn log_event(_: &'static str, _: HashMap<&'static str, &str>) {}
 }
 

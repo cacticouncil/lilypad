@@ -13,7 +13,11 @@ use std::{
 use theme::blocks_theme::BlocksTheme;
 use wasm_bindgen::prelude::*;
 
-use block_editor::{commands, text_editor::TextEdit, EditorModel};
+use block_editor::{
+    commands,
+    text_editor::{StackFrameLines, TextEdit},
+    EditorModel,
+};
 use lsp::{
     completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCodeAction},
@@ -158,6 +162,33 @@ pub fn set_completions(json: JsValue) {
 }
 
 #[wasm_bindgen]
+pub fn set_breakpoints(json: JsValue) {
+    let breakpoints: Vec<usize> =
+        serde_wasm_bindgen::from_value(json).expect("Could not deserialize breakpoints");
+
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(commands::SET_BREAKPOINTS, breakpoints, Target::Global)
+            .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
+#[wasm_bindgen]
+pub fn set_stack_frame(selected: Option<usize>, deepest: Option<usize>) {
+    if let Some(sink) = EVENT_SINK.get() {
+        sink.submit_command(
+            commands::SET_STACK_FRAME,
+            StackFrameLines { selected, deepest },
+            Target::Global,
+        )
+        .unwrap();
+    } else {
+        console_log!("could not get sink");
+    }
+}
+
+#[wasm_bindgen]
 pub fn undo() {
     if let Some(sink) = EVENT_SINK.get() {
         sink.submit_command(druid::commands::UNDO, (), Target::Global)
@@ -214,6 +245,9 @@ pub mod vscode {
 
         #[wasm_bindgen(js_name = telemetryCrash)]
         pub fn telemetry_crash(msg: String);
+
+        #[wasm_bindgen(js_name = registerBreakpoints)]
+        pub fn register_breakpoints(lines: Vec<usize>);
     }
 
     pub fn log_event(cat: &'static str, info: HashMap<&'static str, &str>) {

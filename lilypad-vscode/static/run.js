@@ -1,4 +1,4 @@
-import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, insert_text, new_diagnostics, set_quick_fixes, set_completions, set_block_theme, undo, redo } from "./lilypad_web.js";
+import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, insert_text, new_diagnostics, set_quick_fixes, set_completions, set_block_theme, undo, redo, set_breakpoints, set_stack_frame } from "./lilypad_web.js";
 
 async function run() {
   await init();
@@ -67,6 +67,13 @@ export function executeWorkspaceEdit(edit) {
   });
 }
 
+export function registerBreakpoints(lines) {
+  vscode.postMessage({
+    type: "register_breakpoints",
+    lines: lines
+  });
+}
+
 export function telemetryEvent(cat, info) {
   vscode.postMessage({
     type: "telemetry_log",
@@ -97,6 +104,12 @@ window.addEventListener("message", event => {
       break;
     case "new_blocks_theme":
       set_block_theme(message.theme);
+      break;
+    case "set_breakpoints":
+      set_breakpoints(message.breakpoints);
+      break;
+    case "set_stack_frame":
+      set_stack_frame(message.selected, message.deepest);
       break;
     case "return_quick_fixes":
       set_quick_fixes(message.actions);
