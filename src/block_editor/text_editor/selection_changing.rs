@@ -5,10 +5,13 @@ use ropey::Rope;
 use tree_sitter_c2rust::TreeCursor;
 
 use super::TextEditor;
-use crate::block_editor::{
-    rope_ext::{RopeExt, RopeSliceExt},
-    DragSession, TextPoint, TextRange, FONT_HEIGHT, FONT_WIDTH, GUTTER_WIDTH, OUTER_PAD,
-    TEXT_L_PAD, TOTAL_TEXT_X_OFFSET,
+use crate::{
+    block_editor::{
+        rope_ext::{RopeExt, RopeSliceExt},
+        DragSession, TextPoint, TextRange, FONT_HEIGHT, FONT_WIDTH, GUTTER_WIDTH, OUTER_PAD,
+        TEXT_L_PAD, TOTAL_TEXT_X_OFFSET,
+    },
+    vscode,
 };
 
 impl TextEditor {
@@ -106,8 +109,19 @@ impl TextEditor {
 
         // move the cursor and get selection start position
         let loc = self.mouse_to_coord(mouse.pos, source);
-        let selection = TextRange::new_cursor(loc);
-        self.set_selection(selection, source);
+
+        if mouse.pos.x < GUTTER_WIDTH {
+            // if in the gutter, set a breakpoint
+            if self.breakpoints.contains(&loc.line) {
+                self.breakpoints.remove(&loc.line);
+            } else {
+                self.breakpoints.insert(loc.line);
+            }
+            vscode::register_breakpoints(self.breakpoints.iter().cloned().collect());
+        } else {
+            let selection = TextRange::new_cursor(loc);
+            self.set_selection(selection, source);
+        }
 
         // request keyboard focus if not already focused
         if !ctx.is_focused() {

@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 use druid::{
     text::TextAction, Event, LifeCycle, Menu, MouseButton, PaintCtx, Point, RenderContext, Size,
@@ -286,6 +289,18 @@ impl Widget<EditorModel> for TextEditor {
 
                     ctx.set_handled()
                 }
+                // VSCode Debugging
+                else if let Some(breakpoints) = command.get(commands::SET_BREAKPOINTS) {
+                    let mut set = HashSet::new();
+                    for bp in breakpoints {
+                        set.insert(*bp);
+                    }
+                    self.breakpoints = set;
+                    ctx.request_paint();
+                } else if let Some(stack_frame) = command.get(commands::SET_STACK_FRAME) {
+                    self.stack_frame = *stack_frame;
+                    ctx.request_paint();
+                }
                 // Applying an edit
                 else if let Some(edit) = command.get(commands::APPLY_EDIT) {
                     self.apply_edit(
@@ -439,7 +454,13 @@ impl Widget<EditorModel> for TextEditor {
         self.completion_popup.paint(ctx, data, env);
 
         // draw gutter
-        gutter_drawer::draw_line_numbers(&self.padding, self.selection.end.line, ctx);
+        gutter_drawer::draw_line_numbers(
+            &self.padding,
+            self.selection.end.line,
+            &self.breakpoints,
+            self.stack_frame,
+            ctx,
+        );
 
         // draw cursor
         if ctx.has_focus() {

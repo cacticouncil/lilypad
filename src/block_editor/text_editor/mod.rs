@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::Duration;
 
 use druid::TimerToken;
@@ -63,6 +64,12 @@ pub struct TextEditor {
     /// the padding above each individual line
     padding: Vec<f64>,
 
+    /// line numbers that have breakpoints
+    breakpoints: HashSet<usize>,
+
+    /// line number of the selected stack frame and the deepest stack frame
+    stack_frame: StackFrameLines,
+
     /// pairs that were inserted and should be ignored on the next input
     input_ignore_stack: Vec<&'static str>,
 
@@ -83,6 +90,21 @@ pub struct TextEditor {
     ime: ImeComponent,
 }
 
+#[derive(Clone, Copy)]
+pub struct StackFrameLines {
+    pub selected: Option<usize>,
+    pub deepest: Option<usize>,
+}
+
+impl StackFrameLines {
+    pub fn empty() -> Self {
+        StackFrameLines {
+            selected: None,
+            deepest: None,
+        }
+    }
+}
+
 impl TextEditor {
     pub fn new(lang: &'static LanguageConfig) -> Self {
         TextEditor {
@@ -97,6 +119,8 @@ impl TextEditor {
             text_changed: true,
             blocks: vec![],
             padding: vec![],
+            breakpoints: HashSet::new(),
+            stack_frame: StackFrameLines::empty(),
             input_ignore_stack: vec![],
             paired_delete_stack: vec![],
             drag_insertion_line: None,

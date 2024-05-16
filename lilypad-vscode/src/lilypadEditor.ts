@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { DebugProtocol } from "@vscode/debugprotocol";
 import { activeLilypadEditor, logger, setActiveLilypadEditor } from "./extension";
 
 export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
@@ -90,12 +91,67 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             }
         });
 
+        // Listen for new debug stuff
+        function setBreakpoints() {
+            let lines = [];
+            for (let b of vscode.debug.breakpoints) {
+                if (b instanceof vscode.SourceBreakpoint) {
+                    lines.push(b.location.range.start.line);
+                }
+            }
+
+            webviewPanel.webview.postMessage({
+                type: "set_breakpoints",
+                breakpoints: lines
+            });
+        }
+
+        const changeBreakpointsSubscription = vscode.debug.onDidChangeBreakpoints(e => {
+            setBreakpoints();
+        });
+
+        // both of these anys are a workaround until @types/vscode 1.90 releases
+        const stackItemSubscription = (vscode.debug as any).onDidChangeActiveStackItem((e: any) => {
+            vscode.debug.activeDebugSession!.customRequest('stackTrace', {
+                threadId: e.threadId
+            }).then(response => {
+                const stackFrames: Array<DebugProtocol.StackFrame> = response.stackFrames;
+
+                let selectedFrame = stackFrames.find(s => s.id === e.frameId);
+                let deepestFrame = stackFrames[0];
+
+                let selectedFrameInFile = selectedFrame?.source?.path === document.uri.fsPath;
+                let deepestFrameInFile = deepestFrame.source?.path === document.uri.fsPath;
+
+                let selectedFrameLine = selectedFrameInFile ? selectedFrame?.line : undefined;
+                let deepestFrameLine = deepestFrameInFile ? deepestFrame.line : undefined;
+                
+                console.log(selectedFrameLine, deepestFrameLine);
+
+                webviewPanel.webview.postMessage({
+                    type: "set_stack_frame",
+                    selected: selectedFrameLine,
+                    deepest: deepestFrameLine
+                });
+            });
+        });
+
+        vscode.debug.onDidTerminateDebugSession(e => {
+            webviewPanel.webview.postMessage({
+                type: "set_stack_frame",
+                selected: undefined,
+                deepest: undefined
+            });
+        });
+
         // Get rid of the listeners when our editor is closed.
         webviewPanel.onDidDispose(() => {
             changeDocumentSubscription.dispose();
             changeDiagnosticsSubscription.dispose();
             viewStateSubscription.dispose();
             configSubscription.dispose();
+            changeBreakpointsSubscription.dispose();
+            stackItemSubscription.dispose();
         });
 
         // Receive message from the webview.
@@ -113,6 +169,11 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                         type: "new_diagnostics",
                         diagnostics: vscode.languages.getDiagnostics(document.uri)
                     });
+
+                    // send initial breakpoints
+                    setBreakpoints();
+
+                    // TODO: initial stack frame
 
                     // set the new webview as the current webview
                     setActiveLilypadEditor(webviewPanel.webview);
@@ -160,6 +221,15 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                             completions: completions.items
                         });
                     });
+                    break;
+                }
+                case "register_breakpoints": {
+                    // currently just reset all breakpoints, could change this to a diff later if that matters
+                    vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+                    const newBreakpoints: Array<vscode.SourceBreakpoint> = Array.from(message.lines, ((line: number) =>
+                        new vscode.SourceBreakpoint(new vscode.Location(document.uri, new vscode.Position(line, 0)))
+                    ));
+                    vscode.debug.addBreakpoints(newBreakpoints);
                     break;
                 }
                 case "execute_command": {
@@ -213,10 +283,10 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         let nextEdit = this.editQueue.shift();
         if (nextEdit) {
             // don't allow another edit to be applied until this finishes
-            this.applyingEdit = true; 
+            this.applyingEdit = true;
 
             // don't cause edit notification cycle
-            this.internalEdit = true; 
+            this.internalEdit = true;
 
             // apply edit, and then trigger the next edit after that
             vscode.workspace.applyEdit(nextEdit)

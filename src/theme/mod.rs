@@ -42,6 +42,10 @@ pub const PSEUDO_SELECTION: Color = Color::rgba8(0xA0, 0x1C, 0x08, 0x40);
 pub const POPUP_BACKGROUND: Color = Color::rgb8(0x1E, 0x22, 0x27);
 pub const LINE_NUMBERS: Color = one_dark::GUTTER_GREY;
 
+pub const BREAKPOINT: Color = Color::rgb8(0xFF, 0x45, 0x45);
+pub const STACK_FRAME_SELECTED: Color = Color::rgb8(0x00, 0xFF, 0x00);
+pub const STACK_FRAME_DEEPEST: Color = Color::rgb8(0xFF, 0xFF, 0x00);
+
 #[allow(dead_code)]
 mod one_dark {
     use druid::Color;

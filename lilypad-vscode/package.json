@@ -13,7 +13,7 @@
     "ms-python.python"
   ],
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
     "Visualization",
@@ -89,6 +89,7 @@
   },
   "dependencies": {
     "@types/node-fetch": "^2.6.11",
+    "@vscode/debugprotocol": "^1.65.0",
     "node-fetch": "^2.7.0"
   }
 }
