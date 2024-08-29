@@ -1,27 +1,25 @@
-use std::sync::Arc;
-
-use druid::{text::Movement, EventCtx, MouseEvent, Point};
+use egui::{Modifiers, Pos2};
 use ropey::Rope;
 use tree_sitter_c2rust::TreeCursor;
 
-use super::TextEditor;
+use super::{text_editing::TextMovement, TextEditor};
 use crate::{
     block_editor::{
         rope_ext::{RopeExt, RopeSliceExt},
-        DragSession, TextPoint, TextRange, FONT_HEIGHT, FONT_WIDTH, GUTTER_WIDTH, OUTER_PAD,
-        TEXT_L_PAD, TOTAL_TEXT_X_OFFSET,
+        DragSession, MonospaceFont, TextPoint, TextRange, GUTTER_WIDTH, OUTER_PAD, TEXT_L_PAD,
+        TOTAL_TEXT_X_OFFSET,
     },
     vscode,
 };
 
 impl TextEditor {
     // Set the selection as a result of user input
-    fn set_selection(&mut self, selection: TextRange, source: &Rope) {
+    fn set_selection(&mut self, selection: TextRange) {
         self.selection = selection;
-        self.find_pseudo_selection(source);
+        self.find_pseudo_selection();
 
         // make cursor visible whenever moved
-        self.cursor_visible = true;
+        self.last_selection_time = self.frame_start_time;
 
         // clear input ignore stack
         self.input_ignore_stack.clear();
@@ -31,13 +29,13 @@ impl TextEditor {
         self.undo_manager.add_undo_stop()
     }
 
-    pub fn find_pseudo_selection(&mut self, source: &Rope) {
+    pub fn find_pseudo_selection(&mut self) {
         self.pseudo_selection = None;
         if self.selection.is_cursor() {
             // find if the cursor is after a quote
             let cursor_loc = self.selection.start;
-            let cursor_offset = cursor_loc.char_idx_in(source);
-            let (prev_char, _) = source.surrounding_chars(cursor_offset);
+            let cursor_offset = cursor_loc.char_idx_in(&self.source);
+            let (prev_char, _) = self.source.surrounding_chars(cursor_offset);
 
             if prev_char == '"' || prev_char == '\'' {
                 self.pseudo_selection = self.string_pseudo_selection_range(
@@ -83,35 +81,40 @@ impl TextEditor {
     }
 
     /* ----------------------------- Cursor Movement ---------------------------- */
-    pub fn move_cursor(&mut self, movement: Movement, source: &Rope) {
-        let new_cursor = self.selection.find_movement_result(movement, source, false);
-        self.set_selection(TextRange::new_cursor(new_cursor), source);
+    pub fn move_cursor(&mut self, movement: TextMovement) {
+        let new_cursor = self
+            .selection
+            .find_movement_result(movement, &self.source, false);
+        self.set_selection(TextRange::new_cursor(new_cursor));
     }
 
-    pub fn move_selecting(&mut self, movement: Movement, source: &Rope) {
-        let new_sel = self.selection.expanded_by(movement, source);
-        self.set_selection(new_sel, source);
+    pub fn move_selecting(&mut self, movement: TextMovement) {
+        let new_sel = self.selection.expanded_by(movement, &self.source);
+        self.set_selection(new_sel);
     }
 
     /* ------------------------------ Mouse Clicks ------------------------------ */
     pub fn mouse_clicked(
         &mut self,
-        mouse: &MouseEvent,
-        source: &mut Rope,
-        drag_block: &mut Option<Arc<DragSession>>,
-        ctx: &mut EventCtx,
+        pos: Pos2,
+        mods: Modifiers,
+        drag_block: &mut Option<DragSession>,
+        font: &MonospaceFont,
     ) {
         // if option is held, remove the current block from the source and place it in drag_block
-        if mouse.mods.alt() {
-            self.start_block_drag(mouse.pos, source, drag_block, ctx);
+        if mods.alt {
+            if drag_block.is_none() {
+                self.start_block_drag(pos, drag_block, font);
+            }
             return;
         }
 
         // move the cursor and get selection start position
-        let loc = self.mouse_to_coord(mouse.pos, source);
+        let loc = self.mouse_to_coord(pos, font);
 
-        if mouse.pos.x < GUTTER_WIDTH {
+        if pos.x < GUTTER_WIDTH {
             // if in the gutter, set a breakpoint
+            // TODO: clicking past the end currently adds a breakpoint to the last line, don't do that
             if self.breakpoints.contains(&loc.line) {
                 self.breakpoints.remove(&loc.line);
             } else {
@@ -120,44 +123,32 @@ impl TextEditor {
             vscode::register_breakpoints(self.breakpoints.iter().cloned().collect());
         } else {
             let selection = TextRange::new_cursor(loc);
-            self.set_selection(selection, source);
-        }
-
-        // request keyboard focus if not already focused
-        if !ctx.is_focused() {
-            ctx.request_focus();
+            self.set_selection(selection);
         }
     }
 
-    pub fn mouse_dragged(&mut self, mouse: &MouseEvent, source: &Rope, is_dragging: bool) {
-        if is_dragging {
-            self.set_dropping_line(mouse.pos, source);
-        } else {
-            // set selection end position to dragged position
-            let coord = self.mouse_to_coord(mouse.pos, source);
-            self.selection.end = coord;
+    pub fn expand_selection(&mut self, pos: Pos2, font: &MonospaceFont) {
+        // set selection end position to dragged position
+        let coord = self.mouse_to_coord(pos, font);
+        self.selection.end = coord;
 
-            // clear pseudo selection if making a selection
-            if !self.selection.is_cursor() {
-                self.pseudo_selection = None;
-            }
-
-            // show cursor
-            self.cursor_visible = true;
+        // clear pseudo selection if making a selection
+        if !self.selection.is_cursor() {
+            self.pseudo_selection = None;
         }
+
+        // show cursor
+        self.last_selection_time = self.frame_start_time;
     }
 
     /* -------------------- UI <-> Text Coordinate Conversion ------------------- */
-    pub fn mouse_to_coord(&self, point: Point, source: &Rope) -> TextPoint {
-        let font_height = *FONT_HEIGHT.get().unwrap();
-        let font_width = *FONT_WIDTH.get().unwrap();
-
+    pub fn mouse_to_coord(&self, point: Pos2, font: &MonospaceFont) -> TextPoint {
         // find the line clicked on by finding the next one and then going back one
         let mut line: usize = 0;
         let mut total_pad = 0.0;
         for line_pad in &self.padding {
             total_pad += line_pad;
-            let curr_line_start = total_pad + (line as f64 * font_height);
+            let curr_line_start = total_pad + (line as f32 * font.size.y);
             let raw_y = point.y - OUTER_PAD;
             if raw_y <= curr_line_start {
                 break;
@@ -168,7 +159,7 @@ impl TextEditor {
 
         // double check that we are in bounds
         // (clicking and deleting at the same time can cause the padding to not be updated yet)
-        let line_count = source.len_lines();
+        let line_count = self.source.len_lines();
         if line >= line_count {
             line = line_count - 1;
         }
@@ -176,23 +167,20 @@ impl TextEditor {
         // TODO: if past last line, move to end of last line
 
         let col_raw =
-            ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / font_width).round() as usize;
-        let col_bound = clamp_col(line, col_raw, source);
+            ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / font.size.x).round() as usize;
+        let col_bound = clamp_col(line, col_raw, &self.source);
 
         TextPoint::new(line, col_bound)
     }
 
     /// Finds the text coordinate that the mouse is over, without clamping to a valid position within the text
-    pub fn mouse_to_raw_coord(&self, point: Point) -> TextPoint {
-        let font_height = *FONT_HEIGHT.get().unwrap();
-        let font_width = *FONT_WIDTH.get().unwrap();
-
+    pub fn mouse_to_raw_coord(&self, point: Pos2, font: &MonospaceFont) -> TextPoint {
         // find the line clicked on by finding the next one and then going back one
         let mut line: usize = 0;
         let mut total_pad = 0.0;
         for line_pad in &self.padding {
             total_pad += line_pad;
-            let curr_line_start = total_pad + (line as f64 * font_height);
+            let curr_line_start = total_pad + (line as f32 * font.size.y);
             let raw_y = point.y - OUTER_PAD;
             if raw_y <= curr_line_start {
                 break;
@@ -201,68 +189,64 @@ impl TextEditor {
         }
 
         // add any remaining lines past the last line
-        line += ((point.y - (total_pad + (line as f64 * font_height))) / font_height) as usize;
+        line += ((point.y - (total_pad + (line as f32 * font.size.y))) / font.size.y) as usize;
 
         line = line.saturating_sub(1);
 
-        let col = ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / font_width).round() as usize;
+        let col =
+            ((point.x - OUTER_PAD - GUTTER_WIDTH - TEXT_L_PAD) / font.size.x).round() as usize;
 
         TextPoint::new(line, col)
     }
 
-    pub fn coord_to_mouse(&self, coord: TextPoint) -> Point {
-        let font_height = *FONT_HEIGHT.get().unwrap();
-        let font_width = *FONT_WIDTH.get().unwrap();
-
+    pub fn coord_to_mouse(&self, coord: TextPoint, font: &MonospaceFont) -> Pos2 {
         let y = OUTER_PAD
-            + (coord.line as f64 * font_height)
-            + self.padding.iter().take(coord.line).sum::<f64>();
-        let x = TOTAL_TEXT_X_OFFSET + (coord.col as f64 * font_width);
+            + (coord.line as f32 * font.size.y)
+            + self.padding.iter().take(coord.line).sum::<f32>();
+        let x = TOTAL_TEXT_X_OFFSET + (coord.col as f32 * font.size.x);
 
-        Point::new(x, y)
+        Pos2::new(x, y)
     }
 }
 
 impl TextRange {
-    pub fn expanded_by(&self, movement: Movement, source: &Rope) -> TextRange {
+    pub fn expanded_by(&self, movement: TextMovement, source: &Rope) -> TextRange {
         let new_cursor = self.find_movement_result(movement, source, true);
         TextRange::new(self.start, new_cursor)
     }
 
     pub fn find_movement_result(
         &self,
-        movement: Movement,
+        movement: TextMovement,
         source: &Rope,
         expanding: bool,
     ) -> TextPoint {
-        use druid::text::{Direction::*, Movement::*, VerticalMovement::*};
+        use super::text_editing::{HDir::*, HUnit, TextMovement::*, VDir::*, VUnit};
         match movement {
-            Grapheme(dir) => match dir {
-                Left | Upstream => self.cursor_left(source, expanding),
-                Right | Downstream => self.cursor_right(source, expanding),
+            Horizontal { unit, direction } => match unit {
+                HUnit::Grapheme => match direction {
+                    Left => self.cursor_left(source, expanding),
+                    Right => self.cursor_right(source, expanding),
+                },
+                HUnit::Word => match direction {
+                    Left => self.cursor_to_prev_word_start(source),
+                    Right => self.cursor_to_next_word_end(source),
+                },
+                HUnit::Line => match direction {
+                    Left => self.cursor_to_line_start(source),
+                    Right => self.cursor_to_line_end(source),
+                },
             },
-            Word(dir) => match dir {
-                Left | Upstream => self.cursor_to_prev_word_start(source),
-                Right | Downstream => self.cursor_to_next_word_end(source),
+            Vertical { unit, direction } => match unit {
+                VUnit::Line => match direction {
+                    Up => self.cursor_up(source),
+                    Down => self.cursor_down(source),
+                },
+                VUnit::Document => match direction {
+                    Up => TextPoint::ZERO,
+                    Down => self.cursor_to_doc_end(source),
+                },
             },
-            Line(dir) => match dir {
-                Left | Upstream => self.cursor_to_line_start(source),
-                Right | Downstream => self.cursor_to_line_end(source),
-            },
-            Vertical(dir) => match dir {
-                LineUp => self.cursor_up(source),
-                LineDown => self.cursor_down(source),
-                DocumentStart => TextPoint::ZERO,
-                DocumentEnd => self.cursor_to_doc_end(source),
-                _ => {
-                    println!("unimplemented vertical move: {:?}", dir);
-                    self.start
-                }
-            },
-            _ => {
-                println!("unimplemented movement: {:?}", movement);
-                self.start
-            }
         }
     }
 

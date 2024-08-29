@@ -1,23 +1,16 @@
-use druid::{
-    piet::{PietText, TextLayout},
-    Event, LifeCycle, MouseButton, Point, RenderContext, Size, Widget,
-};
 use std::collections::HashMap;
-use std::sync::Arc;
+
+use egui::{Align2, FontId, Rect, Response, ScrollArea, Sense, Stroke, Ui, Vec2, Widget};
 
 use super::loose_block::LooseBlock;
-use crate::block_editor::{commands, DragSession, EditorModel};
+use crate::block_editor::{DragSession, MonospaceFont};
 use crate::lang::Snippet;
+use crate::theme::blocks_theme::BlocksTheme;
 use crate::vscode;
-use crate::{
-    lang::{lang_for_file, LanguageConfig},
-    theme,
-    util::make_label_text_layout,
-};
+use crate::{lang::LanguageConfig, theme};
 
 pub struct BlockPalette {
     shown: bool,
-    lang: &'static LanguageConfig,
     items: Vec<PaletteItem>,
 }
 
@@ -27,189 +20,185 @@ struct PaletteItem {
 }
 
 impl PaletteItem {
-    fn new(snippet: &Snippet, lang: &'static LanguageConfig, piet_text: &mut PietText) -> Self {
+    fn new(snippet: &Snippet, lang: &'static LanguageConfig, font: &MonospaceFont) -> Self {
         Self {
             id: snippet.id,
-            block: LooseBlock::make_from_text(snippet.source, lang, 10.0, piet_text),
+            block: LooseBlock::new(snippet.source, 10.0, lang, font),
         }
     }
 }
 
 impl BlockPalette {
-    pub fn new(lang: &'static LanguageConfig) -> Self {
+    pub fn new() -> Self {
         Self {
             shown: true,
-            lang,
             items: vec![],
         }
     }
 
-    pub fn populate(&mut self, piet_text: &mut PietText) {
-        self.items = self
-            .lang
+    pub fn populate(&mut self, lang: &'static LanguageConfig, font: &MonospaceFont) {
+        self.items = lang
             .palette
             .iter()
-            .map(|snippet| PaletteItem::new(snippet, self.lang, piet_text))
+            .map(|snippet| PaletteItem::new(snippet, lang, font))
             .collect();
     }
 
-    pub fn update_language(&mut self, lang: &'static LanguageConfig, piet_text: &mut PietText) {
-        self.lang = lang;
-        self.populate(piet_text);
+    pub fn is_populated(&self) -> bool {
+        !self.items.is_empty()
     }
 }
 
-const H_PADDING: f64 = 10.0;
-const V_PADDING: f64 = 8.0;
-const HEADING_HEIGHT: f64 = 30.0;
+const H_PADDING: f32 = 10.0;
+const V_PADDING: f32 = 8.0;
+const HEADING_HEIGHT: f32 = 30.0;
 
-impl Widget<EditorModel> for BlockPalette {
-    fn event(
-        &mut self,
-        ctx: &mut druid::EventCtx,
-        event: &druid::Event,
-        data: &mut EditorModel,
-        _env: &druid::Env,
-    ) {
-        match event {
-            Event::MouseDown(mouse) => {
-                if mouse.button == MouseButton::Left {
-                    // toggle shown if clicked on arrow
-                    // sloppy hit box but close enough
-                    if mouse.pos.y <= HEADING_HEIGHT && mouse.pos.x >= ctx.size().width - 30.0 {
-                        self.shown = !self.shown;
-                        ctx.request_layout();
-                        ctx.request_paint();
-                        return;
+impl BlockPalette {
+    pub fn widget<'a>(
+        &'a mut self,
+        dragged_block: &'a mut Option<DragSession>,
+        blocks_theme: BlocksTheme,
+        font: &'a MonospaceFont,
+    ) -> impl Widget + 'a {
+        move |ui: &mut Ui| -> Response {
+            ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .id_source("block_palette")
+                .drag_to_scroll(false)
+                .show(ui, |ui| {
+                    let content_size = self.find_size();
+                    let expanded_size = content_size.max(ui.available_size() - Vec2::new(0.0, 5.0));
+                    let (id, rect) = ui.allocate_space(expanded_size);
+                    let response = ui.interact(rect, id, Sense::click());
+
+                    let painter = ui.painter();
+                    painter.rect_filled(painter.clip_rect(), 0.0, theme::POPUP_BACKGROUND);
+
+                    if self.shown {
+                        ui.painter().text(
+                            rect.min + Vec2::new(H_PADDING, V_PADDING),
+                            Align2::LEFT_TOP,
+                            "Palette:",
+                            FontId::proportional(15.0),
+                            theme::INTERFACE_TEXT,
+                        );
+
+                        self.add_arrow(ui, rect);
+
+                        self.add_blocks(
+                            (rect.min + Vec2::new(H_PADDING, HEADING_HEIGHT)).to_vec2(),
+                            content_size.x,
+                            ui,
+                            dragged_block,
+                            blocks_theme,
+                            font,
+                        );
+                    } else {
+                        self.add_arrow(ui, rect);
                     }
 
-                    // start dragging the selected item
-                    if self.shown {
-                        let mut y = HEADING_HEIGHT;
-                        for item in self.items.iter() {
-                            if mouse.pos.y >= y && mouse.pos.y <= y + item.block.size().height {
-                                vscode::log_event(
-                                    "palette-blog-drag",
-                                    HashMap::from([("type", item.id), ("lang", self.lang.name)]),
-                                );
-
-                                data.drag_block = Some(Arc::new(DragSession {
-                                    text: item.block.text().to_string(),
-                                    offset: Point::new(mouse.pos.x - H_PADDING, mouse.pos.y - y),
-                                }));
-                                break;
-                            }
-
-                            y += item.block.size().height + V_PADDING;
+                    // if mouse released in the block palette, cancel the drag
+                    if response.contains_pointer() {
+                        let mouse_released = ui.input(|i| i.pointer.primary_released());
+                        if mouse_released {
+                            *dragged_block = None;
                         }
                     }
-                }
-            }
 
-            Event::MouseUp(mouse) if mouse.button == MouseButton::Left => {
-                // cancel drag if block is dropped on the palette
-                if data.drag_block.is_some() {
-                    data.drag_block = None;
-                    ctx.submit_command(commands::DRAG_CANCELLED);
-                    ctx.request_paint();
-                }
-            }
-
-            Event::Command(command) => {
-                if let Some(file_name) = command.get(commands::SET_FILE_NAME) {
-                    let new_lang = lang_for_file(file_name);
-                    if self.lang.name != new_lang.name {
-                        self.update_language(new_lang, ctx.text());
-                    }
-                    ctx.request_layout();
-                }
-            }
-            _ => {}
+                    response
+                })
+                .inner
         }
     }
 
-    fn lifecycle(
-        &mut self,
-        ctx: &mut druid::LifeCycleCtx,
-        event: &druid::LifeCycle,
-        _data: &EditorModel,
-        _env: &druid::Env,
-    ) {
-        if let LifeCycle::WidgetAdded = event {
-            self.populate(ctx.text());
+    fn add_arrow(&mut self, ui: &mut Ui, rect: Rect) {
+        let direction = if self.shown { Vec2::RIGHT } else { Vec2::LEFT };
+        let close_response = ui.put(
+            Rect::from_min_size(
+                rect.right_top() + Vec2::new(-1.0 * (H_PADDING + 30.0), V_PADDING - 5.0),
+                Vec2::splat(30.0),
+            ),
+            ArrowButton::new(direction),
+        );
+        if close_response.clicked() {
+            self.shown = !self.shown;
         }
     }
 
-    fn update(
+    fn add_blocks(
         &mut self,
-        _ctx: &mut druid::UpdateCtx,
-        _old_data: &EditorModel,
-        _data: &EditorModel,
-        _env: &druid::Env,
+        mut offset: Vec2,
+        width: f32,
+        ui: &mut Ui,
+        dragged_block: &mut Option<DragSession>,
+        blocks_theme: BlocksTheme,
+        font: &MonospaceFont,
     ) {
+        for item in &self.items {
+            let block_rect = Rect::from_min_size(
+                offset.to_pos2(),
+                Vec2::new(width - (H_PADDING * 3.0), item.block.min_size().y),
+            );
+            let response = ui.put(block_rect, item.block.widget(blocks_theme, font));
+            if dragged_block.is_none() {
+                if let Some(pointer_pos) = response.interact_pointer_pos() {
+                    vscode::log_event("palette-blog-drag", HashMap::from([("type", item.id)]));
+
+                    *dragged_block = Some(DragSession {
+                        text: item.block.text().to_string(),
+                        offset: pointer_pos - block_rect.min.to_vec2(),
+                    });
+                }
+            }
+
+            offset.y += item.block.min_size().y + V_PADDING;
+        }
     }
 
-    fn layout(
-        &mut self,
-        ctx: &mut druid::LayoutCtx,
-        bc: &druid::BoxConstraints,
-        _data: &EditorModel,
-        _env: &druid::Env,
-    ) -> druid::Size {
-        let size = if self.shown {
-            let mut size = Size::ZERO;
+    pub fn find_size(&self) -> Vec2 {
+        if self.shown {
+            let mut size = Vec2::ZERO;
             for item in &self.items {
-                size.width = f64::max(size.width, item.block.size().width);
-                size.height += item.block.size().height + V_PADDING;
+                size.x = f32::max(size.x, item.block.min_size().x);
+                size.y += item.block.min_size().y + V_PADDING;
             }
+            size.x += H_PADDING * 3.0;
             size
         } else {
-            let button = make_label_text_layout("⇤", ctx.text());
-            Size::new(button.size().width + (H_PADDING * 2.0), 30.0)
-        };
-
-        bc.constrain(size)
-    }
-
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &EditorModel, _env: &druid::Env) {
-        // set background color
-        let bg_rect = ctx.size().to_rect();
-        ctx.fill(bg_rect, &theme::POPUP_BACKGROUND);
-
-        if self.shown {
-            let mut y = 0.0;
-
-            // top label
-            let heading = make_label_text_layout("Palette:", ctx.text());
-            ctx.draw_text(&heading, Point::new(H_PADDING, V_PADDING));
-
-            let close_btn = make_label_text_layout("⇥", ctx.text());
-            ctx.draw_text(
-                &close_btn,
-                Point::new(
-                    bg_rect.width() - close_btn.size().width - H_PADDING,
-                    V_PADDING,
-                ),
-            );
-
-            y += HEADING_HEIGHT;
-
-            // draw palettes
-            for item in &self.items {
-                let offset = Point::new(H_PADDING, y);
-                item.block
-                    .draw(offset, ctx.size().width - H_PADDING, data.block_theme, ctx);
-                y += item.block.size().height + V_PADDING;
-            }
-        } else {
-            let open_btn = make_label_text_layout("⇤", ctx.text());
-            ctx.draw_text(
-                &open_btn,
-                Point::new(
-                    bg_rect.width() - open_btn.size().width - H_PADDING,
-                    V_PADDING,
-                ),
-            );
+            Vec2::new(40.0, 30.0)
         }
+    }
+}
+
+struct ArrowButton {
+    direction: Vec2,
+}
+
+impl ArrowButton {
+    fn new(direction: Vec2) -> Self {
+        Self { direction }
+    }
+}
+
+impl Widget for ArrowButton {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let desired_size = Vec2::new(30.0, 30.0);
+        let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+
+        if ui.is_rect_visible(rect) {
+            let visuals = ui.style().interact(&response);
+            let arrow_points = [
+                rect.center() + self.direction * rect.height() * 0.2,
+                rect.center() - self.direction.rot90() * rect.height() * 0.2,
+                rect.center() + self.direction.rot90() * rect.height() * 0.2,
+            ];
+            ui.painter().add(egui::Shape::convex_polygon(
+                arrow_points.to_vec(),
+                visuals.fg_stroke.color,
+                Stroke::NONE,
+            ));
+        }
+
+        response
     }
 }

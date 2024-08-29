@@ -1,14 +1,14 @@
-use druid::kurbo::RoundedRect;
-use druid::{PaintCtx, Point, RenderContext, Size};
+use std::ops::RangeInclusive;
+
+use egui::{Painter, Pos2, Rect, Stroke, Vec2};
 use tree_sitter_c2rust::{Node, TreeCursor};
 
-use crate::block_editor::{FONT_HEIGHT, FONT_WIDTH};
 use crate::lang::LanguageConfig;
 use crate::theme::blocks_theme::BlocksTheme;
 
 use super::rope_ext::RopeSliceExt;
 use super::text_range::{TextPoint, TextRange};
-use super::SHOW_ERROR_BLOCK_OUTLINES;
+use super::{MonospaceFont, SHOW_ERROR_BLOCK_OUTLINES};
 
 /* ------------------------------ tree handling ----------------------------- */
 
@@ -299,32 +299,46 @@ fn adjust_block_starts(blocks: &mut Vec<Block>) -> usize {
 
 /* --------------------------------- drawing -------------------------------- */
 
-const OUTER_CORNER_RAD: f64 = 6.0;
-const MIN_CORNER_RAD: f64 = 1.5;
+const OUTER_CORNER_RAD: f32 = 6.0;
+const MIN_CORNER_RAD: f32 = 1.5;
 
-const BLOCK_STROKE_WIDTH: f64 = 1.5;
-const BLOCK_INNER_PAD: f64 = 3.0;
-const BLOCK_TOP_PAD: f64 = 1.0;
+const BLOCK_STROKE_WIDTH: f32 = 1.5;
+const BLOCK_INNER_PAD: f32 = 3.0;
+const BLOCK_TOP_PAD: f32 = 1.0;
 
 pub fn draw_blocks(
     blocks: &Vec<Block>,
-    offset: Point,
-    width: f64,
-    block_theme: BlocksTheme,
-    ctx: &mut PaintCtx,
+    offset: Vec2,
+    width: f32,
+    visible_lines: Option<RangeInclusive<usize>>,
+    blocks_theme: BlocksTheme,
+    font: &MonospaceFont,
+    painter: &Painter,
 ) {
-    draw_blocks_helper(blocks, 0, 0.0, offset, width, block_theme, ctx);
+    draw_blocks_helper(
+        blocks,
+        0,
+        0.0,
+        offset,
+        width,
+        visible_lines,
+        blocks_theme,
+        font,
+        painter,
+    );
 }
 
 fn draw_blocks_helper(
     blocks: &Vec<Block>,
     level: usize,
-    mut total_padding: f64,
-    offset: Point,
-    width: f64,
-    block_theme: BlocksTheme,
-    ctx: &mut PaintCtx,
-) -> f64 {
+    mut total_padding: f32,
+    offset: Vec2,
+    width: f32,
+    visible_lines: Option<RangeInclusive<usize>>,
+    blocks_theme: BlocksTheme,
+    font: &MonospaceFont,
+    painter: &Painter,
+) -> f32 {
     for block in blocks {
         if block.syntax_type == BlockType::Divider {
             // do not draw this block
@@ -334,8 +348,10 @@ fn draw_blocks_helper(
                 total_padding,
                 offset,
                 width,
-                block_theme,
-                ctx,
+                visible_lines.clone(),
+                blocks_theme,
+                font,
+                painter,
             );
         } else {
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
@@ -347,20 +363,33 @@ fn draw_blocks_helper(
                 total_padding,
                 offset,
                 width,
-                block_theme,
-                ctx,
+                visible_lines.clone(),
+                blocks_theme,
+                font,
+                painter,
             ) - total_padding;
 
-            draw_block(
-                block,
-                level,
-                total_padding,
-                inside_padding,
-                offset,
-                width,
-                block_theme,
-                ctx,
-            );
+            let block_visible = match visible_lines.clone() {
+                Some(visible) => {
+                    block.line <= *visible.end() && *visible.start() <= block.line + block.height
+                }
+                None => true,
+            };
+
+            if block_visible {
+                draw_block(
+                    block,
+                    level,
+                    total_padding,
+                    inside_padding,
+                    offset,
+                    width,
+                    blocks_theme,
+                    font,
+                    painter,
+                );
+            }
+
             total_padding += inside_padding;
             total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
         }
@@ -372,56 +401,56 @@ fn draw_blocks_helper(
 fn draw_block(
     block: &Block,
     level: usize,
-    padding_above: f64,
-    padding_inside: f64,
-    offset: Point,
-    width: f64,
-    block_theme: BlocksTheme,
-    ctx: &mut PaintCtx,
+    padding_above: f32,
+    padding_inside: f32,
+    offset: Vec2,
+    width: f32,
+    blocks_theme: BlocksTheme,
+    font: &MonospaceFont,
+    painter: &Painter,
 ) {
     // No color for invisible nodes
-    let color = match (block_theme.color_for)(block.syntax_type, level) {
+    let color = match (blocks_theme.color_for)(block.syntax_type, level) {
         Some(color) => color,
         None => return,
     };
 
-    let font_width = *FONT_WIDTH.get().unwrap();
-    let font_height = *FONT_HEIGHT.get().unwrap();
-
-    let start_pt = Point::new(
-        (block.col as f64) * font_width + offset.x - (BLOCK_STROKE_WIDTH / 2.0),
-        (block.line as f64) * font_height + offset.y - (BLOCK_STROKE_WIDTH / 2.0) + padding_above,
+    let start_pt = Pos2::new(
+        (block.col as f32) * font.size.x - (BLOCK_STROKE_WIDTH / 2.0),
+        (block.line as f32) * font.size.y - (BLOCK_STROKE_WIDTH / 2.0) - (BLOCK_INNER_PAD / 2.0)
+            + padding_above,
     );
 
     // determine the margin based on level
-    let margin = (start_pt.x) + ((level as f64) * (BLOCK_INNER_PAD + BLOCK_STROKE_WIDTH));
+    let right_margin = (level as f32) * (BLOCK_INNER_PAD + BLOCK_STROKE_WIDTH);
 
     // get the size of the rectangle to draw
-    let size = Size::new(
-        (width) - margin,
-        ((block.height as f64) * font_height) + (BLOCK_INNER_PAD * 2.0) + padding_inside,
+    let size = Vec2::new(
+        width - start_pt.x - right_margin,
+        ((block.height as f32) * font.size.y) + (BLOCK_INNER_PAD * 2.0) + padding_inside,
     );
 
     // nested corner radii should be r_inner = r_outer - distance
-    let rounding = f64::max(
-        OUTER_CORNER_RAD - (level as f64 * BLOCK_INNER_PAD),
+    let rounding = f32::max(
+        OUTER_CORNER_RAD - (level as f32 * BLOCK_INNER_PAD),
         MIN_CORNER_RAD,
     );
 
     // draw it
-    let rect = RoundedRect::from_origin_size(start_pt, size, rounding);
-    ctx.stroke(rect, &color, BLOCK_STROKE_WIDTH);
+    let rect = Rect::from_min_size(start_pt + offset, size);
+    let stroke = Stroke::new(BLOCK_STROKE_WIDTH, color);
+    painter.rect_stroke(rect, rounding, stroke);
 }
 
 /* ---------------------------- padding for text ---------------------------- */
 
-pub fn make_padding(blocks: &Vec<Block>, line_count: usize) -> Vec<f64> {
+pub fn make_padding(blocks: &Vec<Block>, line_count: usize) -> Vec<f32> {
     let mut padding = vec![0.0; line_count];
     padding_helper(blocks, &mut padding);
     padding
 }
 
-fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f64>) {
+fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f32>) {
     // do not calculate padding for empty file
     // (there will still be one block for an empty file)
     if padding.is_empty() {

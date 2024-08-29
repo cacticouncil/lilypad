@@ -1,4 +1,4 @@
-use druid::Color;
+use egui::Color32;
 use serde::{Deserialize, Deserializer};
 
 use crate::theme;
@@ -17,7 +17,7 @@ impl VSCodeCompletionItem {
         self.label.name()
     }
 
-    pub fn color(&self) -> Color {
+    pub fn color(&self) -> Color32 {
         self.kind.map_or(theme::syntax::DEFAULT, |k| k.color())
     }
 
@@ -105,7 +105,7 @@ enum VSCodeCompletionKind {
 }
 
 impl VSCodeCompletionKind {
-    pub fn color(self) -> Color {
+    pub fn color(self) -> Color32 {
         use VSCodeCompletionKind::*;
 
         match self {

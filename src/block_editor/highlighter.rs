@@ -7,7 +7,7 @@
 //   - support for ropey
 
 use ropey::RopeSlice;
-use std::{borrow::Cow, iter, mem, ops, str, usize};
+use std::{borrow::Cow, iter, mem, ops, str};
 use tree_sitter_c2rust::{
     Language, Node, Query, QueryCaptures, QueryCursor, QueryError, TextProvider,
 };

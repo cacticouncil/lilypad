@@ -65,7 +65,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         const changeDiagnosticsSubscription = vscode.languages.onDidChangeDiagnostics(e => {
             if (e.uris.map(u => u.toString()).includes(document.uri.toString())) {
                 webviewPanel.webview.postMessage({
-                    type: "new_diagnostics",
+                    type: "set_diagnostics",
                     diagnostics: vscode.languages.getDiagnostics(document.uri)
                 });
             }
@@ -85,7 +85,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             if (e.affectsConfiguration("lilypad.blocksTheme")) {
                 const newTheme = vscode.workspace.getConfiguration("lilypad").get("blocksTheme");
                 webviewPanel.webview.postMessage({
-                    type: "new_blocks_theme",
+                    type: "set_blocks_theme",
                     theme: newTheme
                 });
             }
@@ -125,7 +125,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
 
                 let selectedFrameLine = selectedFrameInFile ? selectedFrame?.line : undefined;
                 let deepestFrameLine = deepestFrameInFile ? deepestFrame.line : undefined;
-                
+
                 console.log(selectedFrameLine, deepestFrameLine);
 
                 webviewPanel.webview.postMessage({
@@ -166,7 +166,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
 
                     // send initial diagnostics
                     webviewPanel.webview.postMessage({
-                        type: "new_diagnostics",
+                        type: "set_diagnostics",
                         diagnostics: vscode.languages.getDiagnostics(document.uri)
                     });
 
@@ -204,6 +204,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     ).then((actions) => {
                         webviewPanel.webview.postMessage({
                             type: "return_quick_fixes",
+                            id: message.id,
                             actions
                         });
                     });
@@ -319,22 +320,30 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         <html lang="en">
             <head>
                 <meta charset="utf-8">
-                <title>Druid web example</title>
+                <title>Lilypad Editor</title>
                 <style>
                     html,
-                    body,
+                    body {
+                        overflow: hidden;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        height: 100%;
+                        width: 100%;
+                    }
+
                     canvas {
-                        margin: 0px;
-                        padding: 0px;
+                        margin-right: auto;
+                        margin-left: auto;
+                        display: block;
+                        position: absolute;
                         width: 100%;
                         height: 100%;
-                        overflow: hidden;
                     }
                 </style>
             </head>
             <body>
                 <div style="text-align: center; margin: 0px; padding: 0px;">
-                    <canvas id="canvas"></canvas>
+                    <canvas id="lilypad-canvas"></canvas>
                 </div>
                 <script>
                     /* this is a hacky way to send the configuration to run.js */

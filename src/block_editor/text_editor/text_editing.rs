@@ -1,4 +1,3 @@
-use druid::text::{Direction, Movement};
 use ropey::Rope;
 use std::borrow::Cow;
 use tree_sitter_c2rust::InputEdit;
@@ -18,6 +17,78 @@ use crate::{
 };
 
 const TAB_SIZE: usize = 4;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TextMovement {
+    Horizontal { unit: HUnit, direction: HDir },
+    Vertical { unit: VUnit, direction: VDir },
+}
+
+impl TextMovement {
+    pub fn horizontal(unit: HUnit, direction: HDir) -> Self {
+        Self::Horizontal { unit, direction }
+    }
+
+    pub fn vertical(unit: VUnit, direction: VDir) -> Self {
+        Self::Vertical { unit, direction }
+    }
+
+    pub fn is_grapheme(&self) -> bool {
+        matches!(
+            self,
+            Self::Horizontal {
+                unit: HUnit::Grapheme,
+                ..
+            }
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HUnit {
+    /// A movement that stops when it reaches an extended grapheme cluster boundary.
+    ///
+    /// This movement is achieved on most systems by pressing the left and right
+    /// arrow keys.  For more information on grapheme clusters, see
+    /// [Unicode Text Segmentation](https://unicode.org/reports/tr29/#Grapheme_Cluster_Boundaries).
+    Grapheme,
+
+    /// A movement that stops when it reaches a word boundary.
+    ///
+    /// This movement is achieved on most systems by pressing the left and right
+    /// arrow keys while holding control. For more information on words, see
+    /// [Unicode Text Segmentation](https://unicode.org/reports/tr29/#Word_Boundaries).
+    Word,
+
+    /// A movement that stops when it reaches a soft line break.
+    ///
+    /// This movement is achieved on macOS by pressing the left and right arrow
+    /// keys while holding command.  `Line` should be idempotent: if the
+    /// position is already at the end of a soft-wrapped line, this movement
+    /// should never push it onto another soft-wrapped line.
+    ///
+    /// In order to implement this properly, your text positions should remember
+    /// their affinity.
+    Line,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HDir {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum VUnit {
+    Line,
+    Document,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum VDir {
+    Up,
+    Down,
+}
 
 #[derive(Debug)]
 pub struct TextEdit<'a> {
@@ -112,7 +183,6 @@ impl<'a> TextEdit<'a> {
         tree_manager.update(source, tree_edit);
 
         // update vscode if not from vscode
-        // TODO: this is a pretty major bottleneck in the extension due to javascript overhead
         if self.origin != TextEditOrigin::Vscode {
             vscode::edited(
                 &self.text,
@@ -305,7 +375,7 @@ fn edit_for_insert_newline<'a>(
 fn edit_for_backspace<'a>(
     selection: TextRange,
     source: &Rope,
-    movement: Movement,
+    movement: TextMovement,
     pseudo_selection: Option<TextRange>,
     input_ignore_stack: &mut Vec<&'static str>,
     paired_delete_stack: &mut Vec<bool>,
@@ -321,8 +391,7 @@ fn edit_for_backspace<'a>(
     } else if old_selection.is_cursor() {
         // if single character not at start of line, backspace apply de-indent and paired delete
         if old_selection.start.col != 0
-            && (movement == Movement::Grapheme(Direction::Upstream)
-                || movement == Movement::Grapheme(Direction::Left))
+            && movement == TextMovement::horizontal(HUnit::Grapheme, HDir::Left)
         {
             // unindent if at start of line
             let line_indent = source.line(old_selection.start.line).whitespace_at_start();
@@ -354,7 +423,7 @@ fn edit_for_backspace<'a>(
         }
     } else {
         // if a selection, delete the whole selection (applying a movement if necessary)
-        if let Movement::Grapheme(_) = movement {
+        if movement.is_grapheme() {
             // if just a single character, delete the current selection
             old_selection
         } else {
@@ -482,13 +551,12 @@ impl TextEditor {
     /// NOTE: requires selection to be updated before calling because it updates the pseudo selection based on that.
     fn apply_edit_helper(
         &mut self,
-        source: &mut Rope,
         edit: &TextEdit,
         undo_stop_before: UndoStopCondition,
         undo_stop_after: bool,
     ) {
         // update buffer and tree
-        let undo = edit.apply(source, &mut self.tree_manager);
+        let undo = edit.apply(&mut self.source, &mut self.tree_manager);
 
         // update undo manager
         self.undo_manager
@@ -496,42 +564,41 @@ impl TextEditor {
         self.undo_manager.clear_redos();
 
         // show cursor whenever text changes
-        self.cursor_visible = true;
+        self.last_selection_time = self.frame_start_time;
 
         // will need to redraw because of edits
         self.text_changed = true;
 
         // cursor will have moved, so check for new pseudo selections
-        self.find_pseudo_selection(source);
+        self.find_pseudo_selection();
     }
 
     /// Apply an edit to the source and selection.
     /// Notifies vscode depending on the origin property of the TextEdit.
     pub fn apply_edit(
         &mut self,
-        source: &mut Rope,
         edit: &TextEdit,
         undo_stop_before: UndoStopCondition,
         undo_stop_after: bool,
     ) {
         self.selection = TextRange::new_cursor(edit.new_end());
-        self.apply_edit_helper(source, edit, undo_stop_before, undo_stop_after);
+        self.apply_edit_helper(edit, undo_stop_before, undo_stop_after);
     }
 
     /// Handle inserting a string at the current selection
-    pub fn insert_str(&mut self, source: &mut Rope, add: &str) {
+    pub fn insert_str(&mut self, add: &str) {
         let old_selection = self.selection.ordered();
         let edit = TextEdit::new(Cow::Borrowed(add), old_selection);
         self.selection = TextRange::new_cursor(edit.new_end());
-        self.apply_edit_helper(source, &edit, Always, true);
+        self.apply_edit_helper(&edit, Always, true);
     }
 
     /// Handle typing a single character
     /// (separate from `insert_str` because it also handles paired completion)
-    pub fn insert_char(&mut self, source: &mut Rope, add: &str) {
+    pub fn insert_char(&mut self, add: &str) {
         let (edit, new_selection) = edit_for_insert_char(
             self.selection,
-            source,
+            &self.source,
             add,
             &mut self.input_ignore_stack,
             &mut self.paired_delete_stack,
@@ -540,21 +607,21 @@ impl TextEditor {
         self.selection = new_selection;
 
         if let Some(edit) = edit {
-            self.apply_edit_helper(source, &edit, IfNotMerged, false);
+            self.apply_edit_helper(&edit, IfNotMerged, false);
         }
     }
 
-    pub fn insert_newline(&mut self, source: &mut Rope) {
+    pub fn insert_newline(&mut self) {
         let (edit, new_selection) =
-            edit_for_insert_newline(self.selection, source, self.language.new_scope_char);
+            edit_for_insert_newline(self.selection, &self.source, self.language.new_scope_char);
         self.selection = new_selection;
-        self.apply_edit_helper(source, &edit, Always, false);
+        self.apply_edit_helper(&edit, Always, false);
     }
 
-    pub fn backspace(&mut self, source: &mut Rope, movement: Movement) {
+    pub fn backspace(&mut self, movement: TextMovement) {
         let (edit, new_selection) = edit_for_backspace(
             self.selection,
-            source,
+            &self.source,
             movement,
             self.pseudo_selection,
             &mut self.input_ignore_stack,
@@ -562,41 +629,54 @@ impl TextEditor {
         );
         self.selection = new_selection;
         if let Some(edit) = edit {
-            self.apply_edit_helper(source, &edit, IfNotMerged, false);
+            self.apply_edit_helper(&edit, IfNotMerged, false);
         }
     }
 
-    pub fn indent(&mut self, source: &mut Rope) {
-        let (edit, new_selection) = edit_for_indent(self.selection, source);
-        self.selection = new_selection;
-        self.apply_edit_helper(source, &edit, Always, true);
-    }
-
-    pub fn unindent(&mut self, source: &mut Rope) {
-        let (edit, new_selection) = edit_for_unindent(self.selection, source);
-        self.selection = new_selection;
-        self.apply_edit_helper(source, &edit, Always, true);
-    }
-
-    pub fn undo(&mut self, source: &mut Rope) {
-        if let Some(new_selection) = self.undo_manager.apply_undo(source, &mut self.tree_manager) {
-            self.selection = new_selection;
-
-            // same as apply_edit_helper
-            self.cursor_visible = true;
-            self.text_changed = true;
-            self.find_pseudo_selection(source);
+    /// Delete just the currently selected text
+    pub fn delete_selection(&mut self) {
+        if !self.selection.is_cursor() {
+            self.apply_edit(&TextEdit::delete(self.selection), IfNotMerged, false);
         }
     }
 
-    pub fn redo(&mut self, source: &mut Rope) {
-        if let Some(new_selection) = self.undo_manager.apply_redo(source, &mut self.tree_manager) {
+    pub fn indent(&mut self) {
+        let (edit, new_selection) = edit_for_indent(self.selection, &self.source);
+        self.selection = new_selection;
+        self.apply_edit_helper(&edit, Always, true);
+    }
+
+    pub fn unindent(&mut self) {
+        let (edit, new_selection) = edit_for_unindent(self.selection, &self.source);
+        self.selection = new_selection;
+        self.apply_edit_helper(&edit, Always, true);
+    }
+
+    pub fn undo(&mut self) {
+        if let Some(new_selection) = self
+            .undo_manager
+            .apply_undo(&mut self.source, &mut self.tree_manager)
+        {
             self.selection = new_selection;
 
             // same as apply_edit_helper
-            self.cursor_visible = true;
+            self.last_selection_time = self.frame_start_time;
             self.text_changed = true;
-            self.find_pseudo_selection(source);
+            self.find_pseudo_selection();
+        }
+    }
+
+    pub fn redo(&mut self) {
+        if let Some(new_selection) = self
+            .undo_manager
+            .apply_redo(&mut self.source, &mut self.tree_manager)
+        {
+            self.selection = new_selection;
+
+            // same as apply_edit_helper
+            self.last_selection_time = self.frame_start_time;
+            self.text_changed = true;
+            self.find_pseudo_selection();
         }
     }
 }

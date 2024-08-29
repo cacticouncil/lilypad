@@ -301,7 +301,7 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
                 } else {
                     Some(FunctionDef)
                 }
-            },
+            }
             "while_statement" => Some(While),
             "if_statement" => {
                 if node.prev_sibling().map_or("", |s| s.kind()) == "else" {
@@ -314,9 +314,9 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
             "try_statement" => Some(Try),
             "template_declaration" => Some(FunctionDef),
 
-           // normal expressions (incomplete)
+            // normal expressions (incomplete)
             "preproc_include" => Some(Generic),
-            "expression_statement" =>Some(Generic),
+            "expression_statement" => Some(Generic),
             "continue_statement" => Some(Generic),
             "break_statement" => Some(Generic),
             "pass_statement" => Some(Generic),

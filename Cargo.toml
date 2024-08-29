@@ -1,6 +1,6 @@
 [package]
 name = "lilypad"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -22,13 +22,17 @@ lto = true
 # wasm-opt = false
 
 [dependencies]
-druid = "0.8"
+# egui
+egui = "0.28"
+eframe = { version = "0.28", default-features = false, features = [
+    "wgpu",
+    "default_fonts", # TODO: load fonts instead of bunding them
+] }
+egui_inbox = "0.5"
 
-# wasm stuff
-wasm-bindgen = "0.2"
-serde-wasm-bindgen = "0.6"
-console_error_panic_hook = "0.1"
-getrandom = { version = "*", features = ["js"] } # for serde-wasm-bindgen
+# logging
+log = "0.4"
+env_logger = "0.11"
 
 # text
 ropey = { version = "1.6", default-features = false, features = ["simd"] }
@@ -45,7 +49,18 @@ regex = { version = "1.9", default-features = false, features = [
 
 # tree sitter
 tree-sitter-c2rust = { git = "https://github.com/liamrosenfeld/tree-sitter", branch = "cfg-fix" }
-tree-sitter-python = { git = "https://github.com/liamrosenfeld/tree-sitter-python/", branch = "wasm"}
+tree-sitter-python = { git = "https://github.com/liamrosenfeld/tree-sitter-python/", branch = "wasm" }
 tree-sitter-java = { git = "https://github.com/liamrosenfeld/tree-sitter-java/", branch = "wasm" }
 tree-sitter-c-sharp = { git = "https://github.com/liamrosenfeld/tree-sitter-c-sharp/", branch = "wasm" }
 tree-sitter-cpp = { git = "https://github.com/singh-maya/tree-sitter-cpp/", branch = "wasm" }
+
+# wasm stuff
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3"
+serde-wasm-bindgen = "0.6"
+console_error_panic_hook = "0.1"
+
+# native stuff
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rfd = "0.14"

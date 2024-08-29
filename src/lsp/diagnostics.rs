@@ -1,8 +1,7 @@
-use druid::Color;
+use egui::Color32;
 use serde::{Deserialize, Serialize};
 
 use crate::block_editor::text_range::{TextPoint, TextRange};
-use crate::util::rand_u64;
 use crate::vscode;
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
@@ -11,13 +10,13 @@ pub struct Diagnostic {
     pub range: TextRange,
     pub severity: DiagnosticSeverity,
     pub source: String,
-    #[serde(skip, default = "rand_u64")]
-    pub id: u64,
+    #[serde(skip, default)]
+    pub id: usize,
 }
 
 impl Diagnostic {
     pub fn request_fixes(&self) {
-        crate::vscode::request_quick_fixes(self.range.start.line, self.range.start.col);
+        crate::vscode::request_quick_fixes(self.id, self.range.start.line, self.range.start.col);
     }
 
     #[allow(dead_code)]
@@ -27,7 +26,7 @@ impl Diagnostic {
             range: TextRange::new(TextPoint::new(2, 18), TextPoint::new(2, 25)),
             severity: DiagnosticSeverity::Error,
             source: "example".to_string(),
-            id: rand_u64(),
+            id: 0,
         }
     }
 }
@@ -41,7 +40,7 @@ pub enum DiagnosticSeverity {
 }
 
 impl DiagnosticSeverity {
-    pub fn color(&self) -> Color {
+    pub fn color(&self) -> Color32 {
         use crate::theme::diagnostic::*;
         use DiagnosticSeverity::*;
 

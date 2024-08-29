@@ -1,25 +1,18 @@
-use druid::{
-    piet::{PietText, PietTextLayout, Text, TextLayoutBuilder},
-    Color, PaintCtx, Point, RenderContext,
-};
+use egui::{Align2, Color32, Painter, Vec2};
 use ropey::Rope;
 use tree_sitter_c2rust::Node;
 
 use std::{
     borrow::Cow,
     cmp::{max, min},
-    ops::Range,
+    ops::{Range, RangeInclusive},
 };
 
-use super::highlighter::{Highlight, HighlightConfiguration, HighlightEvent};
-use super::{FONT_FAMILY, FONT_HEIGHT, FONT_SIZE};
+use super::{
+    highlighter::{Highlight, HighlightConfiguration, HighlightEvent},
+    MonospaceFont,
+};
 use crate::{lang::LanguageConfig, theme};
-
-#[cfg(target_family = "wasm")]
-use druid::piet::TextLayout;
-
-#[cfg(not(target_family = "wasm"))]
-use druid::piet::TextAttribute;
 
 // TODO: probably should have text drawers share highlight configurations
 pub struct TextDrawer {
@@ -47,19 +40,35 @@ impl TextDrawer {
         self.cache.clear();
     }
 
-    pub fn draw(&self, padding: &[f64], offset: Point, ctx: &mut PaintCtx) {
+    pub fn draw(
+        &self,
+        padding: &[f32],
+        offset: Vec2,
+        visible_lines: Option<RangeInclusive<usize>>,
+        font: &MonospaceFont,
+        painter: &Painter,
+    ) {
         let mut total_padding = 0.0;
         for (num, layout) in self.cache.iter().enumerate() {
             total_padding += padding[num];
-            let pos = Point {
+
+            if let Some(range) = &visible_lines {
+                if num < *range.start() {
+                    continue;
+                } else if num > *range.end() {
+                    break;
+                }
+            }
+
+            let total_offset = Vec2 {
                 x: offset.x,
-                y: ((num as f64) * FONT_HEIGHT.get().unwrap()) + total_padding + offset.y,
+                y: ((num as f32) * font.size.y) + total_padding + offset.y,
             };
-            layout.draw(pos, ctx);
+            layout.draw(total_offset, font, painter);
         }
     }
 
-    pub fn layout(&mut self, root_node: Node, source: &Rope, piet_text: &mut PietText) {
+    pub fn highlight(&mut self, root_node: Node, source: &Rope) {
         // erase old values
         self.cache.clear();
 
@@ -152,7 +161,7 @@ impl TextDrawer {
             }
 
             // build
-            self.cache.push(colored_text.build(piet_text));
+            self.cache.push(colored_text.build());
 
             // prepare for next
             start_of_line = end_of_line;
@@ -179,7 +188,7 @@ const HIGHLIGHT_NAMES: &[&str] = &[
     "embedded", // inside of interpolation
 ];
 
-fn get_text_color(highlight: Highlight) -> Color {
+fn get_text_color(highlight: Highlight) -> Color32 {
     use theme::syntax::*;
 
     // indexes of the above array
@@ -205,7 +214,7 @@ fn get_text_color(highlight: Highlight) -> Color {
 }
 
 struct ColorRange {
-    color: Color,
+    color: Color32,
     range: Range<usize>,
 }
 
@@ -215,14 +224,7 @@ struct ColoredTextBuilder<'a> {
 }
 
 struct ColoredText {
-    #[cfg(not(target_family = "wasm"))]
-    layout: PietTextLayout,
-
-    #[cfg(target_family = "wasm")]
-    /// html canvas (and therefor piet-web) does not
-    /// support ranged attributes so every
-    /// color must be a separate text layout
-    layouts: Vec<PietTextLayout>,
+    chunks: Vec<(String, Color32)>,
 }
 
 impl<'a> ColoredTextBuilder<'a> {
@@ -233,48 +235,12 @@ impl<'a> ColoredTextBuilder<'a> {
         }
     }
 
-    fn add_color(&mut self, color: Color, range: Range<usize>) {
+    fn add_color(&mut self, color: Color32, range: Range<usize>) {
         self.color_ranges.push(ColorRange { color, range });
     }
 
-    #[cfg(not(target_family = "wasm"))]
-    fn build(self, piet_text: &mut PietText) -> ColoredText {
-        let mut layout = piet_text
-            .new_text_layout(self.text.into_owned())
-            .font(
-                FONT_FAMILY.get().unwrap().clone(),
-                *FONT_SIZE.get().unwrap(),
-            )
-            .default_attribute(TextAttribute::TextColor(theme::syntax::DEFAULT));
-
-        // apply colors
-        for color_range in self.color_ranges {
-            layout = layout.range_attribute(
-                color_range.range,
-                TextAttribute::TextColor(color_range.color),
-            );
-        }
-
-        ColoredText {
-            layout: layout.build().unwrap(),
-        }
-    }
-
-    #[cfg(target_family = "wasm")]
-    fn build(self, piet_text: &mut PietText) -> ColoredText {
-        fn make_text_layout(text: &str, color: Color, piet_text: &mut PietText) -> PietTextLayout {
-            piet_text
-                .new_text_layout(text.to_string())
-                .font(
-                    FONT_FAMILY.get().unwrap().clone(),
-                    *FONT_SIZE.get().unwrap(),
-                )
-                .text_color(color)
-                .build()
-                .unwrap()
-        }
-
-        let mut layouts = vec![];
+    fn build(self) -> ColoredText {
+        let mut chunks = vec![];
 
         // apply colors
         let mut handled_up_to = 0;
@@ -282,37 +248,42 @@ impl<'a> ColoredTextBuilder<'a> {
             // add anything this might have skipped
             if handled_up_to < color_range.range.start {
                 let text = &self.text[handled_up_to..color_range.range.start];
-                layouts.push(make_text_layout(text, theme::syntax::DEFAULT, piet_text));
+                chunks.push((text.to_string(), theme::syntax::DEFAULT));
             }
 
             // add this
             handled_up_to = color_range.range.end;
             let text = &self.text[color_range.range];
-            layouts.push(make_text_layout(text, color_range.color, piet_text));
+            chunks.push((text.to_string(), color_range.color));
         }
 
         // add the rest
         if handled_up_to != self.text.len() {
             let text = &self.text[handled_up_to..];
-            layouts.push(make_text_layout(text, theme::syntax::DEFAULT, piet_text));
+            chunks.push((text.to_string(), theme::syntax::DEFAULT));
         }
 
-        ColoredText { layouts }
+        ColoredText { chunks }
     }
 }
 
 impl ColoredText {
-    #[cfg(not(target_family = "wasm"))]
-    fn draw(&self, pos: Point, ctx: &mut PaintCtx) {
-        ctx.draw_text(&self.layout, pos);
-    }
-
-    #[cfg(target_family = "wasm")]
-    fn draw(&self, mut pos: Point, ctx: &mut PaintCtx) {
-        // potential optimization: use spacers instead of full layouts for whitespace
-        for layout in &self.layouts {
-            ctx.draw_text(layout, pos);
-            pos.x += layout.trailing_whitespace_width();
+    fn draw(&self, mut offset: Vec2, font: &MonospaceFont, painter: &Painter) {
+        // draw by character until egui fixes monospace layout by switching to cosmic-text:
+        // https://github.com/emilk/egui/issues/3378
+        for (text, color) in &self.chunks {
+            for char in text.chars() {
+                if !char.is_whitespace() {
+                    painter.text(
+                        offset.to_pos2(),
+                        Align2::LEFT_TOP,
+                        char,
+                        font.id.clone(),
+                        *color,
+                    );
+                }
+                offset.x += font.size.x;
+            }
         }
     }
 }

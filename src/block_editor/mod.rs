@@ -1,15 +1,16 @@
-use druid::widget::Flex;
-use druid::{widget::Scroll, Data, Point, Widget, WidgetPod};
-use druid::{Event, MouseButton, WidgetExt};
+use egui::Vec2;
+use egui::{
+    text::Fonts, CentralPanel, FontFamily, FontId, Frame, Pos2, Rect, Sense, SidePanel, Widget,
+};
 use ropey::Rope;
-use std::sync::{Arc, Mutex, OnceLock};
+use text_editor::{StackFrameLines, TextEdit};
 
 use crate::lang::{lang_for_file, LanguageConfig};
+use crate::lsp::completion::VSCodeCompletionItem;
 use crate::theme::blocks_theme::BlocksTheme;
-use crate::vscode;
+use crate::{theme, vscode};
 
 mod block_drawer;
-pub mod commands;
 mod dragging;
 mod highlighter;
 mod rope_ext;
@@ -17,97 +18,111 @@ mod text_drawer;
 pub mod text_editor;
 pub mod text_range;
 
-pub use block_drawer::BlockType;
-
-use crate::lsp::diagnostics::Diagnostic;
-use text_range::*;
+pub use self::block_drawer::BlockType;
 
 use self::dragging::block_palette::BlockPalette;
-use self::dragging::dragging_popup::DraggingPopup;
+use self::dragging::loose_block::LooseBlock;
 use self::text_editor::TextEditor;
-
-static FONT_FAMILY: OnceLock<druid::FontFamily> = OnceLock::new();
-static FONT_SIZE: OnceLock<f64> = OnceLock::new();
-static FONT_WIDTH: OnceLock<f64> = OnceLock::new();
-static FONT_HEIGHT: OnceLock<f64> = OnceLock::new();
-
-pub fn configure_font(name: String, size: f64) {
-    let family = druid::FontFamily::new_unchecked(name);
-    FONT_FAMILY.set(family).unwrap();
-    FONT_SIZE.set(size).unwrap();
-}
-
-pub fn find_font_dimensions(ctx: &mut druid::LifeCycleCtx, env: &druid::Env) {
-    // find the size of a single character
-    let font = druid::FontDescriptor::new(FONT_FAMILY.get().unwrap().clone())
-        .with_size(*FONT_SIZE.get().unwrap());
-    let mut layout = druid::TextLayout::<String>::from_text("A");
-    layout.set_font(font);
-    layout.rebuild_if_needed(ctx.text(), env);
-    let dimensions = layout.size();
-
-    FONT_WIDTH.set(dimensions.width).unwrap();
-    FONT_HEIGHT.set(dimensions.height).unwrap();
-}
+use self::text_range::*;
+use crate::lsp::diagnostics::{Diagnostic, VSCodeCodeAction};
 
 /// padding around edges of entire editor
-const OUTER_PAD: f64 = 16.0;
+const OUTER_PAD: f32 = 16.0;
 
 /// left padding on text (to position it nicer within the blocks)
-const TEXT_L_PAD: f64 = 2.0;
+const TEXT_L_PAD: f32 = 2.0;
 
 /// width for the line number gutter
-const GUTTER_WIDTH: f64 = 30.0;
+const GUTTER_WIDTH: f32 = 30.0;
 
 /// convenience constant for all the padding that impacts text layout
-const TOTAL_TEXT_X_OFFSET: f64 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
+const TOTAL_TEXT_X_OFFSET: f32 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 
 const SHOW_ERROR_BLOCK_OUTLINES: bool = false;
 
-pub fn widget(file_name: &str) -> impl Widget<EditorModel> {
-    BlockEditor::new(file_name)
-}
-
-struct BlockEditor {
+pub struct BlockEditor {
     /// the current language used by the editor
     language: &'static LanguageConfig,
 
-    /// a horizontal stack with the text editor and block palette
-    content: WidgetPod<EditorModel, Flex<EditorModel>>,
+    /// the color theme for the blocks
+    blocks_theme: BlocksTheme,
 
-    /// overlay view for dragging blocks
-    dragging_popup: WidgetPod<EditorModel, DraggingPopup>,
+    /// the font used for code
+    font: MonospaceFont,
+
+    /// the editor widget
+    text_editor: TextEditor,
+
+    /// the palette of blocks that can be dragged into the editor
+    block_palette: BlockPalette,
+
+    /// text that is currently getting dragged
+    drag_block: Option<DragSession>,
+
+    /// the popup for the currently dragged block
+    dragging_popup: Option<LooseBlock>,
 }
 
+#[derive(Debug)]
 pub struct DragSession {
     text: String,
 
     /// point within the block that it is dragged by
-    offset: Point,
+    offset: Pos2,
 }
 
-#[derive(Clone, Data)]
-pub struct EditorModel {
-    /// the source code to edit
-    pub source: Arc<Mutex<Rope>>,
+#[allow(dead_code)]
+pub enum ExternalCommand {
+    // setup
+    SetText(String),
+    SetFileName(String),
+    SetBlocksTheme(BlocksTheme),
 
-    /// the color theme for the blocks
-    #[data(eq)]
-    pub block_theme: BlocksTheme,
+    // external edits
+    ApplyEdit(TextEdit<'static>),
+    InsertText(String),
 
-    /// diagnostics for current cursor position
-    pub diagnostics: Arc<Vec<Diagnostic>>,
+    // lsp connection
+    SetDiagnostics(Vec<Diagnostic>),
+    SetQuickFix(usize, Vec<VSCodeCodeAction>),
+    SetCompletions(Vec<VSCodeCompletionItem>),
 
-    /// id of diagnostic selected in the popup
-    #[data(eq)]
-    pub diagnostic_selection: Option<u64>,
+    // debugging
+    SetBreakpoints(Vec<usize>),
+    SetStackFrame(StackFrameLines),
 
-    /// text that is currently getting dragged
-    pub drag_block: Option<Arc<DragSession>>,
+    // undo/redo
+    Undo,
+    Redo,
+}
+
+pub struct MonospaceFont {
+    /// The font size and family
+    id: FontId,
+
+    /// The size in pixels of a single character
+    size: Vec2,
+}
+
+impl MonospaceFont {
+    /// Create a new monospace font.
+    /// Note: does not calculate the size yet. Must also call `calculate_size` before using..
+    pub fn new(_family: &str, size: f32) -> Self {
+        // TODO: support custom font families
+        let id = FontId::new(size, FontFamily::Monospace);
+        Self {
+            id,
+            size: Vec2::ZERO,
+        }
+    }
+
+    pub fn calculate_size(&mut self, fonts: &Fonts) {
+        self.size = Vec2::new(fonts.glyph_width(&self.id, 'A'), fonts.row_height(&self.id));
+    }
 }
 
 impl BlockEditor {
-    fn new(file_name: &str) -> Self {
+    pub fn new(file_name: &str, blocks_theme: &str, font: MonospaceFont) -> Self {
         let lang = lang_for_file(file_name);
         vscode::log_event(
             "opened-file",
@@ -115,128 +130,119 @@ impl BlockEditor {
         );
         BlockEditor {
             language: lang,
-            content: WidgetPod::new(Self::make_content(lang)),
-            dragging_popup: WidgetPod::new(DraggingPopup::new(lang)),
+            blocks_theme: BlocksTheme::for_str(blocks_theme),
+            font,
+            text_editor: TextEditor::new(Rope::new(), lang),
+            block_palette: BlockPalette::new(),
+            drag_block: None,
+            dragging_popup: None,
         }
     }
 
-    fn make_content(lang: &'static LanguageConfig) -> Flex<EditorModel> {
-        Flex::row()
-            .with_flex_child(
-                Scroll::new(TextEditor::new(lang))
-                    .content_must_fill(true)
-                    .expand(),
-                1.0,
-            )
-            .with_child(
-                Scroll::new(BlockPalette::new(lang))
-                    .content_must_fill(true)
-                    .expand_height(),
-            )
-            .must_fill_main_axis(true)
-    }
-}
+    pub fn widget<'a>(&'a mut self, external_commands: &'a [ExternalCommand]) -> impl Widget + 'a {
+        move |ui: &mut egui::Ui| -> egui::Response {
+            // trigger started on the first frame
+            if ui.ctx().frame_nr() == 0 {
+                vscode::started();
+            }
 
-impl Widget<EditorModel> for BlockEditor {
-    fn event(
-        &mut self,
-        ctx: &mut druid::EventCtx,
-        event: &druid::Event,
-        data: &mut EditorModel,
-        env: &druid::Env,
-    ) {
-        self.dragging_popup.event(ctx, event, data, env);
-        self.content.event(ctx, event, data, env);
+            // calculate the size of a character at the start of the frame
+            // since it can change with pixels_per_point
+            ui.fonts(|f| self.font.calculate_size(f));
 
-        match event {
-            Event::MouseDown(mouse) => {
-                if mouse.button == MouseButton::Left {
-                    // set the origin of the dragging popup if dragging
-                    if data.drag_block.is_some() {
-                        let origin = self.dragging_popup.widget().calc_origin(mouse.pos);
-                        self.dragging_popup.set_origin(ctx, origin);
+            // handle external commands
+            for command in external_commands.iter() {
+                match command {
+                    ExternalCommand::SetBlocksTheme(theme) => {
+                        self.blocks_theme = *theme;
                     }
-
-                    ctx.request_layout();
-                    ctx.request_paint();
+                    ExternalCommand::SetFileName(file_name) => {
+                        self.language = lang_for_file(file_name);
+                        self.block_palette.populate(self.language, &self.font)
+                    }
+                    _ => {}
                 }
             }
 
-            Event::MouseMove(mouse) => {
-                if mouse.buttons.has_left() {
-                    // set the origin of the dragging popup if dragging
-                    if data.drag_block.is_some() {
-                        let origin = self.dragging_popup.widget().calc_origin(mouse.pos);
-                        self.dragging_popup.set_origin(ctx, origin);
-                    }
-
-                    ctx.request_paint();
-                }
+            if !self.block_palette.is_populated() {
+                self.block_palette.populate(self.language, &self.font);
             }
 
-            Event::Command(command) => {
-                if let Some(file_name) = command.get(commands::SET_FILE_NAME) {
-                    let new_lang = lang_for_file(file_name);
-                    if self.language.name != new_lang.name {
-                        self.language = new_lang;
-                        self.dragging_popup.widget_mut().change_language(new_lang);
-                    }
-                } else if let Some(block_theme) = command.get(commands::SET_BLOCK_THEME) {
-                    data.block_theme = *block_theme;
-                }
-            }
+            let response =
+                ui.allocate_response(ui.available_size(), Sense::focusable_noninteractive());
 
-            _ => {}
+            self.editor_contents(ui, external_commands);
+
+            self.draw_dragged_block(ui);
+
+            response
         }
     }
 
-    fn lifecycle(
-        &mut self,
-        ctx: &mut druid::LifeCycleCtx,
-        event: &druid::LifeCycle,
-        data: &EditorModel,
-        env: &druid::Env,
-    ) {
-        self.dragging_popup.lifecycle(ctx, event, data, env);
-        self.content.lifecycle(ctx, event, data, env);
+    fn editor_contents(&mut self, ui: &mut egui::Ui, external_commands: &[ExternalCommand]) {
+        let palette_size = self.block_palette.find_size();
+        SidePanel::right("palette_panel")
+            .exact_width(palette_size.x)
+            .show_separator_line(false)
+            .resizable(false)
+            .frame(Frame::none())
+            .show(ui.ctx(), |ui| {
+                ui.add(self.block_palette.widget(
+                    &mut self.drag_block,
+                    self.blocks_theme,
+                    &self.font,
+                ));
+            });
+
+        CentralPanel::default()
+            .frame(Frame::none())
+            .show(ui.ctx(), |ui| {
+                ui.add(self.text_editor.widget(
+                    &mut self.drag_block,
+                    external_commands,
+                    self.blocks_theme,
+                    &self.font,
+                ));
+            });
     }
 
-    fn update(
-        &mut self,
-        ctx: &mut druid::UpdateCtx,
-        old_data: &EditorModel,
-        data: &EditorModel,
-        env: &druid::Env,
-    ) {
-        self.dragging_popup.update(ctx, data, env);
-        self.content.update(ctx, data, env);
+    fn draw_dragged_block(&mut self, ui: &mut egui::Ui) {
+        if let Some(drag_block) = &mut self.drag_block {
+            // show dragging cursor
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
 
-        if data.block_theme != old_data.block_theme {
-            ctx.request_paint();
-        }
-    }
+            // create the dragging popup if this is the first frame of the drag
+            if self.dragging_popup.is_none() {
+                self.dragging_popup = Some(LooseBlock::new(
+                    &drag_block.text,
+                    40.0,
+                    self.language,
+                    &self.font,
+                ));
+            }
 
-    fn layout(
-        &mut self,
-        ctx: &mut druid::LayoutCtx,
-        bc: &druid::BoxConstraints,
-        data: &EditorModel,
-        env: &druid::Env,
-    ) -> druid::Size {
-        self.dragging_popup.layout(ctx, bc, data, env);
-        self.content.layout(ctx, bc, data, env);
-
-        bc.constrain(druid::Size {
-            width: f64::INFINITY,
-            height: f64::INFINITY,
-        })
-    }
-
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &EditorModel, env: &druid::Env) {
-        self.content.paint(ctx, data, env);
-
-        if data.drag_block.is_some() {
-            self.dragging_popup.paint(ctx, data, env);
+            if let Some(dragging_popup) = &mut self.dragging_popup {
+                // add the dragging pop up where the mouse is
+                if let Some(mouse_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                    let painter = ui.painter();
+                    let origin = mouse_pos - drag_block.offset;
+                    painter.rect_filled(
+                        Rect::from_min_size(origin.to_pos2(), dragging_popup.min_size()),
+                        0.0,
+                        theme::BACKGROUND.gamma_multiply(0.75),
+                    );
+                    dragging_popup.draw(
+                        origin,
+                        dragging_popup.min_size().x,
+                        self.blocks_theme,
+                        &self.font,
+                        painter,
+                    )
+                }
+            }
+        } else {
+            // clear the dragging popup if the drag is over
+            self.dragging_popup = None;
         }
     }
 }

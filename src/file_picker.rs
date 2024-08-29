@@ -1,130 +1,93 @@
-use crate::{block_editor::commands, theme, util::make_label_text_layout, AppModel};
-use druid::{
-    piet::TextLayout, widget::Scroll, Event, LifeCycle, MouseButton, Point, Rect, RenderContext,
-    Size, Widget, WidgetExt,
-};
+use egui::{Button, FontId, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget};
+use rfd::FileDialog;
+use std::path::PathBuf;
 
-pub fn widget() -> impl Widget<AppModel> {
-    Scroll::new(FilePicker { files: vec![] })
-        .vertical()
-        .expand_height()
-        .background(theme::POPUP_BACKGROUND)
-}
+use crate::{block_editor::ExternalCommand, theme, util_widgets::SelectableRow};
 
-struct FilePicker {
+pub struct FilePicker {
+    dir: Option<PathBuf>,
     files: Vec<String>,
+    selected_file: Option<usize>,
 }
 
-const ROW_HEIGHT: f64 = 25.0;
-const ROW_WIDTH: f64 = 150.0;
+const ROW_HEIGHT: f32 = 25.0;
 
-impl Widget<AppModel> for FilePicker {
-    fn event(
-        &mut self,
-        ctx: &mut druid::EventCtx,
-        event: &druid::Event,
-        data: &mut AppModel,
-        _env: &druid::Env,
-    ) {
-        if let Event::MouseDown(mouse) = event {
-            ctx.request_focus();
-
-            if mouse.button == MouseButton::Left {
-                let file_num = (mouse.pos.y / ROW_HEIGHT) as usize;
-                if file_num < self.files.len() {
-                    data.file = Some(self.files[file_num].clone());
-                }
-                ctx.set_handled();
-            }
+impl FilePicker {
+    pub fn new() -> Self {
+        Self {
+            dir: None,
+            files: vec![],
+            selected_file: None,
         }
     }
 
-    fn lifecycle(
-        &mut self,
-        _ctx: &mut druid::LifeCycleCtx,
-        event: &druid::LifeCycle,
-        data: &AppModel,
-        _env: &druid::Env,
-    ) {
-        if let LifeCycle::WidgetAdded = event {
-            if let Some(dir) = &data.dir {
-                self.files = std::fs::read_dir(dir)
-                    .unwrap()
-                    .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
-                    .collect::<Vec<_>>();
-            }
+    pub fn widget<'a>(&'a mut self, commands: &'a mut Vec<ExternalCommand>) -> impl Widget + 'a {
+        move |ui: &mut Ui| -> Response {
+            ScrollArea::vertical()
+                .show(ui, |ui| {
+                    let (id, rect) = ui.allocate_space(
+                        ui.available_size()
+                            .max(Vec2::new(0.0, self.files.len() as f32 * ROW_HEIGHT)),
+                    );
+                    let response = ui.interact(rect, id, Sense::hover());
+
+                    ui.painter().rect_filled(rect, 0.0, theme::POPUP_BACKGROUND);
+
+                    if self.dir.is_some() {
+                        for (idx, file) in self.files.iter().enumerate() {
+                            if ui
+                                .put(
+                                    Rect::from_min_size(
+                                        rect.min + Vec2::new(0.0, idx as f32 * ROW_HEIGHT),
+                                        Vec2::new(rect.width(), ROW_HEIGHT),
+                                    ),
+                                    SelectableRow::new(
+                                        file,
+                                        theme::syntax::DEFAULT,
+                                        self.selected_file == Some(idx),
+                                        FontId::proportional(15.0),
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                self.selected_file = Some(idx);
+                                self.set_file(commands);
+                            }
+                        }
+                    } else if ui
+                        .put(
+                            Rect::from_min_size(rect.min, Vec2::new(rect.width(), ROW_HEIGHT)),
+                            Button::new("Pick Folder"),
+                        )
+                        .clicked()
+                    {
+                        if let Some(dir) = FileDialog::new().pick_folder() {
+                            self.files = std::fs::read_dir(&dir)
+                                .unwrap()
+                                .map(|entry| {
+                                    entry.unwrap().file_name().to_string_lossy().to_string()
+                                })
+                                .collect::<Vec<_>>();
+                            self.dir = Some(dir);
+                        }
+                    }
+
+                    response
+                })
+                .inner
         }
     }
 
-    fn update(
-        &mut self,
-        ctx: &mut druid::UpdateCtx,
-        old_data: &AppModel,
-        data: &AppModel,
-        _env: &druid::Env,
-    ) {
-        if old_data.dir != data.dir {
-            if let Some(dir) = &data.dir {
-                self.files = std::fs::read_dir(dir)
-                    .unwrap()
-                    .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
-                    .collect::<Vec<_>>();
-                self.files.sort_unstable();
-            } else {
-                self.files.clear();
-            }
-        }
+    fn set_file(&self, commands: &mut Vec<ExternalCommand>) {
+        if let (Some(dir), Some(selected_file)) = (self.dir.as_ref(), self.selected_file) {
+            let file_path = dir.join(&self.files[selected_file]);
 
-        // update source if file changed
-        if old_data.file != data.file {
-            if let Some(file) = &data.file {
-                let mut file_path = data.dir.clone().unwrap();
-                file_path.push(file);
+            let file_contents = std::fs::read_to_string(&file_path)
+                .unwrap_or_else(|_| "# could not read file".to_string());
+            let file_name = file_path.file_name().unwrap().to_string_lossy().to_string();
 
-                let file_contents = std::fs::read_to_string(&file_path)
-                    .unwrap_or_else(|_| "# could not read file".to_string());
-                let file_name = file_path.file_name().unwrap().to_string_lossy().to_string();
-                ctx.submit_command(commands::SET_FILE_NAME.with(file_name));
-                ctx.submit_command(commands::SET_TEXT.with(file_contents));
-            }
-        }
-    }
-
-    fn layout(
-        &mut self,
-        _ctx: &mut druid::LayoutCtx,
-        bc: &druid::BoxConstraints,
-        _data: &AppModel,
-        _env: &druid::Env,
-    ) -> druid::Size {
-        let height = self.files.len() as f64 * ROW_HEIGHT;
-        let desired = Size {
-            width: ROW_WIDTH,
-            height,
-        };
-        bc.constrain(desired)
-    }
-
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &AppModel, _env: &druid::Env) {
-        if ctx.has_focus() {
-            let outline = Rect::from_origin_size(Point::ORIGIN, ctx.size());
-            ctx.stroke(outline, &theme::SELECTION, 2.0);
-        }
-
-        for (num, file) in self.files.iter().enumerate() {
-            let layout = make_label_text_layout(file, ctx.text());
-
-            let pos = Point::new(0.0, ROW_HEIGHT * num as f64);
-
-            if Some(file) == data.file.as_ref() {
-                // highlight background
-                let rect = Rect::from_origin_size(pos, Size::new(ROW_WIDTH, ROW_HEIGHT));
-                ctx.fill(rect, &theme::SELECTION);
-            }
-
-            let text_pos = Point::new(10.0, pos.y + ((ROW_HEIGHT - layout.size().height) / 2.0));
-
-            ctx.draw_text(&layout, text_pos);
+            commands.push(ExternalCommand::SetFileName(file_name));
+            commands.push(ExternalCommand::SetText(file_contents));
         }
     }
 }

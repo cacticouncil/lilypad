@@ -1,59 +1,66 @@
-use druid::{Color, PaintCtx, Point, Rect, RenderContext, Size};
-use ropey::Rope;
+use egui::{Color32, Painter, Pos2, Rect, Ui, Vec2};
 
-use super::{TextEditor, TextPoint};
+use super::{TextEditor, TextPoint, CURSOR_OFF_DURATION, CURSOR_ON_DURATION};
 use crate::{
-    block_editor::{
-        text_range::TextRange, FONT_HEIGHT, FONT_WIDTH, OUTER_PAD, TOTAL_TEXT_X_OFFSET,
-    },
+    block_editor::{text_range::TextRange, MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     theme,
 };
 
 impl TextEditor {
-    pub fn draw_cursor(&self, ctx: &mut PaintCtx) {
-        if self.cursor_visible {
-            // we want to draw the cursor where the mouse has last been (selection end)
-            let total_pad: f64 = self.padding.iter().take(self.selection.end.line + 1).sum();
-            let block = Rect::from_origin_size(
-                Point::new(
-                    TOTAL_TEXT_X_OFFSET
-                        + (self.selection.end.col as f64) * FONT_WIDTH.get().unwrap(),
-                    OUTER_PAD
-                        + (self.selection.end.line as f64) * FONT_HEIGHT.get().unwrap()
-                        + total_pad,
-                ),
-                Size::new(2.0, *FONT_HEIGHT.get().unwrap()),
-            );
+    /// Draws the cursor at the current position and returns the rect of the cursor.
+    pub fn draw_cursor(&self, offset: Vec2, font: &MonospaceFont, ui: &Ui) -> Rect {
+        // we want to draw the cursor where the mouse has last been (selection end)
+        let total_pad: f32 = self.padding.iter().take(self.selection.end.line + 1).sum();
+        let block = Rect::from_min_size(
+            Pos2::new(
+                TOTAL_TEXT_X_OFFSET + (self.selection.end.col as f32) * font.size.x,
+                OUTER_PAD + (self.selection.end.line as f32) * font.size.y + total_pad,
+            ) + offset,
+            Vec2::new(2.0, font.size.y),
+        );
 
-            ctx.fill(block, &theme::CURSOR);
-        }
+        let time_since_last_selection = self.frame_start_time - self.last_selection_time;
+        let total_duration = CURSOR_ON_DURATION + CURSOR_OFF_DURATION;
+        let time_in_cycle = time_since_last_selection % total_duration;
+        let wake_in = if time_in_cycle < CURSOR_ON_DURATION {
+            // cursor is visible
+            ui.painter().rect_filled(block, 0.0, theme::CURSOR);
+            CURSOR_ON_DURATION - time_in_cycle
+        } else {
+            // cursor is not visible
+            total_duration - time_in_cycle
+        };
+        ui.ctx().request_repaint_after_secs(wake_in as f32);
+
+        block
     }
 
-    pub fn draw_selection(&self, source: &Rope, ctx: &mut PaintCtx) {
+    pub fn draw_selection(&self, offset: Vec2, font: &MonospaceFont, painter: &Painter) {
         if !self.selection.is_cursor() {
-            self.draw_selection_blocks(self.selection, source, &theme::SELECTION, ctx);
+            self.draw_selection_blocks(self.selection, theme::SELECTION, offset, font, painter);
         }
     }
 
-    pub fn draw_pseudo_selection(&self, source: &Rope, ctx: &mut PaintCtx) {
+    pub fn draw_pseudo_selection(&self, offset: Vec2, font: &MonospaceFont, painter: &Painter) {
         if let Some(selection) = self.pseudo_selection {
-            self.draw_selection_blocks(selection, source, &theme::PSEUDO_SELECTION, ctx);
+            self.draw_selection_blocks(selection, theme::PSEUDO_SELECTION, offset, font, painter);
         }
     }
 
     fn draw_selection_blocks(
         &self,
         selection: TextRange,
-        source: &Rope,
-        color: &Color,
-        ctx: &mut PaintCtx,
+        color: Color32,
+        offset: Vec2,
+        font: &MonospaceFont,
+        painter: &Painter,
     ) {
         let selection = selection.ordered();
-        let line_ranges = selection.individual_lines(source);
+        let line_ranges = selection.individual_lines(&self.source);
 
         // start the the total padding through the first line so the selection
         // block is placed on the text of the first line (instead of the padding above it)
-        let mut total_padding: f64 = self.padding.iter().take(selection.start.line + 1).sum();
+        let mut total_padding: f32 = self.padding.iter().take(selection.start.line + 1).sum();
 
         for line_range in line_ranges {
             // one line per range so the line number is the start of the range
@@ -69,7 +76,9 @@ impl TextEditor {
                 total_padding,
                 line_num != selection.start.line,
                 color,
-                ctx,
+                offset,
+                font,
+                painter,
             );
 
             // the padding for the first line was adding before the loop
@@ -83,28 +92,27 @@ impl TextEditor {
         &self,
         start: TextPoint,
         width: usize,
-        padding_above: f64,
+        padding_above: f32,
         has_block_above: bool,
-        color: &Color,
-        ctx: &mut PaintCtx,
+        color: Color32,
+        offset: Vec2,
+        font: &MonospaceFont,
+        painter: &Painter,
     ) {
-        let font_width = *FONT_WIDTH.get().unwrap();
-        let font_height = *FONT_HEIGHT.get().unwrap();
-
         let line_padding = if has_block_above {
             self.padding[start.line]
         } else {
             0.0
         };
 
-        let block = Rect::from_origin_size(
-            Point::new(
-                (start.col as f64 * font_width) + TOTAL_TEXT_X_OFFSET,
-                (start.line as f64 * font_height) + OUTER_PAD + padding_above,
-            ),
-            Size::new(width as f64 * font_width, font_height + line_padding),
+        let block = Rect::from_min_size(
+            Pos2::new(
+                (start.col as f32 * font.size.x) + TOTAL_TEXT_X_OFFSET,
+                (start.line as f32 * font.size.y) + OUTER_PAD + padding_above,
+            ) + offset,
+            Vec2::new(width as f32 * font.size.x, font.size.y + line_padding),
         );
 
-        ctx.fill(block, color);
+        painter.rect_filled(block, 0.0, color);
     }
 }

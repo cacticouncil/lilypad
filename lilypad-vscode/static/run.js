@@ -1,12 +1,13 @@
-import init, { run_editor, set_text, apply_edit, copy_selection, cut_selection, insert_text, new_diagnostics, set_quick_fixes, set_completions, set_block_theme, undo, redo, set_breakpoints, set_stack_frame } from "./lilypad_web.js";
+import init, { LilypadWebHandle } from "./lilypad_web.js";
 
-async function run() {
-  await init();
-  // fileName, fontFamily, fontSize, and blockTheme are set in another script tag
-  run_editor(fileName, fontFamily, fontSize, blockTheme);
-}
-// web view -> extension messages
+await init();
+const handle = new LilypadWebHandle();
 const vscode = acquireVsCodeApi();
+
+// fileName, fontFamily, fontSize, and blockTheme are set in another script tag
+await handle.start("lilypad-canvas", fileName, fontFamily, fontSize, blockTheme);
+
+/* --------------------- web view -> extension messages --------------------- */
 
 export function started() {
   // send a resize event to the window to make sure the editor is sized correctly
@@ -36,9 +37,10 @@ export function setClipboard(text) {
   });
 }
 
-export function requestQuickFixes(line, col) {
+export function requestQuickFixes(id, line, col) {
   vscode.postMessage({
     type: "get_quick_fixes",
+    id: id,
     line: line,
     col: col,
   });
@@ -78,7 +80,7 @@ export function telemetryEvent(cat, info) {
   vscode.postMessage({
     type: "telemetry_log",
     cat: cat,
-    info: Object.fromEntries(info) 
+    info: Object.fromEntries(info)
   });
 }
 
@@ -89,59 +91,58 @@ export function telemetryCrash(msg) {
   });
 }
 
-// extension -> web view messages
+/* --------------------- extension -> web view messages --------------------- */
 window.addEventListener("message", event => {
   const message = event.data;
   switch (message.type) {
     case "set_text":
-      set_text(message.text);
+      handle.set_text(message.text);
       break;
     case "apply_edit":
-      apply_edit(message.edit);
+      handle.apply_edit(message.edit);
       break;
-    case "new_diagnostics":
-      new_diagnostics(message.diagnostics);
+    case "set_diagnostics":
+      handle.set_diagnostics(message.diagnostics);
       break;
-    case "new_blocks_theme":
-      set_block_theme(message.theme);
+    case "set_blocks_theme":
+      handle.set_blocks_theme(message.theme);
       break;
     case "set_breakpoints":
-      set_breakpoints(message.breakpoints);
+      handle.set_breakpoints(message.breakpoints);
       break;
     case "set_stack_frame":
-      set_stack_frame(message.selected, message.deepest);
+      handle.set_stack_frame(message.selected, message.deepest);
       break;
     case "return_quick_fixes":
-      set_quick_fixes(message.actions);
+      handle.set_quick_fixes(message.id, message.actions);
       break;
     case "return_completions":
-      set_completions(message.completions);
+      handle.set_completions(message.completions);
       break;
     case "undo":
-      undo();
+      handle.undo();
       break;
     case "redo":
-      redo();
+      handle.redo();
       break;
+    default:
+      console.error("Unknown message type: " + message.type);
   }
 });
 
-// handle clipboard actions
-document.addEventListener("copy", function(e) {
+/* ------------------------ handle clipboard actions ------------------------ */
+document.addEventListener("copy", function (e) {
   copy_selection();
   e.preventDefault();
 });
 
-document.addEventListener("cut", function(e) {
+document.addEventListener("cut", function (e) {
   cut_selection();
   e.preventDefault();
 });
 
-document.addEventListener("paste", function(e) {
+document.addEventListener("paste", function (e) {
   let text = e.clipboardData.getData("text/plain");
   insert_text(text);
   e.preventDefault();
 });
-
-// start the editor
-run();

@@ -1,36 +1,37 @@
+use ropey::Rope;
 use std::collections::HashSet;
-use std::time::Duration;
-
-use druid::TimerToken;
-use druid::WidgetPod;
 
 mod block_dragging;
 mod completion_popup;
 mod diagnostics_popup;
 mod gutter_drawer;
-mod ime;
-mod lifecycle;
 mod selection_changing;
 mod selection_drawer;
 mod text_editing;
 mod undo_manager;
+mod widget;
 
-use self::undo_manager::UndoManager;
-use super::block_drawer;
 use super::text_drawer::*;
 use super::text_range::*;
-use super::EditorModel;
+use crate::block_editor::{block_drawer, text_range::TextRange};
 use crate::lang::LanguageConfig;
+use crate::lsp::diagnostics::Diagnostic;
 use crate::parse::TreeManager;
 use completion_popup::CompletionPopup;
 use diagnostics_popup::DiagnosticPopup;
-use ime::ImeComponent;
-
 pub use text_editing::TextEdit;
+use undo_manager::UndoManager;
 
-const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(700);
+/// the interval during which the cursor is on during the blink cycle (in seconds)
+const CURSOR_ON_DURATION: f64 = 0.8;
+
+/// the interval during which the cursor is on during the blink cycle (in seconds)
+const CURSOR_OFF_DURATION: f64 = 0.4;
 
 pub struct TextEditor {
+    /// the source code to edit
+    source: Rope,
+
     /// generates syntax tree from source code
     tree_manager: TreeManager,
 
@@ -46,11 +47,17 @@ pub struct TextEditor {
     /// the frame that hitting backspace would delete
     pseudo_selection: Option<TextRange>,
 
-    /// the timer that toggles the cursor
-    cursor_timer: TimerToken,
+    // if IME candidate window is shown
+    ime_enabled: bool,
 
-    /// if the blinking cursor is visible
-    cursor_visible: bool,
+    // selection for IME candidate window
+    ime_selection: TextRange,
+
+    /// diagnostics for current cursor position
+    diagnostics: Vec<Diagnostic>,
+
+    /// index of diagnostic selected in the popup
+    diagnostic_selection: Option<usize>,
 
     /// object to calculate text views
     text_drawer: TextDrawer,
@@ -62,7 +69,7 @@ pub struct TextEditor {
     blocks: Vec<block_drawer::Block>,
 
     /// the padding above each individual line
-    padding: Vec<f64>,
+    padding: Vec<f32>,
 
     /// line numbers that have breakpoints
     breakpoints: HashSet<usize>,
@@ -77,17 +84,17 @@ pub struct TextEditor {
     /// the pair down with them if they are deleted
     paired_delete_stack: Vec<bool>,
 
-    /// The line is where to draw the drag insertion line. The column is how much indent the insertion should have.
-    drag_insertion_line: Option<TextPoint>,
-
     /// overlay view for diagnostics
-    diagnostic_popup: WidgetPod<EditorModel, DiagnosticPopup>,
+    diagnostic_popup: DiagnosticPopup,
 
     /// overlay view for completions
-    completion_popup: WidgetPod<EditorModel, CompletionPopup>,
+    completion_popup: CompletionPopup,
 
-    /// connects to the system IME to handle text input
-    ime: ImeComponent,
+    /// the time that the current frame started
+    frame_start_time: f64,
+
+    /// the time of the last selection change (used for cursor blinking)
+    last_selection_time: f64,
 }
 
 #[derive(Clone, Copy)]
@@ -106,15 +113,18 @@ impl StackFrameLines {
 }
 
 impl TextEditor {
-    pub fn new(lang: &'static LanguageConfig) -> Self {
+    pub fn new(source: Rope, lang: &'static LanguageConfig) -> Self {
         TextEditor {
+            source,
             tree_manager: TreeManager::new(lang),
             language: lang,
             undo_manager: UndoManager::new(),
             selection: TextRange::ZERO,
             pseudo_selection: None,
-            cursor_timer: TimerToken::INVALID,
-            cursor_visible: true,
+            ime_enabled: false,
+            ime_selection: TextRange::ZERO,
+            diagnostics: vec![],
+            diagnostic_selection: Option::None,
             text_drawer: TextDrawer::new(lang),
             text_changed: true,
             blocks: vec![],
@@ -123,10 +133,10 @@ impl TextEditor {
             stack_frame: StackFrameLines::empty(),
             input_ignore_stack: vec![],
             paired_delete_stack: vec![],
-            drag_insertion_line: None,
-            diagnostic_popup: WidgetPod::new(DiagnosticPopup::new()),
-            completion_popup: WidgetPod::new(CompletionPopup::new()),
-            ime: ImeComponent::default(),
+            diagnostic_popup: DiagnosticPopup::new(),
+            completion_popup: CompletionPopup::new(),
+            frame_start_time: 0.0,
+            last_selection_time: 0.0,
         }
     }
 }
