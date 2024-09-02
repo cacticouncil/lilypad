@@ -64,3 +64,9 @@ console_error_panic_hook = "0.1"
 # native stuff
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rfd = "0.14"
+
+
+[patch.crates-io]
+# patch egui with my web event propagation fix
+egui = { git = "https://github.com/liamrosenfeld/egui", branch = "web-event-propagation" }
+eframe = { git = "https://github.com/liamrosenfeld/egui", branch = "web-event-propagation" }

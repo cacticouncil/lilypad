@@ -14,9 +14,6 @@ export function started() {
   }, 10);
 }
 export function edited(newText, startLine, startCol, endLine, endCol) { }
-export function setClipboard(text) {
-  navigator.clipboard.writeText(text);
-}
 export function requestQuickFixes(line, col) { }
 export function executeCommand(command, args) { }
 export function requestCompletions(line, col) { }
@@ -24,21 +21,6 @@ export function executeWorkspaceEdit(edit) { }
 export function registerBreakpoints(lines) { }
 export function telemetryEvent(cat, info) { }
 export function telemetryCrash(msg) { }
-
-// handle clipboard actions
-document.addEventListener("copy", function (e) {
-  handle.copy_selection();
-  e.preventDefault();
-});
-
-document.addEventListener("cut", function (e) {
-  handle.cut_selection();
-  e.preventDefault();
-});
-
-addEventListener("paste", (event) => {
-  handle.insert_text(event.clipboardData.getData("text"));
-});
 
 document.getElementById("language-picker").addEventListener("change", (e) => {
   const language = e.target.value;

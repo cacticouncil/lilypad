@@ -16,7 +16,6 @@ pub mod c_shim;
 use block_editor::{BlockEditor, ExternalCommand, MonospaceFont};
 use egui::Sense;
 use egui_inbox::UiInbox;
-use wasm_bindgen::prelude::*;
 
 pub struct LilypadWeb {
     block_editor: BlockEditor,

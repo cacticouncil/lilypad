@@ -1,14 +1,14 @@
-use egui::Sense;
+use egui::{Event, Key};
 use egui_inbox::{UiInbox, UiInboxSender};
 use log::error;
 use std::panic::{self, PanicInfo};
 use wasm_bindgen::prelude::*;
+use web_sys::HtmlCanvasElement;
 
 use crate::block_editor::{
-    self,
     text_editor::{StackFrameLines, TextEdit},
     text_range::TextRange,
-    BlockEditor, ExternalCommand,
+    ExternalCommand,
 };
 use crate::lsp::{
     completion::VSCodeCompletionItem,
@@ -53,12 +53,28 @@ impl LilypadWebHandle {
         font_size: f32,
         blocks_theme: String,
     ) -> Result<(), wasm_bindgen::JsValue> {
+        let document = web_sys::window()
+            .ok_or("No window found")?
+            .document()
+            .ok_or("No document found")?;
+
+        let canvas = document
+            .get_element_by_id(canvas_id)
+            .ok_or(format!("No element with id '{}' found", canvas_id))?
+            .dyn_into::<HtmlCanvasElement>()
+            .map_err(|_| format!("Element with id '{}' is not a canvas", canvas_id))?;
+
+        let options = eframe::WebOptions {
+            should_propagate_event: Box::new(|event| Self::should_propagate_event(event)),
+            ..Default::default()
+        };
+
         let inbox = UiInbox::new();
         self.command_sender = Some(inbox.sender());
         self.runner
             .start(
-                canvas_id,
-                eframe::WebOptions::default(),
+                canvas,
+                options,
                 Box::new(move |cc| {
                     Ok(Box::new(LilypadWeb::new(
                         cc,
@@ -71,6 +87,40 @@ impl LilypadWebHandle {
                 }),
             )
             .await
+    }
+
+    fn should_propagate_event(event: &egui::Event) -> bool {
+        if let Event::Key {
+            key,
+            physical_key: _,
+            pressed: _,
+            repeat: _,
+            modifiers,
+        } = event
+        {
+            // pass through hotkeys (other than undo/redo/find) and function keys
+            if modifiers.any() && !modifiers.shift_only() {
+                matches!(key, Key::Z | Key::Y | Key::F) == false
+            } else {
+                matches!(
+                    key,
+                    Key::F1
+                        | Key::F2
+                        | Key::F3
+                        | Key::F4
+                        | Key::F5
+                        | Key::F6
+                        | Key::F7
+                        | Key::F8
+                        | Key::F9
+                        | Key::F10
+                        | Key::F11
+                        | Key::F12
+                )
+            }
+        } else {
+            false
+        }
     }
 
     #[wasm_bindgen]
@@ -105,6 +155,20 @@ impl LilypadWebHandle {
     }
 
     #[wasm_bindgen]
+    pub fn set_font(&self, font_name: String, font_size: f32) {
+        if let Some(sender) = &self.command_sender {
+            if sender
+                .send(ExternalCommand::SetFont(font_name, font_size))
+                .is_err()
+            {
+                error!("Failed to send command");
+            }
+        } else {
+            error!("No command sender");
+        }
+    }
+
+    #[wasm_bindgen]
     pub fn apply_edit(&self, json: JsValue) {
         #[derive(serde::Deserialize)]
         struct VSCodeEdit {
@@ -117,27 +181,6 @@ impl LilypadWebHandle {
             TextEdit::new_from_vscode(std::borrow::Cow::Owned(vscode_edit.text), vscode_edit.range);
         if let Some(sender) = &self.command_sender {
             if sender.send(ExternalCommand::ApplyEdit(edit)).is_err() {
-                error!("Failed to send command");
-            }
-        } else {
-            error!("No command sender");
-        }
-    }
-
-    // #[wasm_bindgen]
-    // pub fn copy_selection(&self) {
-    //     self.command_sender.unwrap().send(ExternalCommand::Copy);
-    // }
-
-    // #[wasm_bindgen]
-    // pub fn cut_selection(&self) {
-    //     self.command_sender.unwrap().send(ExternalCommand::Cut);
-    // }
-
-    #[wasm_bindgen]
-    pub fn insert_text(&self, text: String) {
-        if let Some(sender) = &self.command_sender {
-            if sender.send(ExternalCommand::InsertText(text)).is_err() {
                 error!("Failed to send command");
             }
         } else {

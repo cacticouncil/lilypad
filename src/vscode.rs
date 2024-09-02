@@ -1,4 +1,5 @@
-pub mod actual {
+#[cfg(target_arch = "wasm32")]
+mod actual {
     use std::collections::HashMap;
     use wasm_bindgen::prelude::*;
 
@@ -13,9 +14,6 @@ pub mod actual {
             end_line: usize,
             end_col: usize,
         );
-
-        #[wasm_bindgen(js_name = setClipboard)]
-        pub fn set_clipboard(text: String);
 
         #[wasm_bindgen(js_name = requestQuickFixes)]
         pub fn request_quick_fixes(id: usize, line: usize, col: usize);
@@ -48,12 +46,12 @@ pub mod actual {
     }
 }
 
-pub mod shim {
+#[cfg(not(target_arch = "wasm32"))]
+mod shim {
     use std::collections::HashMap;
 
     pub fn started() {}
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
-    pub fn set_clipboard(_: String) {}
     pub fn request_quick_fixes(_: usize, _: usize, _: usize) {}
     pub fn request_completions(_: usize, _: usize) {}
     pub fn execute_command(_: String, _: wasm_bindgen::JsValue) {}

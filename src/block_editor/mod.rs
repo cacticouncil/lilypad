@@ -77,10 +77,10 @@ pub enum ExternalCommand {
     SetText(String),
     SetFileName(String),
     SetBlocksTheme(BlocksTheme),
+    SetFont(String, f32),
 
     // external edits
     ApplyEdit(TextEdit<'static>),
-    InsertText(String),
 
     // lsp connection
     SetDiagnostics(Vec<Diagnostic>),
@@ -159,6 +159,10 @@ impl BlockEditor {
                     ExternalCommand::SetFileName(file_name) => {
                         self.language = lang_for_file(file_name);
                         self.block_palette.populate(self.language, &self.font)
+                    }
+                    ExternalCommand::SetFont(font_name, font_size) => {
+                        self.font = MonospaceFont::new(font_name, *font_size);
+                        ui.fonts(|f| self.font.calculate_size(f));
                     }
                     _ => {}
                 }

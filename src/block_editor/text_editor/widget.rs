@@ -292,7 +292,11 @@ impl TextEditor {
                         self.expand_selection(pos, font);
                     }
                 } else if ui.input(|i| i.pointer.primary_pressed()) {
-                    self.mouse_clicked(pos, mods, dragged_block, font);
+                    if mods.shift {
+                        self.expand_selection(pos, font);
+                    } else {
+                        self.mouse_clicked(pos, mods, dragged_block, font);
+                    }
                     self.completion_popup.clear();
                     response.request_focus();
                 }
@@ -350,7 +354,12 @@ impl TextEditor {
                     ui.ctx().copy_text(selected_text);
                 }
 
-                Event::Cut => {}
+                Event::Cut => {
+                    let selection = self.selection.ordered().char_range_in(&self.source);
+                    let selected_text = self.source.slice(selection).to_string();
+                    self.insert_str("");
+                    ui.ctx().copy_text(selected_text);
+                }
 
                 Event::Paste(new_text) => self.insert_str(new_text),
 
@@ -406,9 +415,6 @@ impl TextEditor {
                 }
                 ExternalCommand::ApplyEdit(edit) => {
                     self.apply_edit(edit, UndoStopCondition::Always, true)
-                }
-                ExternalCommand::InsertText(new_text) => {
-                    self.insert_str(new_text);
                 }
                 ExternalCommand::SetDiagnostics(new_diagnostics) => {
                     self.diagnostics = new_diagnostics.clone();

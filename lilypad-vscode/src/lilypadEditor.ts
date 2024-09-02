@@ -88,6 +88,17 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     type: "set_blocks_theme",
                     theme: newTheme
                 });
+            } else if (e.affectsConfiguration("editor.fontFamily") || e.affectsConfiguration("editor.fontSize")) {
+                // TODO: support fallback fonts instead of only sending the first
+                // TODO: could this be called as a part of started instead of using the hacky js pass through thing?
+                const editorConfig = vscode.workspace.getConfiguration("editor");
+                const fontFamily = (editorConfig.get("fontFamily") as string).split(',')[0];
+                const fontSize = editorConfig.get("fontSize");
+                webviewPanel.webview.postMessage({
+                    type: "set_font",
+                    fontFamily,
+                    fontSize
+                });
             }
         });
 
@@ -106,18 +117,20 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             });
         }
 
-        const changeBreakpointsSubscription = vscode.debug.onDidChangeBreakpoints(e => {
+        const changeBreakpointsSubscription = vscode.debug.onDidChangeBreakpoints(_e => {
             setBreakpoints();
         });
 
-        // both of these anys are a workaround until @types/vscode 1.90 releases
-        const stackItemSubscription = (vscode.debug as any).onDidChangeActiveStackItem((e: any) => {
+        function setStackFrame(activeStackItem: vscode.DebugStackFrame | vscode.DebugThread | undefined) {
+            if (activeStackItem === undefined) { return; }
+
             vscode.debug.activeDebugSession!.customRequest('stackTrace', {
-                threadId: e.threadId
+                threadId: activeStackItem.threadId
             }).then(response => {
                 const stackFrames: Array<DebugProtocol.StackFrame> = response.stackFrames;
 
-                let selectedFrame = stackFrames.find(s => s.id === e.frameId);
+                let selectedFrameId = "frameId" in activeStackItem ? activeStackItem.frameId : undefined;
+                let selectedFrame = stackFrames.find(s => s.id === selectedFrameId);
                 let deepestFrame = stackFrames[0];
 
                 let selectedFrameInFile = selectedFrame?.source?.path === document.uri.fsPath;
@@ -126,14 +139,16 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                 let selectedFrameLine = selectedFrameInFile ? selectedFrame?.line : undefined;
                 let deepestFrameLine = deepestFrameInFile ? deepestFrame.line : undefined;
 
-                console.log(selectedFrameLine, deepestFrameLine);
-
                 webviewPanel.webview.postMessage({
                     type: "set_stack_frame",
                     selected: selectedFrameLine,
                     deepest: deepestFrameLine
                 });
             });
+        }
+
+        const stackItemSubscription = vscode.debug.onDidChangeActiveStackItem(e => {
+            setStackFrame(e);
         });
 
         vscode.debug.onDidTerminateDebugSession(e => {
@@ -173,7 +188,8 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     // send initial breakpoints
                     setBreakpoints();
 
-                    // TODO: initial stack frame
+                    // send initial stack frame
+                    setStackFrame(vscode.debug.activeStackItem);
 
                     // set the new webview as the current webview
                     setActiveLilypadEditor(webviewPanel.webview);
