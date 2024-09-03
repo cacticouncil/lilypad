@@ -314,16 +314,28 @@ impl TextEditor {
         }
 
         // find diagnostic under cursor
-        // TODO: delay to pop up
         // TODO: multiple diagnostics displayed at once
-        // TODO: r-tree??
         if response.hovered() {
             if let Some(pointer_pos) = ui.input(|i| i.pointer.latest_pos()) {
-                let coord = self.mouse_to_raw_coord(pointer_pos - offset, font);
-                self.diagnostic_selection = self
-                    .diagnostics
-                    .iter()
-                    .position(|d| d.range.contains(coord, &self.source));
+                if let Some(diagnostic_selection) = self.diagnostic_selection {
+                    // if still in the current diagnostic range, keep the popup open.
+                    // otherwise, clear the selection
+                    if let Some(diagnostic) = self.diagnostics.get(diagnostic_selection) {
+                        let coord = self.mouse_to_raw_coord(pointer_pos - offset, font);
+                        if !diagnostic.range.contains(coord, &self.source) {
+                            self.diagnostic_selection = None;
+                        }
+                    }
+                }
+
+                // if the mouse has been still for a bit with no selection, find the diagnostic under the cursor
+                if self.diagnostic_selection.is_none() && Self::mouse_still_for(0.25, ui) {
+                    let coord = self.mouse_to_raw_coord(pointer_pos - offset, font);
+                    self.diagnostic_selection = self
+                        .diagnostics
+                        .iter()
+                        .position(|d| d.range.contains(coord, &self.source));
+                }
             }
         };
 
@@ -704,5 +716,17 @@ impl TextEditor {
             + 200.0; // extra space for over-scroll
 
         Vec2::new(width, height)
+    }
+
+    /// Detects if the mouse has been in the same spot for a certain amount of time (in seconds)
+    fn mouse_still_for(duration: f32, ui: &Ui) -> bool {
+        let time_since_last_move = ui.input(|i| i.pointer.time_since_last_movement());
+        if time_since_last_move < duration {
+            ui.ctx()
+                .request_repaint_after_secs(duration - time_since_last_move);
+            false
+        } else {
+            true
+        }
     }
 }
