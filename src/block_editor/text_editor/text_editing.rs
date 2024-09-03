@@ -701,53 +701,25 @@ mod tests {
         );
 
         // Insert parenthesis into prepending strings
-        char_insert_test(
-            "print('hello, world'→←)",
-            ")",
-            "print('hello, world')→←)"
-        );
+        char_insert_test("print('hello, world'→←)", ")", "print('hello, world')→←)");
 
         // Insert parenthesis into input ignore stack (is this wrong?)
-        char_insert_test(
-            "print(→←)",
-            ")",
-            "print()→←)"
-        );
+        char_insert_test("print(→←)", ")", "print()→←)");
 
         // Insert brackets
-        char_insert_test(
-            "[→←]",
-            "]",
-            "[]→←]"
-        );
+        char_insert_test("[→←]", "]", "[]→←]");
 
         // Insert quote
-        char_insert_test(
-            "\"→←\"",
-            "\"",
-            "\"\"→←\""
-        );
+        char_insert_test("\"→←\"", "\"", "\"\"→←\"");
 
         // Insert unicode
-        char_insert_test(
-            "→←",
-            "༄",
-            "༄→←"
-        );
+        char_insert_test("→←", "༄", "༄→←");
 
         // Insert on new line
-        char_insert_test(
-            "aa\n→←bb",
-            "a",
-            "aa\na→←bb"
-        );
+        char_insert_test("aa\n→←bb", "a", "aa\na→←bb");
 
         // Replace on new line
-        char_insert_test(
-            "aa\n→bb←",
-            "a",
-            "aa\na→←"
-        )
+        char_insert_test("aa\n→bb←", "a", "aa\na→←")
     }
 
     #[test]
@@ -800,10 +772,7 @@ mod tests {
         );
 
         // indent unicode
-        indent_test(
-            "→༄༄༄ᜃᜃᜃ←",
-            "→    ༄༄༄ᜃᜃᜃ←"
-        );
+        indent_test("→༄༄༄ᜃᜃᜃ←", "→    ༄༄༄ᜃᜃᜃ←");
     }
 
     #[test]
@@ -856,135 +825,189 @@ mod tests {
         );
 
         // unindent unicode
-        unindent_test(
-            "→    ༄༄༄ᜃᜃᜃ←",
-            "→༄༄༄ᜃᜃᜃ←"
-        );
+        unindent_test("→    ༄༄༄ᜃᜃᜃ←", "→༄༄༄ᜃᜃᜃ←");
     }
 
     #[test]
     fn test_backspace() {
         // Paired delete test
-        backspace_test("(→←)", "→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![")"],
-                       &mut vec![true]
+        backspace_test(
+            "(→←)",
+            "→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![")"],
+            &mut vec![true],
         );
 
         // Select paired delete test
-        backspace_test("→(←)", "→←)",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![")"],
-                       &mut vec![true]
+        backspace_test(
+            "→(←)",
+            "→←)",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![")"],
+            &mut vec![true],
         );
 
         // Paired delete a lot of them
-        backspace_test("(((→←)))", "((→←))",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![")",")",")"],
-                       &mut vec![true, true],
+        backspace_test(
+            "(((→←)))",
+            "((→←))",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![")", ")", ")"],
+            &mut vec![true, true],
         );
 
         // Select paired delete a lot of them
-        backspace_test("→(((←)))", "→←)))",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![")",")",")"],
-                       &mut vec![true, true, true],
+        backspace_test(
+            "→(((←)))",
+            "→←)))",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![")", ")", ")"],
+            &mut vec![true, true, true],
         );
 
         // Delete single character
-        backspace_test("aaa→←", "aa→←",
-                        Movement::Grapheme(Direction::Upstream),
-                        None, &mut vec![], &mut vec![]
+        backspace_test(
+            "aaa→←",
+            "aa→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Ctrl + Backspace
-        backspace_test("aaa→←", "→←",
-                       Movement::Line(Direction::Upstream),
-                       None, &mut vec![], &mut vec![]
+        backspace_test(
+            "aaa→←",
+            "→←",
+            TextMovement::horizontal(HUnit::Line, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Ctrl + Backspace paired delete
-        backspace_test("(aaa→←)", "→←)",
-                       Movement::Line(Direction::Upstream),
-                       None, &mut vec![")"],
-                       &mut vec![true, false, false, false]
+        backspace_test(
+            "(aaa→←)",
+            "→←)",
+            TextMovement::horizontal(HUnit::Line, HDir::Left),
+            None,
+            &mut vec![")"],
+            &mut vec![true, false, false, false],
         );
 
         // Ctrl + Backspace
-        backspace_test("(aaa)→←", "→←",
-                       Movement::Line(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![true, false, false, false]
+        backspace_test(
+            "(aaa)→←",
+            "→←",
+            TextMovement::horizontal(HUnit::Line, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![true, false, false, false],
         );
 
         // Select delete
-        backspace_test("→a←", "→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "→a←",
+            "→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Large select delete
-        backspace_test("→abcdefghijklmnopqrstuvwxyz←", "→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "→abcdefghijklmnopqrstuvwxyz←",
+            "→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Unicode select delete
-        backspace_test("→༄←", "→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "→༄←",
+            "→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Delete unicode
-        backspace_test("༄→←", "→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "༄→←",
+            "→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Large unicode select delete
-        backspace_test("→߷߷߷༄༄༄←", "→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "→߷߷߷༄༄༄←",
+            "→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Single delete, large unicode
-        backspace_test("߷߷߷༄༄༄→←", "߷߷߷༄༄→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![], &mut vec![]
+        backspace_test(
+            "߷߷߷༄༄༄→←",
+            "߷߷߷༄༄→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Select, mixed, unicode/ascii
-        backspace_test("→a߷b߷c߷d༄e༄f༄g←", "→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "→a߷b߷c߷d༄e༄f༄g←",
+            "→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Single delete, large unicode/ascii
-        backspace_test("a߷b߷c߷d༄e༄f༄g→←", "a߷b߷c߷d༄e༄f༄→←",
-                       Movement::Grapheme(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "a߷b߷c߷d༄e༄f༄g→←",
+            "a߷b߷c߷d༄e༄f༄→←",
+            TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Ctrl + Backspace, spaces
-        backspace_test("lilypad is so cool →←", "→←",
-                       Movement::Line(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "lilypad is so cool →←",
+            "→←",
+            TextMovement::horizontal(HUnit::Line, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
 
         // Ctrl + Backspace, newline
-        backspace_test("lilypad is so\n cool →←", "lilypad is so\n →←",
-                       Movement::Line(Direction::Upstream),
-                       None, &mut vec![],
-                       &mut vec![]
+        backspace_test(
+            "lilypad is so\n cool →←",
+            "lilypad is so\n →←",
+            TextMovement::horizontal(HUnit::Line, HDir::Left),
+            None,
+            &mut vec![],
+            &mut vec![],
         );
     }
 
@@ -1024,16 +1047,23 @@ mod tests {
     }
 
     fn backspace_test(
-        start: &str, 
-        target: &str, 
-        movement: Movement,
+        start: &str,
+        target: &str,
+        movement: TextMovement,
         pseudo_selection: Option<TextRange>,
         input_ignore_stack: &mut Vec<&'static str>,
-        paired_delete_stack: &mut Vec<bool>
+        paired_delete_stack: &mut Vec<bool>,
     ) {
         let (mut src, start_sel) = generate_state(start);
         let (target_src, target_sel) = generate_state(target);
-        let (edit, end_sel) = edit_for_backspace(start_sel, &src, movement, pseudo_selection, input_ignore_stack, paired_delete_stack);
+        let (edit, end_sel) = edit_for_backspace(
+            start_sel,
+            &src,
+            movement,
+            pseudo_selection,
+            input_ignore_stack,
+            paired_delete_stack,
+        );
 
         edit.unwrap().apply_to_rope(&mut src);
 
