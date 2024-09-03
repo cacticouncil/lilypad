@@ -8,7 +8,9 @@
 
 use ropey::RopeSlice;
 use std::{borrow::Cow, iter, mem, ops, str};
-use tree_sitter::{Language, Node, Query, QueryCaptures, QueryCursor, QueryError, TextProvider};
+use tree_sitter::{
+    Language, Node, Point, Query, QueryCaptures, QueryCursor, QueryError, Range, TextProvider, Tree,
+};
 
 /// Indicates which highlight should be applied to a region of source code.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -29,7 +31,10 @@ pub enum HighlightEvent {
 #[allow(dead_code)]
 pub struct HighlightConfiguration {
     pub language: Language,
+    pub language_name: String,
     pub query: Query,
+    combined_injections_query: Option<Query>,
+    locals_pattern_index: usize,
     highlights_pattern_index: usize,
     highlight_indices: Vec<Option<Highlight>>,
     non_local_variable_patterns: Vec<bool>,
@@ -37,6 +42,15 @@ pub struct HighlightConfiguration {
     local_def_capture_index: Option<u32>,
     local_def_value_capture_index: Option<u32>,
     local_ref_capture_index: Option<u32>,
+}
+
+/// Performs syntax highlighting, recognizing a given list of highlight names.
+///
+/// For the best performance `Highlighter` values should be reused between
+/// syntax highlighting calls. A separate highlighter is needed for each thread that
+/// is performing highlighting.
+pub struct Highlighter {
+    cursors: Vec<QueryCursor>,
 }
 
 #[derive(Debug)]
@@ -54,39 +68,68 @@ struct LocalScope<'a> {
 }
 
 struct HighlightIter<'a> {
-    source: RopeSlice<'a>,
+    source: RopeProvider<'a>,
     byte_offset: usize,
-    layer: HighlightIterLayer<'a>,
+    highlighter: &'a mut Highlighter,
+    layers: Vec<HighlightIterLayer<'a>>,
     next_event: Option<HighlightEvent>,
-    last_highlight_range: Option<(usize, usize)>,
+    last_highlight_range: Option<(usize, usize, usize)>,
 }
 
+#[allow(dead_code)]
 struct HighlightIterLayer<'a> {
-    _cursor: QueryCursor, // needed to keep in memory
+    _tree: Option<Tree>,
+    cursor: QueryCursor,
     captures: iter::Peekable<QueryCaptures<'a, 'a, RopeProvider<'a>, &'a [u8]>>,
     config: &'a HighlightConfiguration,
     highlight_end_stack: Vec<usize>,
     scope_stack: Vec<LocalScope<'a>>,
+    ranges: Vec<Range>,
+    depth: usize,
 }
 
-impl HighlightConfiguration {
-    /// Iterate over the highlighted regions for a given node.
-    /// Does not parse anything (and therefore does not support injections).
-    pub fn highlight<'a>(
-        &'a self,
-        source: RopeSlice<'a>,
-        node: &'a Node,
-    ) -> impl Iterator<Item = HighlightEvent> + 'a {
-        let layer = HighlightIterLayer::new_from_tree(RopeProvider(source), node, self);
-        HighlightIter {
-            source,
-            byte_offset: 0,
-            layer,
-            next_event: None,
-            last_highlight_range: None,
+impl Default for Highlighter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Highlighter {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            cursors: Vec::new(),
         }
     }
 
+    /// Iterate over the highlighted regions for a given node.
+    /// Does not parse anything (and therefore does not support injections).
+    pub fn highlight_existing_tree<'a>(
+        &'a mut self,
+        source: RopeSlice<'a>,
+        node: &'a Node,
+        config: &'a HighlightConfiguration,
+    ) -> impl Iterator<Item = HighlightEvent> + 'a {
+        let rope_provider = RopeProvider(source);
+        let layers = vec![HighlightIterLayer::new_from_tree(
+            rope_provider,
+            node,
+            config,
+        )];
+        let mut result = HighlightIter {
+            source: rope_provider,
+            byte_offset: 0,
+            highlighter: self,
+            layers,
+            next_event: None,
+            last_highlight_range: None,
+        };
+        result.sort_layers();
+        result
+    }
+}
+
+impl HighlightConfiguration {
     /// Creates a `HighlightConfiguration` for a given `Language` and set of highlighting
     /// queries.
     ///
@@ -95,31 +138,62 @@ impl HighlightConfiguration {
     /// * `language`  - The Tree-sitter `Language` that should be used for parsing.
     /// * `highlights_query` - A string containing tree patterns for syntax highlighting. This
     ///   should be non-empty, otherwise no syntax highlights will be added.
-    /// * `locals_query` - A string containing tree patterns for tracking local variable
-    ///   definitions and references. This can be empty if local variable tracking is not needed.
+    /// * `injections_query` -  A string containing tree patterns for injecting other languages into
+    ///   the document. This can be empty if no injections are desired.
+    /// * `locals_query` - A string containing tree patterns for tracking local variable definitions
+    ///   and references. This can be empty if local variable tracking is not needed.
     ///
     /// Returns a `HighlightConfiguration` that can then be used with the `highlight` method.
     pub fn new(
         language: Language,
+        name: impl Into<String>,
         highlights_query: &str,
+        injection_query: &str,
         locals_query: &str,
     ) -> Result<Self, QueryError> {
         // Concatenate the query strings, keeping track of the start offset of each section.
         let mut query_source = String::new();
+        query_source.push_str(injection_query);
+        let locals_query_offset = query_source.len();
         query_source.push_str(locals_query);
         let highlights_query_offset = query_source.len();
         query_source.push_str(highlights_query);
 
         // Construct a single query by concatenating the three query strings, but record the
         // range of pattern indices that belong to each individual string.
-        let query = Query::new(&language, &query_source)?;
+        let mut query = Query::new(&language, &query_source)?;
+        let mut locals_pattern_index = 0;
         let mut highlights_pattern_index = 0;
         for i in 0..(query.pattern_count()) {
             let pattern_offset = query.start_byte_for_pattern(i);
             if pattern_offset < highlights_query_offset {
-                highlights_pattern_index += 1;
+                if pattern_offset < highlights_query_offset {
+                    highlights_pattern_index += 1;
+                }
+                if pattern_offset < locals_query_offset {
+                    locals_pattern_index += 1;
+                }
             }
         }
+
+        // Construct a separate query just for dealing with the 'combined injections'.
+        // Disable the combined injection patterns in the main query.
+        let mut combined_injections_query = Query::new(&language, injection_query)?;
+        let mut has_combined_queries = false;
+        for pattern_index in 0..locals_pattern_index {
+            let settings = query.property_settings(pattern_index);
+            if settings.iter().any(|s| &*s.key == "injection.combined") {
+                has_combined_queries = true;
+                query.disable_pattern(pattern_index);
+            } else {
+                combined_injections_query.disable_pattern(pattern_index);
+            }
+        }
+        let combined_injections_query = if has_combined_queries {
+            Some(combined_injections_query)
+        } else {
+            None
+        };
 
         // Find all of the highlighting patterns that are disabled for nodes that
         // have been identified as local variables.
@@ -149,9 +223,12 @@ impl HighlightConfiguration {
         }
 
         let highlight_indices = vec![None; query.capture_names().len()];
-        Ok(HighlightConfiguration {
+        Ok(Self {
             language,
+            language_name: name.into(),
             query,
+            combined_injections_query,
+            locals_pattern_index,
             highlights_pattern_index,
             highlight_indices,
             non_local_variable_patterns,
@@ -160,12 +237,6 @@ impl HighlightConfiguration {
             local_ref_capture_index,
             local_scope_capture_index,
         })
-    }
-
-    /// Get a slice containing all of the highlight names used in the configuration.
-    #[allow(dead_code)]
-    pub fn names(&self) -> &[&str] {
-        self.query.capture_names()
     }
 
     /// Set the list of recognized highlight names.
@@ -214,8 +285,9 @@ impl<'a> HighlightIterLayer<'a> {
         node: &'a Node,
         config: &'a HighlightConfiguration,
     ) -> Self {
-        // QueryCursor is a pointer so it's okay to make a copy as long as we keep both in scope
         let mut cursor = QueryCursor::new();
+
+        // `QueryCursor` is really just a pointer, so it's ok to move.
         let cursor_ref = unsafe { mem::transmute::<_, &'static mut QueryCursor>(&mut cursor) };
         let captures = cursor_ref.captures(&config.query, *node, source).peekable();
 
@@ -226,9 +298,41 @@ impl<'a> HighlightIterLayer<'a> {
                 range: 0..usize::MAX,
                 local_defs: Vec::new(),
             }],
-            _cursor: cursor,
+            cursor,
+            depth: 0,
+            _tree: None,
             captures,
             config,
+            ranges: vec![Range {
+                start_byte: 0,
+                end_byte: usize::MAX,
+                start_point: Point::new(0, 0),
+                end_point: Point::new(usize::MAX, usize::MAX),
+            }],
+        }
+    }
+
+    // First, sort scope boundaries by their byte offset in the document. At a
+    // given position, emit scope endings before scope beginnings. Finally, emit
+    // scope boundaries from deeper layers first.
+    fn sort_key(&mut self) -> Option<(usize, bool, isize)> {
+        let depth = -(self.depth as isize);
+        let next_start = self
+            .captures
+            .peek()
+            .map(|(m, i)| m.captures[*i].node.start_byte());
+        let next_end = self.highlight_end_stack.last().copied();
+        match (next_start, next_end) {
+            (Some(start), Some(end)) => {
+                if start < end {
+                    Some((start, true, depth))
+                } else {
+                    Some((end, false, depth))
+                }
+            }
+            (Some(i), None) => Some((i, true, depth)),
+            (None, Some(j)) => Some((j, false, depth)),
+            _ => None,
         }
     }
 }
@@ -247,9 +351,33 @@ impl<'a> HighlightIter<'a> {
             });
             self.byte_offset = offset;
             self.next_event = event;
-            result
         } else {
-            event
+            result = event
+        }
+        self.sort_layers();
+        result
+    }
+
+    fn sort_layers(&mut self) {
+        while !self.layers.is_empty() {
+            if let Some(sort_key) = self.layers[0].sort_key() {
+                let mut i = 0;
+                while i + 1 < self.layers.len() {
+                    if let Some(next_offset) = self.layers[i + 1].sort_key() {
+                        if next_offset < sort_key {
+                            i += 1;
+                            continue;
+                        }
+                    }
+                    break;
+                }
+                if i > 0 {
+                    self.layers[0..=i].rotate_left(1);
+                }
+                break;
+            }
+            let layer = self.layers.remove(0);
+            self.highlighter.cursors.push(layer.cursor);
         }
     }
 }
@@ -257,6 +385,7 @@ impl<'a> HighlightIter<'a> {
 impl<'a> Iterator for HighlightIter<'a> {
     type Item = HighlightEvent;
 
+    #[allow(unused_assignments)]
     fn next(&mut self) -> Option<Self::Item> {
         'main: loop {
             // If we've already determined the next highlight boundary, just return it.
@@ -264,80 +393,92 @@ impl<'a> Iterator for HighlightIter<'a> {
                 return Some(e);
             }
 
+            // If none of the layers have any more highlight boundaries, terminate.
+            if self.layers.is_empty() {
+                return if self.byte_offset < self.source.0.len_bytes() {
+                    let result = Some(HighlightEvent::Source {
+                        start: self.byte_offset,
+                        end: self.source.0.len_bytes(),
+                    });
+                    self.byte_offset = self.source.0.len_bytes();
+                    result
+                } else {
+                    None
+                };
+            }
+
             // Get the next capture from whichever layer has the earliest highlight boundary.
             let range;
-            if let Some((next_match, capture_index)) = self.layer.captures.peek() {
+            let layer = &mut self.layers[0];
+            if let Some((next_match, capture_index)) = layer.captures.peek() {
                 let next_capture = next_match.captures[*capture_index];
                 range = next_capture.node.byte_range();
 
                 // If any previous highlight ends before this node starts, then before
                 // processing this capture, emit the source code up until the end of the
                 // previous highlight, and an end event for that highlight.
-                if let Some(end_byte) = self.layer.highlight_end_stack.last().cloned() {
+                if let Some(end_byte) = layer.highlight_end_stack.last().copied() {
                     if end_byte <= range.start {
-                        self.layer.highlight_end_stack.pop();
+                        layer.highlight_end_stack.pop();
                         return self.emit_event(end_byte, Some(HighlightEvent::HighlightEnd));
                     }
                 }
             }
             // If there are no more captures, then emit any remaining highlight end events.
             // And if there are none of those, then just advance to the end of the document.
-            else if let Some(end_byte) = self.layer.highlight_end_stack.last().cloned() {
-                self.layer.highlight_end_stack.pop();
-                return self.emit_event(end_byte, Some(HighlightEvent::HighlightEnd));
-            } else {
-                return self.emit_event(self.source.len_bytes(), None);
-            };
+            else {
+                if let Some(end_byte) = layer.highlight_end_stack.last().copied() {
+                    layer.highlight_end_stack.pop();
+                    return self.emit_event(end_byte, Some(HighlightEvent::HighlightEnd));
+                }
+                return self.emit_event(self.source.0.len_bytes(), None);
+            }
 
-            let (mut match_, capture_index) = self.layer.captures.next().unwrap();
+            let (mut match_, capture_index) = layer.captures.next().unwrap();
             let mut capture = match_.captures[capture_index];
 
             // Remove from the local scope stack any local scopes that have already ended.
-            while range.start > self.layer.scope_stack.last().unwrap().range.end {
-                self.layer.scope_stack.pop();
+            while range.start > layer.scope_stack.last().unwrap().range.end {
+                layer.scope_stack.pop();
             }
 
             // If this capture is for tracking local variables, then process the
             // local variable info.
             let mut reference_highlight = None;
             let mut definition_highlight = None;
-            while match_.pattern_index < self.layer.config.highlights_pattern_index {
+            while match_.pattern_index < layer.config.highlights_pattern_index {
                 // If the node represents a local scope, push a new local scope onto
                 // the scope stack.
-                if Some(capture.index) == self.layer.config.local_scope_capture_index {
+                if Some(capture.index) == layer.config.local_scope_capture_index {
                     definition_highlight = None;
                     let mut scope = LocalScope {
                         inherits: true,
                         range: range.clone(),
                         local_defs: Vec::new(),
                     };
-                    for prop in self
-                        .layer
-                        .config
-                        .query
-                        .property_settings(match_.pattern_index)
-                    {
+                    for prop in layer.config.query.property_settings(match_.pattern_index) {
                         if prop.key.as_ref() == "local.scope-inherits" {
                             scope.inherits =
                                 prop.value.as_ref().map_or(true, |r| r.as_ref() == "true");
                         }
                     }
-                    self.layer.scope_stack.push(scope);
+                    layer.scope_stack.push(scope);
                 }
                 // If the node represents a definition, add a new definition to the
                 // local scope at the top of the scope stack.
-                else if Some(capture.index) == self.layer.config.local_def_capture_index {
+                else if Some(capture.index) == layer.config.local_def_capture_index {
                     reference_highlight = None;
-                    let scope = self.layer.scope_stack.last_mut().unwrap();
+                    definition_highlight = None;
+                    let scope = layer.scope_stack.last_mut().unwrap();
 
                     let mut value_range = 0..0;
                     for capture in match_.captures {
-                        if Some(capture.index) == self.layer.config.local_def_value_capture_index {
+                        if Some(capture.index) == layer.config.local_def_value_capture_index {
                             value_range = capture.node.byte_range();
                         }
                     }
 
-                    let name = Cow::from(self.source.byte_slice(range.clone()));
+                    let name = Cow::from(self.source.0.byte_slice(range.clone()));
                     scope.local_defs.push(LocalDef {
                         name,
                         value_range,
@@ -347,12 +488,12 @@ impl<'a> Iterator for HighlightIter<'a> {
                 }
                 // If the node represents a reference, then try to find the corresponding
                 // definition in the scope stack.
-                else if Some(capture.index) == self.layer.config.local_ref_capture_index
+                else if Some(capture.index) == layer.config.local_ref_capture_index
                     && definition_highlight.is_none()
                 {
                     definition_highlight = None;
-                    let name = self.source.byte_slice(range.clone());
-                    for scope in self.layer.scope_stack.iter().rev() {
+                    let name = self.source.0.byte_slice(range.clone());
+                    for scope in layer.scope_stack.iter().rev() {
                         if let Some(highlight) = scope.local_defs.iter().rev().find_map(|def| {
                             if def.name == name && range.start >= def.value_range.end {
                                 Some(def.highlight)
@@ -370,51 +511,55 @@ impl<'a> Iterator for HighlightIter<'a> {
                 }
 
                 // Continue processing any additional matches for the same node.
-                if let Some((next_match, next_capture_index)) = self.layer.captures.peek() {
+                if let Some((next_match, next_capture_index)) = layer.captures.peek() {
                     let next_capture = next_match.captures[*next_capture_index];
                     if next_capture.node == capture.node {
                         capture = next_capture;
-                        match_ = self.layer.captures.next().unwrap().0;
+                        match_ = layer.captures.next().unwrap().0;
                         continue;
                     }
                 }
 
+                self.sort_layers();
                 continue 'main;
             }
 
-            // If the current node was found to be a local variable, then skip over any
-            // highlighting patterns that are disabled for local variables.
-            if definition_highlight.is_some() || reference_highlight.is_some() {
-                while self.layer.config.non_local_variable_patterns[match_.pattern_index] {
-                    match_.remove();
-                    if let Some((next_match, next_capture_index)) = self.layer.captures.peek() {
-                        let next_capture = next_match.captures[*next_capture_index];
-                        if next_capture.node == capture.node {
-                            capture = next_capture;
-                            match_ = self.layer.captures.next().unwrap().0;
-                            continue;
-                        }
-                    }
-
+            // Otherwise, this capture must represent a highlight.
+            // If this exact range has already been highlighted by an earlier pattern, or by
+            // a different layer, then skip over this one.
+            if let Some((last_start, last_end, last_depth)) = self.last_highlight_range {
+                if range.start == last_start && range.end == last_end && layer.depth < last_depth {
+                    self.sort_layers();
                     continue 'main;
                 }
             }
 
-            // Once a highlighting pattern is found for the current node, skip over
-            // any later highlighting patterns that also match this node. Captures
-            // for a given node are ordered by pattern index, so these subsequent
+            // Once a highlighting pattern is found for the current node, keep iterating over
+            // any later highlighting patterns that also match this node and set the match to it.
+            // Captures for a given node are ordered by pattern index, so these subsequent
             // captures are guaranteed to be for highlighting, not injections or
             // local variables.
-            while let Some((next_match, next_capture_index)) = self.layer.captures.peek() {
+            while let Some((next_match, next_capture_index)) = layer.captures.peek() {
                 let next_capture = next_match.captures[*next_capture_index];
                 if next_capture.node == capture.node {
-                    self.layer.captures.next();
+                    let following_match = layer.captures.next().unwrap().0;
+                    // If the current node was found to be a local variable, then ignore
+                    // the following match if it's a highlighting pattern that is disabled
+                    // for local variables.
+                    if (definition_highlight.is_some() || reference_highlight.is_some())
+                        && layer.config.non_local_variable_patterns[following_match.pattern_index]
+                    {
+                        continue;
+                    }
+                    match_.remove();
+                    capture = next_capture;
+                    match_ = following_match;
                 } else {
                     break;
                 }
             }
 
-            let current_highlight = self.layer.config.highlight_indices[capture.index as usize];
+            let current_highlight = layer.config.highlight_indices[capture.index as usize];
 
             // If this node represents a local definition, then store the current
             // highlight value on the local scope entry representing this node.
@@ -424,16 +569,19 @@ impl<'a> Iterator for HighlightIter<'a> {
 
             // Emit a scope start event and push the node's end position to the stack.
             if let Some(highlight) = reference_highlight.or(current_highlight) {
-                self.last_highlight_range = Some((range.start, range.end));
-                self.layer.highlight_end_stack.push(range.end);
+                self.last_highlight_range = Some((range.start, range.end, layer.depth));
+                layer.highlight_end_stack.push(range.end);
                 return self
                     .emit_event(range.start, Some(HighlightEvent::HighlightStart(highlight)));
             }
+
+            self.sort_layers();
         }
     }
 }
 
 /* ------- Rope + TS Text Provider  ------- */
+#[derive(Clone, Copy)]
 struct RopeProvider<'a>(pub RopeSlice<'a>);
 
 impl<'a> TextProvider<&'a [u8]> for RopeProvider<'a> {

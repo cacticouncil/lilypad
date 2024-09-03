@@ -9,32 +9,46 @@ use std::{
 };
 
 use super::{
-    highlighter::{Highlight, HighlightConfiguration, HighlightEvent},
+    highlighter::{Highlight, HighlightConfiguration, HighlightEvent, Highlighter},
     MonospaceFont,
 };
 use crate::{lang::LanguageConfig, theme};
 
 // TODO: probably should have text drawers share highlight configurations
 pub struct TextDrawer {
+    highlighter: Highlighter,
     highlighter_config: HighlightConfiguration,
     cache: Vec<ColoredText>,
 }
 
 impl TextDrawer {
     pub fn new(lang: &LanguageConfig) -> Self {
-        let mut highlighter_config =
-            HighlightConfiguration::new(lang.tree_sitter(), lang.highlight_query, "").unwrap();
+        let mut highlighter_config = HighlightConfiguration::new(
+            lang.tree_sitter(),
+            lang.name,
+            lang.highlight_query,
+            "",
+            "",
+        )
+        .unwrap();
         highlighter_config.configure(HIGHLIGHT_NAMES);
 
         Self {
+            highlighter: Highlighter::new(),
             highlighter_config,
             cache: vec![],
         }
     }
 
     pub fn change_language(&mut self, lang: &LanguageConfig) {
-        let mut highlighter_config =
-            HighlightConfiguration::new(lang.tree_sitter(), lang.highlight_query, "").unwrap();
+        let mut highlighter_config = HighlightConfiguration::new(
+            lang.tree_sitter(),
+            lang.name,
+            lang.highlight_query,
+            "",
+            "",
+        )
+        .unwrap();
         highlighter_config.configure(HIGHLIGHT_NAMES);
         self.highlighter_config = highlighter_config;
         self.cache.clear();
@@ -74,8 +88,8 @@ impl TextDrawer {
 
         // get highlights
         let mut highlights = self
-            .highlighter_config
-            .highlight(source.slice(..), &root_node)
+            .highlighter
+            .highlight_existing_tree(source.slice(..), &root_node, &self.highlighter_config)
             .peekable();
 
         let mut handled_up_to = 0;
