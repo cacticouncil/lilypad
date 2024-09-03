@@ -1,11 +1,16 @@
 use std::{
     alloc::{self, Layout},
-    ffi::{c_int, c_void},
+    ffi::{c_char, c_int, c_void},
     mem::align_of,
     ptr,
 };
 
 /* -------------------------------- stdlib.h -------------------------------- */
+
+#[no_mangle]
+pub unsafe extern "C" fn abort() {
+    panic!("Aborted from C");
+}
 
 #[no_mangle]
 pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
@@ -108,9 +113,103 @@ pub unsafe extern "C" fn memset(s: *mut c_void, c: i32, n: usize) -> *mut c_void
     s
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn memcmp(ptr1: *const c_void, ptr2: *const c_void, n: usize) -> c_int {
+    let s1 = std::slice::from_raw_parts(ptr1 as *const u8, n);
+    let s2 = std::slice::from_raw_parts(ptr2 as *const u8, n);
+
+    for (a, b) in s1.iter().zip(s2.iter()) {
+        if *a != *b {
+            return (*a as i32) - (*b as i32);
+        }
+    }
+
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn strncmp(ptr1: *const c_void, ptr2: *const c_void, n: usize) -> c_int {
+    let s1 = std::slice::from_raw_parts(ptr1 as *const u8, n);
+    let s2 = std::slice::from_raw_parts(ptr2 as *const u8, n);
+
+    for (a, b) in s1.iter().zip(s2.iter()) {
+        if *a != *b || *a == 0 {
+            return (*a as i32) - (*b as i32);
+        }
+    }
+
+    0
+}
+
 /* -------------------------------- wctype.h -------------------------------- */
 
 #[no_mangle]
 pub unsafe extern "C" fn iswspace(c: c_int) -> bool {
     char::from_u32(c as u32).map_or(false, |c| c.is_whitespace())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn iswalnum(c: c_int) -> bool {
+    char::from_u32(c as u32).map_or(false, |c| c.is_alphanumeric())
+}
+
+/* --------------------------------- time.h --------------------------------- */
+
+#[no_mangle]
+pub unsafe extern "C" fn clock() -> u64 {
+    panic!("clock is not supported");
+}
+
+/* --------------------------------- ctype.h -------------------------------- */
+
+#[no_mangle]
+pub unsafe extern "C" fn isprint(c: c_int) -> bool {
+    c >= 32 && c <= 126
+}
+
+/* --------------------------------- stdio.h -------------------------------- */
+
+#[no_mangle]
+pub unsafe extern "C" fn fprintf(_file: *mut c_void, _format: *const c_void, _args: ...) -> c_int {
+    panic!("fprintf is not supported");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fputs(_s: *const c_void, _file: *mut c_void) -> c_int {
+    panic!("fputs is not supported");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fputc(_c: c_int, _file: *mut c_void) -> c_int {
+    panic!("fputc is not supported");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fdopen(_fd: c_int, _mode: *const c_void) -> *mut c_void {
+    panic!("fdopen is not supported");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fclose(_file: *mut c_void) -> c_int {
+    panic!("fclose is not supported");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fwrite(
+    _ptr: *const c_void,
+    _size: usize,
+    _nmemb: usize,
+    _stream: *mut c_void,
+) -> usize {
+    panic!("fwrite is not supported");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vsnprintf(
+    _buf: *mut c_char,
+    _size: usize,
+    _format: *const c_char,
+    _args: ...
+) -> c_int {
+    panic!("vsnprintf is not supported");
 }

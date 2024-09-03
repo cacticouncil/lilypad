@@ -1,5 +1,5 @@
 ﻿use ropey::Rope;
-use tree_sitter_c2rust::{InputEdit, Parser, Tree, TreeCursor};
+use tree_sitter::{InputEdit, Parser, Tree, TreeCursor};
 
 use crate::lang::LanguageConfig;
 

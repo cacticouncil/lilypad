@@ -1,6 +1,6 @@
 use egui::{Modifiers, Pos2};
 use ropey::Rope;
-use tree_sitter_c2rust::TreeCursor;
+use tree_sitter::TreeCursor;
 
 use super::{text_editing::TextMovement, TextEditor};
 use crate::{
@@ -49,7 +49,7 @@ impl TextEditor {
     fn string_pseudo_selection_range(
         &self,
         mut cursor: TreeCursor,
-        point: tree_sitter_c2rust::Point,
+        point: tree_sitter::Point,
     ) -> Option<TextRange> {
         // go to lowest node for point
         // don't set if error (bc that would make things go wonky when unpaired)

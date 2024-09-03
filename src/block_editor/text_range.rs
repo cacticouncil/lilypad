@@ -177,8 +177,8 @@ impl PartialOrd for TextPoint {
     }
 }
 
-impl From<tree_sitter_c2rust::Point> for TextPoint {
-    fn from(ts_pt: tree_sitter_c2rust::Point) -> Self {
+impl From<tree_sitter::Point> for TextPoint {
+    fn from(ts_pt: tree_sitter::Point) -> Self {
         TextPoint {
             line: ts_pt.row,
             col: ts_pt.column,
@@ -186,7 +186,7 @@ impl From<tree_sitter_c2rust::Point> for TextPoint {
     }
 }
 
-impl From<TextPoint> for tree_sitter_c2rust::Point {
+impl From<TextPoint> for tree_sitter::Point {
     fn from(text_pt: TextPoint) -> Self {
         Self {
             row: text_pt.line,

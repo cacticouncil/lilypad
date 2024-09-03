@@ -1,6 +1,6 @@
 use ropey::Rope;
 use std::borrow::Cow;
-use tree_sitter_c2rust::InputEdit;
+use tree_sitter::InputEdit;
 
 use super::{
     undo_manager::UndoStopCondition::{self, *},

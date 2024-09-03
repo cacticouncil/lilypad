@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{Painter, Pos2, Rect, Stroke, Vec2};
-use tree_sitter_c2rust::{Node, TreeCursor};
+use tree_sitter::{Node, TreeCursor};
 
 use crate::lang::LanguageConfig;
 use crate::theme::blocks_theme::BlocksTheme;

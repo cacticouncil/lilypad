@@ -1,7 +1,7 @@
 use egui::{Event, Key};
 use egui_inbox::{UiInbox, UiInboxSender};
 use log::error;
-use std::panic::{self, PanicInfo};
+use std::panic::{self, PanicHookInfo};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
@@ -18,7 +18,7 @@ use crate::theme::blocks_theme::BlocksTheme;
 use crate::vscode;
 use crate::LilypadWeb;
 
-fn panic_hook(info: &PanicInfo) {
+fn panic_hook(info: &PanicHookInfo) {
     console_error_panic_hook::hook(info);
 
     vscode::telemetry_crash(info.to_string().replace(['/', '\\'], ">"));

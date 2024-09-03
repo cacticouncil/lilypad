@@ -1,3 +1,5 @@
+#![feature(c_variadic)]
+
 mod block_editor;
 mod lang;
 mod lsp;

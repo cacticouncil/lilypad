@@ -5,7 +5,7 @@ pub struct LanguageConfig {
     pub name: &'static str,
 
     /// Tree-sitter language
-    ts_lang: fn() -> tree_sitter_c2rust::Language,
+    ts_lang: tree_sitter_language::LanguageFn,
 
     /// Tree-sitter highlight query
     pub highlight_query: &'static str,
@@ -14,7 +14,7 @@ pub struct LanguageConfig {
     pub new_scope_char: NewScopeChar,
 
     /// Assigns a node a block type to draw
-    node_categorizer: fn(&tree_sitter_c2rust::Node) -> Option<BlockType>,
+    node_categorizer: fn(&tree_sitter::Node) -> Option<BlockType>,
 
     /// The IDs for a string, and the start and end. Used for pseudo-selections
     pub string_node_ids: StringNodeIDs,
@@ -56,11 +56,11 @@ impl Snippet {
 }
 
 impl LanguageConfig {
-    pub fn tree_sitter(&self) -> tree_sitter_c2rust::Language {
-        (self.ts_lang)()
+    pub fn tree_sitter(&self) -> tree_sitter::Language {
+        tree_sitter::Language::new(self.ts_lang)
     }
 
-    pub fn categorize_node(&self, node: &tree_sitter_c2rust::Node) -> Option<BlockType> {
+    pub fn categorize_node(&self, node: &tree_sitter::Node) -> Option<BlockType> {
         (self.node_categorizer)(node)
     }
 }
@@ -69,7 +69,7 @@ pub fn lang_for_file(file_name: &str) -> &'static LanguageConfig {
     match file_name.split('.').last() {
         Some("py") => &PYTHON_LANGUAGE,
         Some("java") => &JAVA_LANGUAGE,
-        Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
+        // Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
         Some("cs") => &CS_LANGUAGE,
         _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
     }
@@ -77,7 +77,7 @@ pub fn lang_for_file(file_name: &str) -> &'static LanguageConfig {
 
 const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "python",
-    ts_lang: tree_sitter_python::language,
+    ts_lang: tree_sitter_python::LANGUAGE,
     highlight_query: tree_sitter_python::HIGHLIGHTS_QUERY,
     new_scope_char: NewScopeChar::Colon,
     node_categorizer: |node| {
@@ -135,7 +135,7 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
 
 const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "java",
-    ts_lang: tree_sitter_java::language,
+    ts_lang: tree_sitter_java::LANGUAGE,
     highlight_query: tree_sitter_java::HIGHLIGHTS_QUERY,
     new_scope_char: NewScopeChar::Brace,
     node_categorizer: |node| {
@@ -209,8 +209,8 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
 
 const CS_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "c#",
-    ts_lang: tree_sitter_c_sharp::language,
-    highlight_query: tree_sitter_c_sharp::HIGHLIGHT_QUERY,
+    ts_lang: tree_sitter_c_sharp::LANGUAGE,
+    highlight_query: tree_sitter_c_sharp::HIGHLIGHTS_QUERY,
     new_scope_char: NewScopeChar::Brace,
     node_categorizer: |node| {
         use BlockType::*;
@@ -281,6 +281,7 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
     ],
 };
 
+/*
 const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "cpp",
     ts_lang: tree_sitter_cpp::language,
@@ -346,3 +347,4 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
     },
     palette: &[],
 };
+*/

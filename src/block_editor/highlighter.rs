@@ -8,15 +8,14 @@
 
 use ropey::RopeSlice;
 use std::{borrow::Cow, iter, mem, ops, str};
-use tree_sitter_c2rust::{
-    Language, Node, Query, QueryCaptures, QueryCursor, QueryError, TextProvider,
-};
+use tree_sitter::{Language, Node, Query, QueryCaptures, QueryCursor, QueryError, TextProvider};
 
 /// Indicates which highlight should be applied to a region of source code.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Highlight(pub usize);
 
 /// Represents a single step in rendering a syntax-highlighted document.
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
 pub enum HighlightEvent {
     Source { start: usize, end: usize },
@@ -27,6 +26,7 @@ pub enum HighlightEvent {
 /// Contains the data needed to highlight code written in a particular language.
 ///
 /// This struct is immutable and can be shared between threads.
+#[allow(dead_code)]
 pub struct HighlightConfiguration {
     pub language: Language,
     pub query: Query,

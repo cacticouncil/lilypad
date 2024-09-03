@@ -1,6 +1,6 @@
 use egui::{Align2, Color32, Painter, Vec2};
 use ropey::Rope;
-use tree_sitter_c2rust::Node;
+use tree_sitter::Node;
 
 use std::{
     borrow::Cow,
