@@ -11,7 +11,9 @@ use crate::{lang::LanguageConfig, theme};
 
 pub struct BlockPalette {
     shown: bool,
-    items: Vec<PaletteItem>,
+    selected_palette: usize,
+    palette_names: Vec<&'static str>,
+    items: Vec<Vec<PaletteItem>>,
 }
 
 struct PaletteItem {
@@ -32,16 +34,26 @@ impl BlockPalette {
     pub fn new() -> Self {
         Self {
             shown: true,
+            selected_palette: 0,
+            palette_names: vec![],
             items: vec![],
         }
     }
 
     pub fn populate(&mut self, lang: &'static LanguageConfig, font: &MonospaceFont) {
         self.items = lang
-            .palette
+            .palettes
             .iter()
-            .map(|snippet| PaletteItem::new(snippet, lang, font))
+            .map(|palette| {
+                palette
+                    .snippets
+                    .iter()
+                    .map(|s| PaletteItem::new(s, lang, font))
+                    .collect()
+            })
             .collect();
+        self.palette_names = lang.palettes.iter().map(|p| p.name).collect();
+        self.selected_palette = 0;
     }
 
     pub fn is_populated(&self) -> bool {
@@ -81,6 +93,32 @@ impl BlockPalette {
                             "Palette:",
                             FontId::proportional(15.0),
                             theme::INTERFACE_TEXT,
+                        );
+
+                        ui.put(
+                            Rect::from_min_size(
+                                rect.min + Vec2::new(H_PADDING + 70.0, V_PADDING),
+                                Vec2::new(100.0, 10.0),
+                            ),
+                            |ui: &mut Ui| -> Response {
+                                egui::ComboBox::from_id_source("palette_selector")
+                                    .selected_text(
+                                        *self
+                                            .palette_names
+                                            .get(self.selected_palette)
+                                            .unwrap_or(&""),
+                                    )
+                                    .show_ui(ui, |ui| {
+                                        for (i, palette) in self.palette_names.iter().enumerate() {
+                                            ui.selectable_value(
+                                                &mut self.selected_palette,
+                                                i,
+                                                *palette,
+                                            );
+                                        }
+                                    })
+                                    .response
+                            },
                         );
 
                         self.add_arrow(ui, rect);
@@ -134,7 +172,7 @@ impl BlockPalette {
         blocks_theme: BlocksTheme,
         font: &MonospaceFont,
     ) {
-        for item in &self.items {
+        for item in self.items.get(self.selected_palette).unwrap_or(&vec![]) {
             let block_rect = Rect::from_min_size(
                 offset.to_pos2(),
                 Vec2::new(width - (H_PADDING * 3.0), item.block.min_size().y),
@@ -158,12 +196,12 @@ impl BlockPalette {
     pub fn find_size(&self) -> Vec2 {
         if self.shown {
             let mut size = Vec2::ZERO;
-            for item in &self.items {
+            for item in self.items.get(self.selected_palette).unwrap_or(&vec![]) {
                 size.x = f32::max(size.x, item.block.min_size().x);
                 size.y += item.block.min_size().y + V_PADDING;
             }
             size.x += H_PADDING * 3.0;
-            size
+            size.max(Vec2::new(220.0, 50.0))
         } else {
             Vec2::new(40.0, 30.0)
         }

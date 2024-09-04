@@ -20,7 +20,18 @@ pub struct LanguageConfig {
     pub string_node_ids: StringNodeIDs,
 
     /// Snippets to use for the palette. Must end with a newline.
-    pub palette: &'static [Snippet],
+    pub palettes: &'static [Palette],
+}
+
+pub struct Palette {
+    pub name: &'static str,
+    pub snippets: &'static [Snippet],
+}
+
+impl Palette {
+    pub const fn new(name: &'static str, snippets: &'static [Snippet]) -> Palette {
+        Palette { name, snippets }
+    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -92,12 +103,15 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
 
-            // normal expressions (incomplete)
+            // normal expressions
+            // TODO: check exhastiveness
             "import_statement" => Some(Generic),
+            "import_from_statement" => Some(Generic),
             "expression_statement" => Some(Generic),
             "continue_statement" => Some(Generic),
             "break_statement" => Some(Generic),
             "pass_statement" => Some(Generic),
+            "return_statement" => Some(Generic),
 
             // comments
             "comment" => Some(Comment),
@@ -115,20 +129,91 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 230,
         string_bounds: &[104, 107], // 104 is string start, 107 is string end
     },
-    palette: &[
-        Snippet::new(
-            "if",
-            "if condition:\n    pass\nelif condition:\n    pass\nelse:\n    pass\n",
+    palettes: &[
+        Palette::new(
+            "General",
+            &[
+                Snippet::new("import_module", "import module\n"),
+                Snippet::new("import_from", "from module import thing\n"),
+                Snippet::new("import_as", "import module as name\n"),
+                Snippet::new("var_assign", "val = 0\n"),
+                Snippet::new("var_assign_string", "val = \"Hello world\"\n"),
+                Snippet::new("var_assign_list", "val = [1, 2, 3]\n"),
+                Snippet::new("var_assign_dict", "val = {'a': 1, 'b': 'tw0'}\n"),
+                Snippet::new("var_assign_tuple", "val = (False, 1, 2.0, '3')\n"),
+                Snippet::new("var_assign_set", "val = {1, 2, 3}\n"),
+            ],
         ),
-        Snippet::new("while", "while condition:\n    pass\n"),
-        Snippet::new(
-            "class",
-            "class Class:\n    def __init__(self):\n        pass\n",
+        Palette::new(
+            "Classes",
+            &[
+                Snippet::new(
+                    "class_declaration",
+                    "class ClassName:\n    def __init__(self, param):\n        pass\n",
+                ),
+                Snippet::new("instance_method", "def method(self, param):\n    pass\n"),
+                Snippet::new(
+                    "static_method",
+                    "@staticmethod\ndef method(param):\n    pass\n",
+                ),
+                Snippet::new("class_instance", "instance = ClassName()\n"),
+            ],
         ),
-        Snippet::new("func", "def function():\n    pass\n"),
-        Snippet::new(
-            "try",
-            "try:\n    pass\nexcept:\n    pass\nelse:\n    pass\nfinally:\n    pass\n",
+        Palette::new(
+            "Control",
+            &[
+                Snippet::new("for", "for item in range(0, 10):\n    pass\n"),
+                Snippet::new("while", "while 0 == 0:\n    pass\n"),
+                Snippet::new("break", "break\n"),
+                Snippet::new("continue", "continue\n"),
+                Snippet::new("if", "if 0 < 0:\n    pass\n"),
+                Snippet::new("if_else", "if 0 < 0:\n    pass\nelse:\n    pass\n"),
+                Snippet::new(
+                    "if_elif_else",
+                    "if 0 < 0:\n    pass\nelif 0 > 0:\n    pass\nelse:\n    pass\n",
+                ),
+                Snippet::new(
+                    "try",
+                    "try:\n    pass\nexcept:\n    pass\nelse:\n    pass\nfinally:\n    pass\n",
+                ),
+            ],
+        ),
+        Palette::new(
+            "Functions",
+            &[
+                Snippet::new("function_def", "def function(args):\n    return\n"),
+                Snippet::new("function_call", "function(args) \n"),
+                Snippet::new("return_val", "return value\n"),
+                Snippet::new("return", "return\n"),
+            ],
+        ),
+        Palette::new(
+            "Logic",
+            &[
+                Snippet::new("equals", "a == b\n"),
+                Snippet::new("not_equals", "a != b\n"),
+                Snippet::new("greater_than", "a > b\n"),
+                Snippet::new("less_than", "a < b\n"),
+                Snippet::new("greater_than_or_equal", "a >= b\n"),
+                Snippet::new("less_than_or_equal", "a <= b\n"),
+                Snippet::new("and", "a and b\n"),
+                Snippet::new("or", "a or b\n"),
+                Snippet::new("not", "not a\n"),
+                Snippet::new("in", "a in b\n"),
+                Snippet::new("is", "a is b\n"),
+            ],
+        ),
+        Palette::new(
+            "Arithmetic",
+            &[
+                Snippet::new("add", "a + b\n"),
+                Snippet::new("subtract", "a - b\n"),
+                Snippet::new("multiply", "a * b\n"),
+                Snippet::new("divide", "a / b\n"),
+                Snippet::new("modulo", "a % b\n"),
+                Snippet::new("exponent", "a ** b\n"),
+                Snippet::new("floor_divide", "a // b\n"),
+            ],
         ),
     ],
 };
@@ -189,22 +274,25 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 141,
         string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
     },
-    palette: &[
-        Snippet::new(
-            "if",
-            "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
-        ),
-        Snippet::new(
-            "class",
-            "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
-        ),
-        Snippet::new("while", "while (condition) {\n    \n}\n"),
-        Snippet::new("method", "public void myMethod() {\n    \n}\n"),
-        Snippet::new(
-            "try",
-            "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
-        ),
-    ],
+    palettes: &[Palette::new(
+        "General",
+        &[
+            Snippet::new(
+                "if",
+                "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
+            ),
+            Snippet::new(
+                "class",
+                "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
+            ),
+            Snippet::new("while", "while (condition) {\n    \n}\n"),
+            Snippet::new("method", "public void myMethod() {\n    \n}\n"),
+            Snippet::new(
+                "try",
+                "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
+            ),
+        ],
+    )],
 };
 
 const CS_LANGUAGE: LanguageConfig = LanguageConfig {
@@ -263,22 +351,25 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 141,
         string_bounds: &[11, 12], // 11 is single quote, 12 is double quote
     },
-    palette: &[
-        Snippet::new(
-            "if",
-            "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
-        ),
-        Snippet::new(
-            "class",
-            "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
-        ),
-        Snippet::new("while", "while (condition) {\n    \n}\n"),
-        Snippet::new("func", "public void myFunction() {\n    \n}\n"),
-        Snippet::new(
-            "try",
-            "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
-        ),
-    ],
+    palettes: &[Palette::new(
+        "General",
+        &[
+            Snippet::new(
+                "if",
+                "if (condition) {\n    \n} else if (condition) {\n    \n} else {\n    \n}\n",
+            ),
+            Snippet::new(
+                "class",
+                "public class MyClass {\n    public MyClass() {\n        \n    }\n}\n",
+            ),
+            Snippet::new("while", "while (condition) {\n    \n}\n"),
+            Snippet::new("func", "public void myFunction() {\n    \n}\n"),
+            Snippet::new(
+                "try",
+                "try {\n    \n} catch (Exception e) {\n    \n} finally {\n    \n}\n",
+            ),
+        ],
+    )],
 };
 
 /*
