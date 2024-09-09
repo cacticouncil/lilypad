@@ -6,9 +6,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
 use crate::block_editor::{
-    text_editor::{StackFrameLines, TextEdit},
-    text_range::TextRange,
-    ExternalCommand,
+    source::TextEdit, text_editor::StackFrameLines, text_range::TextRange, ExternalCommand,
 };
 use crate::lsp::{
     completion::VSCodeCompletionItem,

@@ -1,16 +1,26 @@
 use egui::{Color32, Painter, Pos2, Rect, Ui, Vec2};
+use ropey::Rope;
 
-use super::{TextEditor, TextPoint, CURSOR_OFF_DURATION, CURSOR_ON_DURATION};
+use super::{Selections, CURSOR_OFF_DURATION, CURSOR_ON_DURATION};
 use crate::{
-    block_editor::{text_range::TextRange, MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
+    block_editor::{
+        text_editor::TextPoint, text_range::TextRange, MonospaceFont, OUTER_PAD,
+        TOTAL_TEXT_X_OFFSET,
+    },
     theme,
 };
 
-impl TextEditor {
+impl Selections {
     /// Draws the cursor at the current position and returns the rect of the cursor.
-    pub fn draw_cursor(&self, offset: Vec2, font: &MonospaceFont, ui: &Ui) -> Rect {
+    pub fn draw_cursor(
+        &self,
+        offset: Vec2,
+        padding: &[f32],
+        font: &MonospaceFont,
+        ui: &Ui,
+    ) -> Rect {
         // we want to draw the cursor where the mouse has last been (selection end)
-        let total_pad: f32 = self.padding.iter().take(self.selection.end.line + 1).sum();
+        let total_pad: f32 = padding.iter().take(self.selection.end.line + 1).sum();
         let block = Rect::from_min_size(
             Pos2::new(
                 TOTAL_TEXT_X_OFFSET + (self.selection.end.col as f32) * font.size.x,
@@ -35,15 +45,45 @@ impl TextEditor {
         block
     }
 
-    pub fn draw_selection(&self, offset: Vec2, font: &MonospaceFont, painter: &Painter) {
+    pub fn draw_selection(
+        &self,
+        offset: Vec2,
+        padding: &[f32],
+        source: &Rope,
+        font: &MonospaceFont,
+        painter: &Painter,
+    ) {
         if !self.selection.is_cursor() {
-            self.draw_selection_blocks(self.selection, theme::SELECTION, offset, font, painter);
+            self.draw_selection_blocks(
+                self.selection,
+                theme::SELECTION,
+                offset,
+                padding,
+                source,
+                font,
+                painter,
+            );
         }
     }
 
-    pub fn draw_pseudo_selection(&self, offset: Vec2, font: &MonospaceFont, painter: &Painter) {
+    pub fn draw_pseudo_selection(
+        &self,
+        offset: Vec2,
+        padding: &[f32],
+        source: &Rope,
+        font: &MonospaceFont,
+        painter: &Painter,
+    ) {
         if let Some(selection) = self.pseudo_selection {
-            self.draw_selection_blocks(selection, theme::PSEUDO_SELECTION, offset, font, painter);
+            self.draw_selection_blocks(
+                selection,
+                theme::PSEUDO_SELECTION,
+                offset,
+                padding,
+                source,
+                font,
+                painter,
+            );
         }
     }
 
@@ -52,15 +92,17 @@ impl TextEditor {
         selection: TextRange,
         color: Color32,
         offset: Vec2,
+        padding: &[f32],
+        source: &Rope,
         font: &MonospaceFont,
         painter: &Painter,
     ) {
         let selection = selection.ordered();
-        let line_ranges = selection.individual_lines(&self.source);
+        let line_ranges = selection.individual_lines(source);
 
         // start the the total padding through the first line so the selection
         // block is placed on the text of the first line (instead of the padding above it)
-        let mut total_padding: f32 = self.padding.iter().take(selection.start.line + 1).sum();
+        let mut total_padding: f32 = padding.iter().take(selection.start.line + 1).sum();
 
         for line_range in line_ranges {
             // one line per range so the line number is the start of the range
@@ -77,13 +119,14 @@ impl TextEditor {
                 line_num != selection.start.line,
                 color,
                 offset,
+                padding,
                 font,
                 painter,
             );
 
             // the padding for the first line was adding before the loop
             if line_num != selection.start.line {
-                total_padding += self.padding[line_num];
+                total_padding += padding[line_num];
             }
         }
     }
@@ -96,11 +139,12 @@ impl TextEditor {
         has_block_above: bool,
         color: Color32,
         offset: Vec2,
+        padding: &[f32],
         font: &MonospaceFont,
         painter: &Painter,
     ) {
         let line_padding = if has_block_above {
-            self.padding[start.line]
+            padding[start.line]
         } else {
             0.0
         };

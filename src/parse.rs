@@ -22,10 +22,6 @@ impl TreeManager {
         TreeManager { tree, parser }
     }
 
-    pub fn change_language(&mut self, lang: &LanguageConfig) {
-        self.parser.set_language(&lang.tree_sitter()).unwrap();
-    }
-
     pub fn get_cursor(&self) -> TreeCursor {
         self.tree.walk()
     }

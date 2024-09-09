@@ -91,13 +91,6 @@ impl LooseBlock {
         self.min_size = Vec2::new(width, height);
     }
 
-    pub fn change_language(&mut self, lang: &'static LanguageConfig) {
-        self.tree_manager.change_language(lang);
-        self.text_drawer.change_language(lang);
-        self.blocks.clear();
-        self.padding.clear();
-    }
-
     pub fn draw(
         &self,
         offset: Vec2,

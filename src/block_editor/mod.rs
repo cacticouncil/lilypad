@@ -3,7 +3,6 @@ use egui::{
     text::Fonts, CentralPanel, FontFamily, FontId, Frame, Pos2, Rect, Sense, SidePanel, Widget,
 };
 use ropey::Rope;
-use text_editor::{StackFrameLines, TextEdit};
 
 use crate::lang::{lang_for_file, LanguageConfig};
 use crate::lsp::completion::VSCodeCompletionItem;
@@ -14,16 +13,19 @@ mod block_drawer;
 mod dragging;
 mod highlighter;
 mod rope_ext;
+pub mod source;
 mod text_drawer;
 pub mod text_editor;
 pub mod text_range;
 
-pub use self::block_drawer::BlockType;
+pub use block_drawer::BlockType;
 
 use self::dragging::block_palette::BlockPalette;
 use self::dragging::loose_block::LooseBlock;
+use self::source::TextEdit;
+use self::text_editor::StackFrameLines;
 use self::text_editor::TextEditor;
-use self::text_range::*;
+use self::text_range::TextRange;
 use crate::lsp::diagnostics::{Diagnostic, VSCodeCodeAction};
 
 /// padding around edges of entire editor

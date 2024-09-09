@@ -16,6 +16,11 @@ pub trait RopeExt {
     ///
     /// runs in O(log N) time
     fn ends_with(&self, c: char) -> bool;
+
+    /// clamp a column to the line's length
+    ///
+    /// runs in O(log N) time
+    fn clamp_col(&self, line: usize, col: usize) -> usize;
 }
 
 impl RopeExt for Rope {
@@ -56,6 +61,10 @@ impl RopeExt for Rope {
             return false;
         };
         last == c
+    }
+
+    fn clamp_col(&self, line: usize, col: usize) -> usize {
+        std::cmp::min(col, self.line(line).len_chars_no_linebreak())
     }
 }
 

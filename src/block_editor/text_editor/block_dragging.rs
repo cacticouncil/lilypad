@@ -4,14 +4,15 @@ use egui::{Painter, Pos2, Rect, Vec2};
 use ropey::Rope;
 
 use super::{
-    text_editing::{HDir, HUnit, TextMovement},
-    undo_manager::UndoStopCondition,
+    coord_conversions::{pt_to_text_coord, pt_to_unbounded_text_coord, text_coord_to_pt},
     TextEdit, TextEditor,
 };
 use crate::{
     block_editor::{
         block_drawer::Block,
         rope_ext::{RopeExt, RopeSliceExt},
+        source::undo_manager::UndoStopCondition,
+        text_range::movement::{HDir, HUnit, TextMovement},
         text_range::{TextPoint, TextRange},
         BlockType, DragSession, MonospaceFont, GUTTER_WIDTH, OUTER_PAD,
     },
@@ -26,16 +27,16 @@ impl TextEditor {
         drag_block: &mut Option<DragSession>,
         font: &MonospaceFont,
     ) {
-        let cursor_pos = self.mouse_to_coord(mouse_pos, font);
+        let cursor_pos = pt_to_text_coord(mouse_pos, &self.padding, self.source.text(), font);
 
-        if let Some(block) = block_for_point(&self.blocks, cursor_pos, &self.source) {
+        if let Some(block) = block_for_point(&self.blocks, cursor_pos, self.source.text()) {
             let mut text_range = block.text_range();
 
             vscode::log_event(
                 "editor-block-drag",
                 HashMap::from([
                     ("type", block.syntax_type.as_str()),
-                    ("lang", self.language.name),
+                    ("lang", self.source.language.name),
                 ]),
             );
 
@@ -43,8 +44,8 @@ impl TextEditor {
             text_range.start.col = 0;
 
             // normalize the text
-            let char_range = text_range.char_range_in(&self.source);
-            let mut block_text = self.source.slice(char_range.clone()).to_string();
+            let char_range = text_range.char_range_in(self.source.text());
+            let mut block_text = self.source.text().slice(char_range.clone()).to_string();
             block_text = normalize_indent(block_text);
             if !block_text.ends_with('\n') {
                 // add a newline to the end if it doesn't have one
@@ -52,11 +53,12 @@ impl TextEditor {
             }
 
             // offset the dragging popup so it matches where the mouse picked up the block
-            let block_corner = self.coord_to_mouse(
+            let block_corner = text_coord_to_pt(
                 TextPoint {
                     col: block.col,
                     line: block.line,
                 },
+                &self.padding,
                 font,
             );
             let relative_pos =
@@ -69,10 +71,11 @@ impl TextEditor {
             });
 
             // remove dragged block from source
-            self.apply_edit(
+            self.source.apply_edit(
                 &TextEdit::delete(text_range),
                 UndoStopCondition::Always,
                 false,
+                &mut self.selections,
             );
         }
     }
@@ -87,8 +90,8 @@ impl TextEditor {
             let mut indented_text = set_indent(&drag_block.text, drop_point.col);
 
             // if at the end of the file, and the last line doesn't have a newline, add one
-            if drop_point.line == self.source.len_lines() {
-                indented_text.insert_str(0, self.source.detect_linebreak());
+            if drop_point.line == self.source.text().len_lines() {
+                indented_text.insert_str(0, self.source.text().detect_linebreak());
             }
 
             // apply edit
@@ -97,10 +100,14 @@ impl TextEditor {
                 Cow::Owned(indented_text),
                 TextRange::new_cursor(insert_point),
             );
-            self.apply_edit(&edit, UndoStopCondition::Never, true);
+            self.source
+                .apply_edit(&edit, UndoStopCondition::Never, true, &mut self.selections);
 
             // move the cursor from the line after the block to the end of the text
-            self.move_cursor(TextMovement::horizontal(HUnit::Grapheme, HDir::Left));
+            self.selections.move_cursor(
+                TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+                &mut self.source,
+            );
 
             true
         } else {
@@ -131,10 +138,10 @@ impl TextEditor {
     pub fn find_drop_point(&mut self, mouse_pos: Pos2, font: &MonospaceFont) -> TextPoint {
         // find the point adjusted so that it is based around between lines
         let adj_pos = Pos2::new(mouse_pos.x, mouse_pos.y + (font.size.y / 2.0));
-        let coord = self.mouse_to_raw_coord(adj_pos, font);
+        let coord = pt_to_unbounded_text_coord(adj_pos, &self.padding, font);
 
         // clamp line to end of source
-        let line = coord.line.min(self.source.len_lines());
+        let line = coord.line.min(self.source.text().len_lines());
 
         // limit to the first non-empty above line's level
         // (or 1 more if it ends in a new scope character)
@@ -144,7 +151,7 @@ impl TextEditor {
                 break 0;
             }
 
-            let line_above = self.source.line(relative_whitespace_line - 1);
+            let line_above = self.source.text().line(relative_whitespace_line - 1);
             let above_indent = line_above.whitespace_at_start();
 
             // if the line above is entirely whitespace, move to the line above
@@ -156,7 +163,7 @@ impl TextEditor {
             // if the line above ends in a new scope character, allow one more indent
             if line_above
                 .excluding_linebreak()
-                .ends_with(self.language.new_scope_char.char())
+                .ends_with(self.source.language.new_scope_char.char())
             {
                 break above_indent + 4;
             }
@@ -164,7 +171,7 @@ impl TextEditor {
             // otherwise, allow up to the same indent as the line above
             break above_indent;
         };
-        let indent = match self.language.new_scope_char {
+        let indent = match self.source.language.new_scope_char {
             // when scope is indent based, allow reducing scope when dragging
             NewScopeChar::Colon => ((coord.col / 4) * 4).min(allowed_indent),
             // when scope is brace based, only allow the maximum indent

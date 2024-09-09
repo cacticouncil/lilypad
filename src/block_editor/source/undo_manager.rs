@@ -1,10 +1,8 @@
+use ropey::Rope;
 use std::borrow::Cow;
 
-use ropey::Rope;
-
-use crate::parse::TreeManager;
-
 use super::{TextEdit, TextRange};
+use crate::parse::TreeManager;
 
 pub struct UndoManager {
     undo_stack: Vec<UndoItem>,

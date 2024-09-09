@@ -1,20 +1,23 @@
 use egui::{
-    os::OperatingSystem, output::IMEOutput, scroll_area::ScrollBarVisibility, CursorIcon, Event,
-    EventFilter, ImeEvent, Key, Modifiers, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
+    output::IMEOutput, scroll_area::ScrollBarVisibility, CursorIcon, Event, EventFilter, ImeEvent,
+    Key, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
 };
 use ropey::Rope;
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use super::{
-    gutter_drawer,
-    text_editing::{HDir, HUnit, TextMovement, VDir, VUnit},
-    undo_manager::UndoStopCondition,
-    TextEdit, TextEditor, TextPoint,
+    coord_conversions::pt_to_unbounded_text_coord, gutter::Gutter, TextEdit, TextEditor, TextPoint,
 };
 use crate::{
     block_editor::{
-        block_drawer, text_range::TextRange, DragSession, ExternalCommand, MonospaceFont,
-        GUTTER_WIDTH, OUTER_PAD, TEXT_L_PAD, TOTAL_TEXT_X_OFFSET,
+        block_drawer,
+        source::{undo_manager::UndoStopCondition, Source},
+        text_range::{
+            movement::{HDir, HUnit, TextMovement, VDir, VUnit},
+            TextRange,
+        },
+        DragSession, ExternalCommand, MonospaceFont, GUTTER_WIDTH, OUTER_PAD, TEXT_L_PAD,
+        TOTAL_TEXT_X_OFFSET,
     },
     lang::lang_for_file,
     theme::{self, blocks_theme::BlocksTheme},
@@ -56,8 +59,8 @@ impl TextEditor {
                     // find the offset to the content
                     let offset = rect.min.to_vec2();
 
-                    // note the start of the frame
-                    self.frame_start_time = ui.input(|i| i.time);
+                    // set the frame start time in the completion popup (for the cursor blink)
+                    self.selections.set_frame_start_time(ui.input(|i| i.time));
 
                     // handle interactions
                     let drop_point =
@@ -79,24 +82,50 @@ impl TextEditor {
                         ui,
                     );
 
+                    // draw gutter if in frame
+                    if offset.x > -1.0 * GUTTER_WIDTH {
+                        ui.put(
+                            Rect::from_min_size(
+                                Pos2::new(0.0, OUTER_PAD) + offset,
+                                Vec2::new(GUTTER_WIDTH, content_size.y),
+                            ),
+                            Gutter::new(
+                                self.selections.selection().end.line,
+                                &mut self.breakpoints,
+                                self.stack_frame,
+                                &self.padding,
+                                self.source.text(),
+                                font,
+                            ),
+                        );
+                    }
+
                     // draw completion popup
-                    // TODO: have the draw function return the cursor rect and use that here
+                    // TODO: use the cursor rect from the draw function as the origin
                     if self.completion_popup.has_completions() {
                         let mut completion_edit: Option<TextEdit> = None;
                         ui.put(
                             Rect::from_min_size(
                                 self.completion_popup.calc_origin(
-                                    self.selection.start,
+                                    self.selections.selection().start,
                                     &self.padding,
                                     font,
                                 ) + offset,
                                 self.completion_popup.calc_size(font),
                             ),
-                            self.completion_popup
-                                .widget(&mut completion_edit, &self.source, font),
+                            self.completion_popup.widget(
+                                &mut completion_edit,
+                                self.source.text(),
+                                font,
+                            ),
                         );
                         if let Some(edit) = completion_edit {
-                            self.apply_edit(&edit, UndoStopCondition::Always, true);
+                            self.source.apply_edit(
+                                &edit,
+                                UndoStopCondition::Always,
+                                true,
+                                &mut self.selections,
+                            );
                             self.completion_popup.clear();
                             response.request_focus();
                         }
@@ -157,8 +186,15 @@ impl TextEditor {
         painter.rect_filled(painter.clip_rect(), 0.0, theme::BACKGROUND);
 
         // draw selection under text and blocks
-        self.draw_pseudo_selection(offset, font, painter);
-        self.draw_selection(offset, font, painter);
+        self.selections.draw_pseudo_selection(
+            offset,
+            &self.padding,
+            self.source.text(),
+            font,
+            painter,
+        );
+        self.selections
+            .draw_selection(offset, &self.padding, self.source.text(), font, painter);
 
         // find which lines are visible in the viewport
         let visible_lines = self.visible_lines(viewport, font);
@@ -193,46 +229,34 @@ impl TextEditor {
         // draw diagnostic underlines
         // TODO: draw higher priorities on top
         for diagnostic in &self.diagnostics {
-            diagnostic.draw(&self.padding, &self.source, offset, font, painter);
-        }
-
-        // draw gutter if in frame
-        if offset.x > -1.0 * GUTTER_WIDTH {
-            let gutter_offset = Vec2::new(0.0, OUTER_PAD) + offset;
-            gutter_drawer::draw_line_numbers(
-                &self.padding,
-                gutter_offset,
-                self.selection.end.line,
-                &self.breakpoints,
-                self.stack_frame,
-                font,
-                painter,
-            );
+            diagnostic.draw(&self.padding, self.source.text(), offset, font, painter);
         }
 
         // draw cursor
         if has_focus {
-            Some(self.draw_cursor(offset, font, ui))
+            Some(self.selections.draw_cursor(offset, &self.padding, font, ui))
         } else {
             None
         }
     }
 
     fn update_text_if_needed(&mut self) {
-        if self.text_changed {
+        if self.source.has_text_changed_since_last_check() {
             // get blocks
-            let mut cursor = self.tree_manager.get_cursor();
-            self.blocks = block_drawer::blocks_for_tree(&mut cursor, &self.source, self.language);
+            let mut cursor = self.source.get_tree_cursor();
+            self.blocks = block_drawer::blocks_for_tree(
+                &mut cursor,
+                self.source.text(),
+                self.source.language,
+            );
 
             // get padding
-            let line_count = self.source.len_lines();
+            let line_count = self.source.text().len_lines();
             self.padding = block_drawer::make_padding(&self.blocks, line_count);
 
             // highlight text
             self.text_drawer
-                .highlight(self.tree_manager.get_cursor().node(), &self.source);
-
-            self.text_changed = false;
+                .highlight(self.source.get_tree_cursor().node(), self.source.text());
         }
     }
 
@@ -289,13 +313,27 @@ impl TextEditor {
                 let is_being_dragged = ui.ctx().is_being_dragged(response.id);
                 if is_being_dragged {
                     if dragged_block.is_none() {
-                        self.expand_selection(pos, font);
+                        self.selections
+                            .expand_selection(pos, &self.padding, &self.source, font);
                     }
-                } else if ui.input(|i| i.pointer.primary_pressed()) {
+                } else if ui.input(|i| i.pointer.primary_pressed()) && pos.x >= GUTTER_WIDTH {
                     if mods.shift {
-                        self.expand_selection(pos, font);
+                        self.selections
+                            .expand_selection(pos, &self.padding, &self.source, font);
                     } else {
-                        self.mouse_clicked(pos, mods, dragged_block, font);
+                        // if option is held, remove the current block from the source and place it in drag_block
+                        if mods.alt {
+                            if dragged_block.is_none() {
+                                self.start_block_drag(pos, dragged_block, font);
+                            }
+                        } else {
+                            self.selections.mouse_clicked(
+                                pos,
+                                &self.padding,
+                                &mut self.source,
+                                font,
+                            );
+                        }
                     }
                     self.completion_popup.clear();
                     response.request_focus();
@@ -321,8 +359,9 @@ impl TextEditor {
                     // if still in the current diagnostic range, keep the popup open.
                     // otherwise, clear the selection
                     if let Some(diagnostic) = self.diagnostics.get(diagnostic_selection) {
-                        let coord = self.mouse_to_raw_coord(pointer_pos - offset, font);
-                        if !diagnostic.range.contains(coord, &self.source) {
+                        let coord =
+                            pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
+                        if !diagnostic.range.contains(coord, self.source.text()) {
                             self.diagnostic_selection = None;
                         }
                     }
@@ -330,11 +369,12 @@ impl TextEditor {
 
                 // if the mouse has been still for a bit with no selection, find the diagnostic under the cursor
                 if self.diagnostic_selection.is_none() && Self::mouse_still_for(0.25, ui) {
-                    let coord = self.mouse_to_raw_coord(pointer_pos - offset, font);
+                    let coord =
+                        pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
                     self.diagnostic_selection = self
                         .diagnostics
                         .iter()
-                        .position(|d| d.range.contains(coord, &self.source));
+                        .position(|d| d.range.contains(coord, self.source.text()));
                 }
             }
         };
@@ -357,28 +397,38 @@ impl TextEditor {
             events.sort_by_key(|e| !matches!(e, Event::Ime(_)));
         }
 
-        let os = ui.ctx().os();
         for event in &events {
             match event {
                 Event::Copy => {
-                    let selection = self.selection.ordered().char_range_in(&self.source);
-                    let selected_text = self.source.slice(selection).to_string();
+                    let char_range = self
+                        .selections
+                        .selection()
+                        .ordered()
+                        .char_range_in(self.source.text());
+                    let selected_text = self.source.text().slice(char_range).to_string();
                     ui.ctx().copy_text(selected_text);
                 }
 
                 Event::Cut => {
-                    let selection = self.selection.ordered().char_range_in(&self.source);
-                    let selected_text = self.source.slice(selection).to_string();
-                    self.insert_str("");
+                    let char_range = self
+                        .selections
+                        .selection()
+                        .ordered()
+                        .char_range_in(self.source.text());
+                    let selected_text = self.source.text().slice(char_range).to_string();
                     ui.ctx().copy_text(selected_text);
+
+                    self.source.insert_str("", &mut self.selections);
                 }
 
-                Event::Paste(new_text) => self.insert_str(new_text),
+                Event::Paste(new_text) => {
+                    self.source.insert_str(new_text, &mut self.selections);
+                }
 
                 Event::Text(new_text) => {
-                    self.insert_char(new_text);
+                    self.source.insert_char(new_text, &mut self.selections);
                     self.completion_popup
-                        .request_completions(&self.source, self.selection)
+                        .request_completions(self.source.text(), self.selections.selection())
                 }
 
                 Event::Key {
@@ -388,7 +438,7 @@ impl TextEditor {
                     ..
                 } => {
                     if !self.handle_selection_modifying_keypress(modifiers, *key) {
-                        self.handle_text_modifying_keypress(os, modifiers, *key);
+                        self.handle_text_modifying_keypress(modifiers, *key);
                     }
                 }
 
@@ -403,30 +453,24 @@ impl TextEditor {
         for command in commands {
             match command {
                 ExternalCommand::SetText(new_text) => {
-                    // update state and tree
-                    let rope = Rope::from_str(new_text);
-                    self.tree_manager.replace(&rope);
-                    self.source = rope;
-
-                    // reset view properties
-                    self.selection = TextRange::ZERO;
-                    self.pseudo_selection = None;
-                    self.input_ignore_stack.clear();
-                    self.paired_delete_stack.clear();
-
-                    // mark new text layout
-                    self.text_changed = true;
+                    self.source = Source::new(Rope::from_str(new_text), self.source.language);
+                    self.selections.set_selection(TextRange::ZERO, &self.source);
                 }
                 ExternalCommand::SetFileName(new_name) => {
                     let new_lang = lang_for_file(new_name);
-                    if self.language.name != new_lang.name {
-                        self.language = new_lang;
+                    if self.source.language.name != new_lang.name {
+                        self.source = Source::new(Rope::new(), new_lang);
+                        self.selections.set_selection(TextRange::ZERO, &self.source);
                         self.text_drawer.change_language(new_lang);
-                        self.tree_manager.change_language(new_lang);
                     }
                 }
                 ExternalCommand::ApplyEdit(edit) => {
-                    self.apply_edit(edit, UndoStopCondition::Always, true)
+                    self.source.apply_edit(
+                        edit,
+                        UndoStopCondition::Always,
+                        true,
+                        &mut self.selections,
+                    );
                 }
                 ExternalCommand::SetDiagnostics(new_diagnostics) => {
                     self.diagnostics = new_diagnostics.clone();
@@ -438,7 +482,7 @@ impl TextEditor {
                 }
                 ExternalCommand::SetCompletions(new_completions) => {
                     self.completion_popup
-                        .set_completions(new_completions, &self.source);
+                        .set_completions(new_completions, self.source.text());
                 }
                 ExternalCommand::SetBreakpoints(new_breakpoints) => {
                     let mut set = HashSet::new();
@@ -451,10 +495,12 @@ impl TextEditor {
                     self.stack_frame = *new_stack_frame;
                 }
                 ExternalCommand::Undo => {
-                    self.undo();
+                    self.source.undo(&mut self.selections);
+                    self.completion_popup.clear();
                 }
                 ExternalCommand::Redo => {
-                    self.redo();
+                    self.source.redo(&mut self.selections);
+                    self.completion_popup.clear();
                 }
                 _ => {}
             }
@@ -480,19 +526,14 @@ impl TextEditor {
         });
     }
 
-    fn handle_text_modifying_keypress(
-        &mut self,
-        os: OperatingSystem,
-        modifiers: &Modifiers,
-        key: Key,
-    ) {
+    fn handle_text_modifying_keypress(&mut self, modifiers: &Modifiers, key: Key) {
         match key {
             // Basic actions
             Key::Enter => {
                 if self.completion_popup.has_completions() {
                     self.completion_popup.trigger_completion();
                 } else {
-                    self.insert_newline();
+                    self.source.insert_newline(&mut self.selections);
                     self.completion_popup.clear();
                 }
             }
@@ -501,76 +542,78 @@ impl TextEditor {
                     self.completion_popup.trigger_completion();
                 } else {
                     if modifiers.shift {
-                        self.unindent();
+                        self.source.unindent(&mut self.selections);
                     } else {
-                        self.indent();
-                    }
+                        self.source.indent(&mut self.selections)
+                    };
                     self.completion_popup.clear();
                 }
             }
             Key::Backspace => {
-                if modifiers.mac_cmd {
-                    self.backspace(TextMovement::horizontal(HUnit::Line, HDir::Left));
+                let movement = if modifiers.mac_cmd {
+                    TextMovement::horizontal(HUnit::Line, HDir::Left)
                 } else if modifiers.alt || modifiers.ctrl {
                     // alt on mac, ctrl on windows
-                    self.backspace(TextMovement::horizontal(HUnit::Word, HDir::Left));
+                    TextMovement::horizontal(HUnit::Word, HDir::Left)
                 } else {
-                    self.backspace(TextMovement::horizontal(HUnit::Grapheme, HDir::Left));
+                    TextMovement::horizontal(HUnit::Grapheme, HDir::Left)
                 };
+                self.source.delete(movement, &mut self.selections);
+
                 self.completion_popup
-                    .request_completions(&self.source, self.selection)
+                    .request_completions(self.source.text(), self.selections.selection())
             }
-            Key::Delete if !modifiers.shift || os != OperatingSystem::Windows => {
-                if modifiers.mac_cmd {
-                    self.backspace(TextMovement::horizontal(HUnit::Line, HDir::Right));
+            Key::Delete => {
+                let movement = if modifiers.mac_cmd {
+                    TextMovement::horizontal(HUnit::Line, HDir::Right)
                 } else if modifiers.alt || modifiers.ctrl {
                     // alt on mac, ctrl on windows
-                    self.backspace(TextMovement::horizontal(HUnit::Word, HDir::Right));
+                    TextMovement::horizontal(HUnit::Word, HDir::Right)
                 } else {
-                    self.backspace(TextMovement::horizontal(HUnit::Grapheme, HDir::Right));
+                    TextMovement::horizontal(HUnit::Grapheme, HDir::Right)
                 };
+                self.source.delete(movement, &mut self.selections);
                 self.completion_popup
-                    .request_completions(&self.source, self.selection)
+                    .request_completions(self.source.text(), self.selections.selection())
             }
 
             // Undo/Redo
             Key::Z if modifiers.matches_logically(Modifiers::COMMAND) => {
                 if modifiers.shift {
-                    self.redo();
+                    self.source.redo(&mut self.selections);
                 } else {
-                    self.undo();
+                    self.source.undo(&mut self.selections);
                 }
                 self.completion_popup.clear();
             }
             Key::Y if modifiers.matches_logically(Modifiers::COMMAND) => {
-                self.redo();
+                self.source.redo(&mut self.selections);
                 self.completion_popup.clear();
             }
 
             // Control hotkeys
             Key::H if modifiers.ctrl => {
-                self.backspace(TextMovement::horizontal(HUnit::Grapheme, HDir::Left));
+                self.source.delete(
+                    TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
+                    &mut self.selections,
+                );
                 self.completion_popup.clear();
             }
-
+            Key::D if modifiers.ctrl => {
+                self.source.delete(
+                    TextMovement::horizontal(HUnit::Grapheme, HDir::Right),
+                    &mut self.selections,
+                );
+                self.completion_popup.clear();
+            }
             Key::K if modifiers.ctrl => {
-                self.backspace(TextMovement::horizontal(HUnit::Line, HDir::Right));
+                self.source.delete(
+                    TextMovement::horizontal(HUnit::Line, HDir::Right),
+                    &mut self.selections,
+                );
                 self.completion_popup.clear();
             }
 
-            Key::U if modifiers.ctrl => {
-                self.backspace(TextMovement::horizontal(HUnit::Line, HDir::Left));
-                self.completion_popup.clear();
-            }
-
-            Key::W if modifiers.ctrl => {
-                if self.selection.is_cursor() {
-                    self.backspace(TextMovement::horizontal(HUnit::Word, HDir::Left));
-                } else {
-                    self.delete_selection();
-                };
-                self.completion_popup.clear();
-            }
             _ => {}
         }
     }
@@ -579,30 +622,37 @@ impl TextEditor {
         match ime_event {
             ImeEvent::Enabled => {
                 self.ime_enabled = true;
-                self.ime_selection = self.selection;
+                self.ime_selection = self.selections.selection();
             }
             ImeEvent::Preedit(text_mark) => {
                 if text_mark != "\n" && text_mark != "\r" {
                     // Empty prediction can be produced when user press backspace
                     // or escape during IME, so we clear current text.
-                    self.delete_selection();
-                    let start_cursor = self.selection.start;
+                    self.source.insert_str("", &mut self.selections);
+                    let start_cursor = self.selections.selection().start;
                     if !text_mark.is_empty() {
-                        self.insert_str(text_mark);
+                        self.source.insert_str(text_mark, &mut self.selections);
                     }
-                    self.ime_selection = self.selection;
-                    self.selection.start = start_cursor;
+                    self.ime_selection = self.selections.selection();
+
+                    let new_selection =
+                        TextRange::new(start_cursor, self.selections.selection().end);
+                    self.selections.set_selection(new_selection, &self.source);
                 }
             }
             ImeEvent::Commit(prediction) => {
                 if prediction != "\n" && prediction != "\r" {
                     self.ime_enabled = false;
 
-                    if !prediction.is_empty() && self.selection.end == self.ime_selection.end {
-                        self.delete_selection();
-                        self.insert_str(prediction);
+                    if !prediction.is_empty()
+                        && self.selections.selection().start == self.ime_selection.start
+                    {
+                        self.source.insert_str(prediction, &mut self.selections);
                     } else {
-                        self.selection = TextRange::new_cursor(self.selection.start);
+                        self.selections.set_selection(
+                            TextRange::new_cursor(self.selections.selection().start),
+                            &self.source,
+                        );
                     }
                 }
             }
@@ -615,8 +665,11 @@ impl TextEditor {
     pub fn handle_selection_modifying_keypress(&mut self, modifiers: &Modifiers, key: Key) -> bool {
         match key {
             Key::A if modifiers.command => {
-                self.selection = TextRange::ZERO.expanded_by(
-                    TextMovement::vertical(VUnit::Document, VDir::Down),
+                self.selections.set_selection(
+                    TextRange::ZERO.expanded_by(
+                        TextMovement::vertical(VUnit::Document, VDir::Down),
+                        self.source.text(),
+                    ),
                     &self.source,
                 );
                 self.completion_popup.clear();
@@ -641,9 +694,9 @@ impl TextEditor {
                 let movement = TextMovement::horizontal(unit, direction);
 
                 if modifiers.shift {
-                    self.move_selecting(movement);
+                    self.selections.move_selecting(movement, &mut self.source);
                 } else {
-                    self.move_cursor(movement);
+                    self.selections.move_cursor(movement, &mut self.source);
                 }
 
                 self.completion_popup.clear();
@@ -676,9 +729,9 @@ impl TextEditor {
                     let movement = TextMovement::vertical(unit, direction);
 
                     if modifiers.shift {
-                        self.move_selecting(movement);
+                        self.selections.move_selecting(movement, &mut self.source);
                     } else {
-                        self.move_cursor(movement);
+                        self.selections.move_cursor(movement, &mut self.source);
                     }
 
                     self.completion_popup.clear();
@@ -701,6 +754,7 @@ impl TextEditor {
         // width is max between text and window
         let max_chars = self
             .source
+            .text()
             .lines()
             .map(|l| l.len_chars())
             .max()
@@ -710,7 +764,7 @@ impl TextEditor {
         let width = f32::max(viewport.width(), max_line_len);
 
         // height is just height of text
-        let height = self.source.len_lines() as f32 * font.size.y
+        let height = self.source.text().len_lines() as f32 * font.size.y
             + OUTER_PAD
             + self.padding.iter().sum::<f32>()
             + 200.0; // extra space for over-scroll

@@ -80,7 +80,7 @@ pub fn lang_for_file(file_name: &str) -> &'static LanguageConfig {
     match file_name.split('.').last() {
         Some("py") => &PYTHON_LANGUAGE,
         Some("java") => &JAVA_LANGUAGE,
-        // Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
+        Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
         Some("cs") => &CS_LANGUAGE,
         _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
     }
@@ -126,7 +126,7 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
         }
     },
     string_node_ids: StringNodeIDs {
-        string: 230,
+        string: 232,
         string_bounds: &[104, 107], // 104 is string start, 107 is string end
     },
     palettes: &[
@@ -372,10 +372,9 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
     )],
 };
 
-/*
 const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "cpp",
-    ts_lang: tree_sitter_cpp::language,
+    ts_lang: tree_sitter_cpp::LANGUAGE,
     highlight_query: tree_sitter_cpp::HIGHLIGHT_QUERY,
     new_scope_char: NewScopeChar::Brace,
     node_categorizer: |node| {
@@ -436,6 +435,5 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
         string: 360,
         string_bounds: &[162],
     },
-    palette: &[],
+    palettes: &[Palette::new("General", &[])],
 };
-*/

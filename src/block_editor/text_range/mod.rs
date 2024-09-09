@@ -4,13 +4,19 @@ use std::ops::Range;
 
 use super::rope_ext::RopeSliceExt;
 
+pub mod movement;
+
 /* ------------------------------- Text Range ------------------------------- */
 
 /// An range of text points. Half open: [start, end).
 /// A cursor is a special case where the start and end are the same.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct TextRange {
+    /// When selecting, this is where the mouse was pressed
     pub start: TextPoint,
+
+    /// When selecting, this is where the mouse was released.
+    /// It is where the blinking cursor is. And is what will normally change during expansions.
     pub end: TextPoint,
 }
 
