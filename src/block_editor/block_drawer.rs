@@ -3,7 +3,7 @@ use std::ops::RangeInclusive;
 use egui::{Painter, Pos2, Rect, Stroke, Vec2};
 use tree_sitter::{Node, TreeCursor};
 
-use crate::lang::LanguageConfig;
+use crate::lang::config::{LanguageConfig, NewScopeChar};
 use crate::theme::blocks_theme::BlocksTheme;
 
 use super::rope_ext::RopeSliceExt;
@@ -108,7 +108,7 @@ pub fn blocks_for_tree(
     // if languages uses braces for new scopes,
     // adjust the block starts so that they contain their children
     // (since it would be possible for a block to start further in than its children)
-    if lang.new_scope_char == crate::lang::NewScopeChar::Brace {
+    if lang.new_scope_char == NewScopeChar::Brace {
         adjust_block_starts(&mut blocks);
     }
 

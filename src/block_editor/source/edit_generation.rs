@@ -9,7 +9,7 @@ use crate::{
         text_range::TextPoint,
         TextRange,
     },
-    lang::NewScopeChar,
+    lang::config::NewScopeChar,
 };
 
 const TAB_SIZE: usize = 4;

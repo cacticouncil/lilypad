@@ -2,7 +2,6 @@ mod block_editor;
 mod file_picker;
 mod lang;
 mod lsp;
-mod parse;
 mod theme;
 mod util_widgets;
 mod vscode;

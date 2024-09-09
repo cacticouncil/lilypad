@@ -58,7 +58,7 @@ impl Selections {
 
         // verify that our current point is the start or end of a string (not an escape sequence)
         let current_kind = cursor.node().kind_id();
-        let kinds = source.language.string_node_ids;
+        let kinds = source.lang.config.string_node_ids;
         if !kinds.string_bounds.contains(&current_kind) {
             return None;
         }

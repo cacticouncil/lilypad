@@ -2,7 +2,6 @@ use egui::{
     output::IMEOutput, scroll_area::ScrollBarVisibility, CursorIcon, Event, EventFilter, ImeEvent,
     Key, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
 };
-use ropey::Rope;
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use super::{
@@ -11,7 +10,7 @@ use super::{
 use crate::{
     block_editor::{
         block_drawer,
-        source::{undo_manager::UndoStopCondition, Source},
+        source::{Source, UndoStopCondition},
         text_range::{
             movement::{HDir, HUnit, TextMovement, VDir, VUnit},
             TextRange,
@@ -19,7 +18,6 @@ use crate::{
         DragSession, ExternalCommand, MonospaceFont, GUTTER_WIDTH, OUTER_PAD, TEXT_L_PAD,
         TOTAL_TEXT_X_OFFSET,
     },
-    lang::lang_for_file,
     theme::{self, blocks_theme::BlocksTheme},
 };
 
@@ -33,6 +31,7 @@ const EVENT_FILTER: EventFilter = EventFilter {
 impl TextEditor {
     pub fn widget<'a>(
         &'a mut self,
+        source: &'a mut Source,
         drag_block: &'a mut Option<DragSession>,
         external_commands: &'a [ExternalCommand],
         blocks_theme: BlocksTheme,
@@ -46,7 +45,7 @@ impl TextEditor {
                 .drag_to_scroll(false)
                 .show_viewport(ui, |ui, viewport| {
                     // allocate space
-                    let content_size = self.content_size(viewport, font);
+                    let content_size = self.content_size(source, viewport, font);
                     let expanded_size = content_size.max(ui.available_size() - Vec2::new(0.0, 5.0));
                     let (auto_id, rect) = ui.allocate_space(expanded_size);
 
@@ -64,10 +63,10 @@ impl TextEditor {
 
                     // handle interactions
                     let drop_point =
-                        self.handle_pointer(ui, offset, &mut response, drag_block, font);
-                    self.handle_external_commands(external_commands);
-                    self.event(ui);
-                    self.update_text_if_needed();
+                        self.handle_pointer(ui, offset, &mut response, drag_block, source, font);
+                    self.handle_external_commands(external_commands, source);
+                    self.event(source, ui);
+                    self.update_text_if_needed(source);
                     // TODO: if the selection moved out of view, scroll to it
 
                     // draw the text editor
@@ -77,6 +76,7 @@ impl TextEditor {
                         viewport,
                         response.has_focus(),
                         drop_point,
+                        source,
                         blocks_theme,
                         font,
                         ui,
@@ -94,7 +94,7 @@ impl TextEditor {
                                 &mut self.breakpoints,
                                 self.stack_frame,
                                 &self.padding,
-                                self.source.text(),
+                                source.text(),
                                 font,
                             ),
                         );
@@ -113,14 +113,11 @@ impl TextEditor {
                                 ) + offset,
                                 self.completion_popup.calc_size(font),
                             ),
-                            self.completion_popup.widget(
-                                &mut completion_edit,
-                                self.source.text(),
-                                font,
-                            ),
+                            self.completion_popup
+                                .widget(&mut completion_edit, source.text(), font),
                         );
                         if let Some(edit) = completion_edit {
-                            self.source.apply_edit(
+                            source.apply_edit(
                                 &edit,
                                 UndoStopCondition::Always,
                                 true,
@@ -177,6 +174,7 @@ impl TextEditor {
         viewport: Rect,
         has_focus: bool,
         block_drop_point: Option<TextPoint>,
+        source: &Source,
         blocks_theme: BlocksTheme,
         font: &MonospaceFont,
         ui: &Ui,
@@ -186,15 +184,10 @@ impl TextEditor {
         painter.rect_filled(painter.clip_rect(), 0.0, theme::BACKGROUND);
 
         // draw selection under text and blocks
-        self.selections.draw_pseudo_selection(
-            offset,
-            &self.padding,
-            self.source.text(),
-            font,
-            painter,
-        );
         self.selections
-            .draw_selection(offset, &self.padding, self.source.text(), font, painter);
+            .draw_pseudo_selection(offset, &self.padding, source.text(), font, painter);
+        self.selections
+            .draw_selection(offset, &self.padding, source.text(), font, painter);
 
         // find which lines are visible in the viewport
         let visible_lines = self.visible_lines(viewport, font);
@@ -229,7 +222,7 @@ impl TextEditor {
         // draw diagnostic underlines
         // TODO: draw higher priorities on top
         for diagnostic in &self.diagnostics {
-            diagnostic.draw(&self.padding, self.source.text(), offset, font, painter);
+            diagnostic.draw(&self.padding, source.text(), offset, font, painter);
         }
 
         // draw cursor
@@ -240,23 +233,21 @@ impl TextEditor {
         }
     }
 
-    fn update_text_if_needed(&mut self) {
-        if self.source.has_text_changed_since_last_check() {
+    fn update_text_if_needed(&mut self, source: &mut Source) {
+        if source.has_text_changed_since_last_check() {
             // get blocks
-            let mut cursor = self.source.get_tree_cursor();
-            self.blocks = block_drawer::blocks_for_tree(
-                &mut cursor,
-                self.source.text(),
-                self.source.language,
-            );
+            {
+                let mut cursor = source.get_tree_cursor();
+                self.blocks =
+                    block_drawer::blocks_for_tree(&mut cursor, source.text(), source.lang.config);
+            }
 
             // get padding
-            let line_count = self.source.text().len_lines();
+            let line_count = source.text().len_lines();
             self.padding = block_drawer::make_padding(&self.blocks, line_count);
 
             // highlight text
-            self.text_drawer
-                .highlight(self.source.get_tree_cursor().node(), self.source.text());
+            self.text_drawer.highlight_source(source);
         }
     }
 
@@ -293,6 +284,7 @@ impl TextEditor {
         offset: Vec2,
         response: &mut Response,
         dragged_block: &mut Option<DragSession>,
+        source: &mut Source,
         font: &MonospaceFont,
     ) -> Option<TextPoint> {
         let mods = ui.input(|i| i.modifiers);
@@ -314,25 +306,21 @@ impl TextEditor {
                 if is_being_dragged {
                     if dragged_block.is_none() {
                         self.selections
-                            .expand_selection(pos, &self.padding, &self.source, font);
+                            .expand_selection(pos, &self.padding, source, font);
                     }
                 } else if ui.input(|i| i.pointer.primary_pressed()) && pos.x >= GUTTER_WIDTH {
                     if mods.shift {
                         self.selections
-                            .expand_selection(pos, &self.padding, &self.source, font);
+                            .expand_selection(pos, &self.padding, source, font);
                     } else {
                         // if option is held, remove the current block from the source and place it in drag_block
                         if mods.alt {
                             if dragged_block.is_none() {
-                                self.start_block_drag(pos, dragged_block, font);
+                                self.start_block_drag(pos, dragged_block, source, font);
                             }
                         } else {
-                            self.selections.mouse_clicked(
-                                pos,
-                                &self.padding,
-                                &mut self.source,
-                                font,
-                            );
+                            self.selections
+                                .mouse_clicked(pos, &self.padding, source, font);
                         }
                     }
                     self.completion_popup.clear();
@@ -343,8 +331,8 @@ impl TextEditor {
                 if dragged_block.is_some() {
                     let mouse_released = ui.input(|i| i.pointer.primary_released());
                     if mouse_released {
-                        let drop_point = self.find_drop_point(pos, font);
-                        self.drop_block(dragged_block, drop_point);
+                        let drop_point = self.find_drop_point(pos, source, font);
+                        self.drop_block(dragged_block, drop_point, source);
                         response.request_focus();
                     }
                 }
@@ -361,7 +349,7 @@ impl TextEditor {
                     if let Some(diagnostic) = self.diagnostics.get(diagnostic_selection) {
                         let coord =
                             pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
-                        if !diagnostic.range.contains(coord, self.source.text()) {
+                        if !diagnostic.range.contains(coord, source.text()) {
                             self.diagnostic_selection = None;
                         }
                     }
@@ -374,7 +362,7 @@ impl TextEditor {
                     self.diagnostic_selection = self
                         .diagnostics
                         .iter()
-                        .position(|d| d.range.contains(coord, self.source.text()));
+                        .position(|d| d.range.contains(coord, source.text()));
                 }
             }
         };
@@ -382,13 +370,13 @@ impl TextEditor {
         // figure out the block drop points
         if response.contains_pointer() && dragged_block.is_some() {
             ui.input(|i| i.pointer.latest_pos())
-                .map(|pointer_pos| self.find_drop_point(pointer_pos - offset, font))
+                .map(|pointer_pos| self.find_drop_point(pointer_pos - offset, source, font))
         } else {
             None
         }
     }
 
-    fn event(&mut self, ui: &Ui) {
+    fn event(&mut self, source: &mut Source, ui: &Ui) {
         let mut events = ui.input(|i| i.filtered_events(&EVENT_FILTER));
 
         if self.ime_enabled {
@@ -404,8 +392,8 @@ impl TextEditor {
                         .selections
                         .selection()
                         .ordered()
-                        .char_range_in(self.source.text());
-                    let selected_text = self.source.text().slice(char_range).to_string();
+                        .char_range_in(source.text());
+                    let selected_text = source.text().slice(char_range).to_string();
                     ui.ctx().copy_text(selected_text);
                 }
 
@@ -414,21 +402,21 @@ impl TextEditor {
                         .selections
                         .selection()
                         .ordered()
-                        .char_range_in(self.source.text());
-                    let selected_text = self.source.text().slice(char_range).to_string();
+                        .char_range_in(source.text());
+                    let selected_text = source.text().slice(char_range).to_string();
                     ui.ctx().copy_text(selected_text);
 
-                    self.source.insert_str("", &mut self.selections);
+                    source.insert_str("", &mut self.selections);
                 }
 
                 Event::Paste(new_text) => {
-                    self.source.insert_str(new_text, &mut self.selections);
+                    source.insert_str(new_text, &mut self.selections);
                 }
 
                 Event::Text(new_text) => {
-                    self.source.insert_char(new_text, &mut self.selections);
+                    source.insert_char(new_text, &mut self.selections);
                     self.completion_popup
-                        .request_completions(self.source.text(), self.selections.selection())
+                        .request_completions(source.text(), self.selections.selection())
                 }
 
                 Event::Key {
@@ -437,40 +425,29 @@ impl TextEditor {
                     pressed: true,
                     ..
                 } => {
-                    if !self.handle_selection_modifying_keypress(modifiers, *key) {
-                        self.handle_text_modifying_keypress(modifiers, *key);
+                    if !self.handle_selection_modifying_keypress(modifiers, *key, source) {
+                        self.handle_text_modifying_keypress(modifiers, *key, source);
                     }
                 }
 
-                Event::Ime(ime_event) => self.handle_ime(ime_event),
+                Event::Ime(ime_event) => self.handle_ime(ime_event, source),
 
                 _ => {}
             };
         }
     }
 
-    fn handle_external_commands(&mut self, commands: &[ExternalCommand]) {
+    fn handle_external_commands(&mut self, commands: &[ExternalCommand], source: &mut Source) {
         for command in commands {
             match command {
-                ExternalCommand::SetText(new_text) => {
-                    self.source = Source::new(Rope::from_str(new_text), self.source.language);
-                    self.selections.set_selection(TextRange::ZERO, &self.source);
+                ExternalCommand::SetText(_) => {
+                    self.selections.set_selection(TextRange::ZERO, source);
                 }
-                ExternalCommand::SetFileName(new_name) => {
-                    let new_lang = lang_for_file(new_name);
-                    if self.source.language.name != new_lang.name {
-                        self.source = Source::new(Rope::new(), new_lang);
-                        self.selections.set_selection(TextRange::ZERO, &self.source);
-                        self.text_drawer.change_language(new_lang);
-                    }
+                ExternalCommand::SetFile { .. } => {
+                    self.selections.set_selection(TextRange::ZERO, source);
                 }
                 ExternalCommand::ApplyEdit(edit) => {
-                    self.source.apply_edit(
-                        edit,
-                        UndoStopCondition::Always,
-                        true,
-                        &mut self.selections,
-                    );
+                    source.apply_edit(edit, UndoStopCondition::Always, true, &mut self.selections);
                 }
                 ExternalCommand::SetDiagnostics(new_diagnostics) => {
                     self.diagnostics = new_diagnostics.clone();
@@ -482,7 +459,7 @@ impl TextEditor {
                 }
                 ExternalCommand::SetCompletions(new_completions) => {
                     self.completion_popup
-                        .set_completions(new_completions, self.source.text());
+                        .set_completions(new_completions, source.text());
                 }
                 ExternalCommand::SetBreakpoints(new_breakpoints) => {
                     let mut set = HashSet::new();
@@ -495,11 +472,11 @@ impl TextEditor {
                     self.stack_frame = *new_stack_frame;
                 }
                 ExternalCommand::Undo => {
-                    self.source.undo(&mut self.selections);
+                    source.undo(&mut self.selections);
                     self.completion_popup.clear();
                 }
                 ExternalCommand::Redo => {
-                    self.source.redo(&mut self.selections);
+                    source.redo(&mut self.selections);
                     self.completion_popup.clear();
                 }
                 _ => {}
@@ -526,14 +503,19 @@ impl TextEditor {
         });
     }
 
-    fn handle_text_modifying_keypress(&mut self, modifiers: &Modifiers, key: Key) {
+    fn handle_text_modifying_keypress(
+        &mut self,
+        modifiers: &Modifiers,
+        key: Key,
+        source: &mut Source,
+    ) {
         match key {
             // Basic actions
             Key::Enter => {
                 if self.completion_popup.has_completions() {
                     self.completion_popup.trigger_completion();
                 } else {
-                    self.source.insert_newline(&mut self.selections);
+                    source.insert_newline(&mut self.selections);
                     self.completion_popup.clear();
                 }
             }
@@ -542,9 +524,9 @@ impl TextEditor {
                     self.completion_popup.trigger_completion();
                 } else {
                     if modifiers.shift {
-                        self.source.unindent(&mut self.selections);
+                        source.unindent(&mut self.selections);
                     } else {
-                        self.source.indent(&mut self.selections)
+                        source.indent(&mut self.selections)
                     };
                     self.completion_popup.clear();
                 }
@@ -558,10 +540,10 @@ impl TextEditor {
                 } else {
                     TextMovement::horizontal(HUnit::Grapheme, HDir::Left)
                 };
-                self.source.delete(movement, &mut self.selections);
+                source.delete(movement, &mut self.selections);
 
                 self.completion_popup
-                    .request_completions(self.source.text(), self.selections.selection())
+                    .request_completions(source.text(), self.selections.selection())
             }
             Key::Delete => {
                 let movement = if modifiers.mac_cmd {
@@ -572,42 +554,42 @@ impl TextEditor {
                 } else {
                     TextMovement::horizontal(HUnit::Grapheme, HDir::Right)
                 };
-                self.source.delete(movement, &mut self.selections);
+                source.delete(movement, &mut self.selections);
                 self.completion_popup
-                    .request_completions(self.source.text(), self.selections.selection())
+                    .request_completions(source.text(), self.selections.selection())
             }
 
             // Undo/Redo
             Key::Z if modifiers.matches_logically(Modifiers::COMMAND) => {
                 if modifiers.shift {
-                    self.source.redo(&mut self.selections);
+                    source.redo(&mut self.selections);
                 } else {
-                    self.source.undo(&mut self.selections);
+                    source.undo(&mut self.selections);
                 }
                 self.completion_popup.clear();
             }
             Key::Y if modifiers.matches_logically(Modifiers::COMMAND) => {
-                self.source.redo(&mut self.selections);
+                source.redo(&mut self.selections);
                 self.completion_popup.clear();
             }
 
             // Control hotkeys
             Key::H if modifiers.ctrl => {
-                self.source.delete(
+                source.delete(
                     TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
                     &mut self.selections,
                 );
                 self.completion_popup.clear();
             }
             Key::D if modifiers.ctrl => {
-                self.source.delete(
+                source.delete(
                     TextMovement::horizontal(HUnit::Grapheme, HDir::Right),
                     &mut self.selections,
                 );
                 self.completion_popup.clear();
             }
             Key::K if modifiers.ctrl => {
-                self.source.delete(
+                source.delete(
                     TextMovement::horizontal(HUnit::Line, HDir::Right),
                     &mut self.selections,
                 );
@@ -618,7 +600,7 @@ impl TextEditor {
         }
     }
 
-    fn handle_ime(&mut self, ime_event: &ImeEvent) {
+    fn handle_ime(&mut self, ime_event: &ImeEvent, source: &mut Source) {
         match ime_event {
             ImeEvent::Enabled => {
                 self.ime_enabled = true;
@@ -628,16 +610,16 @@ impl TextEditor {
                 if text_mark != "\n" && text_mark != "\r" {
                     // Empty prediction can be produced when user press backspace
                     // or escape during IME, so we clear current text.
-                    self.source.insert_str("", &mut self.selections);
+                    source.insert_str("", &mut self.selections);
                     let start_cursor = self.selections.selection().start;
                     if !text_mark.is_empty() {
-                        self.source.insert_str(text_mark, &mut self.selections);
+                        source.insert_str(text_mark, &mut self.selections);
                     }
                     self.ime_selection = self.selections.selection();
 
                     let new_selection =
                         TextRange::new(start_cursor, self.selections.selection().end);
-                    self.selections.set_selection(new_selection, &self.source);
+                    self.selections.set_selection(new_selection, source);
                 }
             }
             ImeEvent::Commit(prediction) => {
@@ -647,11 +629,11 @@ impl TextEditor {
                     if !prediction.is_empty()
                         && self.selections.selection().start == self.ime_selection.start
                     {
-                        self.source.insert_str(prediction, &mut self.selections);
+                        source.insert_str(prediction, &mut self.selections);
                     } else {
                         self.selections.set_selection(
                             TextRange::new_cursor(self.selections.selection().start),
-                            &self.source,
+                            source,
                         );
                     }
                 }
@@ -662,15 +644,20 @@ impl TextEditor {
         }
     }
 
-    pub fn handle_selection_modifying_keypress(&mut self, modifiers: &Modifiers, key: Key) -> bool {
+    pub fn handle_selection_modifying_keypress(
+        &mut self,
+        modifiers: &Modifiers,
+        key: Key,
+        source: &mut Source,
+    ) -> bool {
         match key {
             Key::A if modifiers.command => {
                 self.selections.set_selection(
                     TextRange::ZERO.expanded_by(
                         TextMovement::vertical(VUnit::Document, VDir::Down),
-                        self.source.text(),
+                        source.text(),
                     ),
-                    &self.source,
+                    source,
                 );
                 self.completion_popup.clear();
                 true
@@ -694,9 +681,9 @@ impl TextEditor {
                 let movement = TextMovement::horizontal(unit, direction);
 
                 if modifiers.shift {
-                    self.selections.move_selecting(movement, &mut self.source);
+                    self.selections.move_selecting(movement, source);
                 } else {
-                    self.selections.move_cursor(movement, &mut self.source);
+                    self.selections.move_cursor(movement, source);
                 }
 
                 self.completion_popup.clear();
@@ -729,9 +716,9 @@ impl TextEditor {
                     let movement = TextMovement::vertical(unit, direction);
 
                     if modifiers.shift {
-                        self.selections.move_selecting(movement, &mut self.source);
+                        self.selections.move_selecting(movement, source);
                     } else {
-                        self.selections.move_cursor(movement, &mut self.source);
+                        self.selections.move_cursor(movement, source);
                     }
 
                     self.completion_popup.clear();
@@ -750,10 +737,9 @@ impl TextEditor {
     }
 
     /* --------------------------------- helpers -------------------------------- */
-    fn content_size(&self, viewport: Rect, font: &MonospaceFont) -> Vec2 {
+    fn content_size(&self, source: &Source, viewport: Rect, font: &MonospaceFont) -> Vec2 {
         // width is max between text and window
-        let max_chars = self
-            .source
+        let max_chars = source
             .text()
             .lines()
             .map(|l| l.len_chars())
@@ -764,7 +750,7 @@ impl TextEditor {
         let width = f32::max(viewport.width(), max_line_len);
 
         // height is just height of text
-        let height = self.source.text().len_lines() as f32 * font.size.y
+        let height = source.text().len_lines() as f32 * font.size.y
             + OUTER_PAD
             + self.padding.iter().sum::<f32>()
             + 200.0; // extra space for over-scroll

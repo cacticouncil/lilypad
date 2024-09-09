@@ -5,53 +5,28 @@ use tree_sitter::Node;
 use std::{
     borrow::Cow,
     cmp::{max, min},
+    iter::Peekable,
     ops::{Range, RangeInclusive},
 };
 
-use super::{
-    highlighter::{Highlight, HighlightConfiguration, HighlightEvent, Highlighter},
-    MonospaceFont,
+use super::{source::Source, MonospaceFont};
+use crate::{
+    lang::{
+        config::LanguageConfig,
+        highlighter::{Highlight, HighlightEvent},
+        Language,
+    },
+    theme,
 };
-use crate::{lang::LanguageConfig, theme};
 
 // TODO: probably should have text drawers share highlight configurations
 pub struct TextDrawer {
-    highlighter: Highlighter,
-    highlighter_config: HighlightConfiguration,
     cache: Vec<ColoredText>,
 }
 
 impl TextDrawer {
-    pub fn new(lang: &LanguageConfig) -> Self {
-        let mut highlighter_config = HighlightConfiguration::new(
-            lang.tree_sitter(),
-            lang.name,
-            lang.highlight_query,
-            "",
-            "",
-        )
-        .unwrap();
-        highlighter_config.configure(HIGHLIGHT_NAMES);
-
-        Self {
-            highlighter: Highlighter::new(),
-            highlighter_config,
-            cache: vec![],
-        }
-    }
-
-    pub fn change_language(&mut self, lang: &LanguageConfig) {
-        let mut highlighter_config = HighlightConfiguration::new(
-            lang.tree_sitter(),
-            lang.name,
-            lang.highlight_query,
-            "",
-            "",
-        )
-        .unwrap();
-        highlighter_config.configure(HIGHLIGHT_NAMES);
-        self.highlighter_config = highlighter_config;
-        self.cache.clear();
+    pub fn new() -> Self {
+        Self { cache: vec![] }
     }
 
     pub fn draw(
@@ -82,15 +57,35 @@ impl TextDrawer {
         }
     }
 
-    pub fn highlight(&mut self, root_node: Node, source: &Rope) {
+    pub fn highlight_source(&mut self, source: &mut Source) {
+        let mut highlighter = source.lang.highlighter.borrow_mut();
+        let highlight_config = source.lang.highlight_config.borrow_mut();
+        let node = &source.get_tree_cursor().node();
+        let highlights = highlighter
+            .highlight_existing_tree(source.text().slice(..), node, &highlight_config)
+            .peekable();
+
+        self.handle_highlights(highlights, source.text(), source.lang.config);
+    }
+
+    pub fn highlight(&mut self, root_node: Node, source: &Rope, lang: &mut Language) {
+        let mut highlighter = lang.highlighter.borrow_mut();
+        let highlight_config = lang.highlight_config.borrow_mut();
+        let highlights = highlighter
+            .highlight_existing_tree(source.slice(..), &root_node, &highlight_config)
+            .peekable();
+
+        self.handle_highlights(highlights, source, lang.config);
+    }
+
+    fn handle_highlights(
+        &mut self,
+        mut highlights: Peekable<impl Iterator<Item = HighlightEvent>>,
+        source: &Rope,
+        lang: &LanguageConfig,
+    ) {
         // erase old values
         self.cache.clear();
-
-        // get highlights
-        let mut highlights = self
-            .highlighter
-            .highlight_existing_tree(source.slice(..), &root_node, &self.highlighter_config)
-            .peekable();
 
         let mut handled_up_to = 0;
         let mut next_to_handle = 0;
@@ -131,7 +126,7 @@ impl TextDrawer {
 
                             if let Some(cat) = category_stack.last() {
                                 colored_text.add_color(
-                                    get_text_color(*cat),
+                                    lang.highlight[cat.0].1,
                                     (start - start_of_line)..(end - start_of_line),
                                 );
                             }
@@ -154,7 +149,7 @@ impl TextDrawer {
                         let range_end = min(next_to_handle, end_of_line);
 
                         colored_text.add_color(
-                            get_text_color(cat),
+                            lang.highlight[cat.0].1,
                             (range_start - start_of_line)..(range_end - start_of_line),
                         );
                         handled_up_to = range_end;
@@ -180,50 +175,6 @@ impl TextDrawer {
             // prepare for next
             start_of_line = end_of_line;
         }
-    }
-}
-
-const HIGHLIGHT_NAMES: &[&str] = &[
-    "function",
-    "function.builtin",
-    "keyword",
-    "operator",
-    "property",
-    "punctuation.special", // interpolation surrounding
-    "string",
-    "type",
-    "variable",
-    "constructor",
-    "constant",
-    "constant.builtin",
-    "number",
-    "escape",
-    "comment",
-    "embedded", // inside of interpolation
-];
-
-fn get_text_color(highlight: Highlight) -> Color32 {
-    use theme::syntax::*;
-
-    // indexes of the above array
-    match highlight.0 {
-        0 => FUNCTION,
-        1 => FUNCTION_BUILT_IN,
-        2 => KEYWORD,
-        3 => OPERATOR,
-        4 => PROPERTY,
-        5 => INTERPOLATION_SURROUNDING,
-        6 => STRING,
-        7 => TYPE,
-        8 => VARIABLE,
-        9 => CONSTRUCTOR,
-        10 => CONSTANT,
-        11 => LITERAL,
-        12 => LITERAL,
-        13 => ESCAPE_SEQUENCE,
-        14 => COMMENT,
-        15 => DEFAULT, // treat inside of interpolation like top level
-        _ => unreachable!(),
     }
 }
 

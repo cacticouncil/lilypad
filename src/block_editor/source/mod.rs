@@ -1,18 +1,19 @@
 use ropey::Rope;
 use std::borrow::Cow;
 
-use crate::{block_editor::TextRange, lang::LanguageConfig, parse::TreeManager};
-use edit_generation::*;
-use undo_manager::{
-    UndoManager,
-    UndoStopCondition::{self, *},
+use crate::{
+    block_editor::TextRange,
+    lang::{tree_manager::TreeManager, Language},
 };
+use edit_generation::*;
+use undo_manager::{UndoItem, UndoStopCondition::*};
 
 mod edit_generation;
 pub mod text_edit;
-pub mod undo_manager;
+mod undo_manager;
 
 pub use text_edit::TextEdit;
+pub use undo_manager::UndoStopCondition;
 
 use super::{text_editor::selections::Selections, text_range::movement::TextMovement};
 
@@ -21,13 +22,16 @@ pub struct Source {
     text: Rope,
 
     /// the language of the source
-    pub language: &'static LanguageConfig,
+    pub lang: Language,
 
     /// generates syntax tree from source code
     tree_manager: TreeManager,
 
-    /// handles undo/redo
-    undo_manager: UndoManager,
+    /// undos from previous edits
+    undo_stack: Vec<UndoItem>,
+
+    /// redos from previous undos
+    redo_stack: Vec<UndoItem>,
 
     /// pairs that were inserted and should be ignored on the next input
     input_ignore_stack: Vec<&'static str>,
@@ -41,18 +45,30 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new(text: Rope, language: &'static LanguageConfig) -> Self {
-        let mut tree_manager = TreeManager::new(language);
-        tree_manager.replace(&text);
+    pub fn new(text: Rope, mut lang: Language) -> Self {
+        let mut tree_manager = TreeManager::new(&mut lang);
+        tree_manager.replace(&text, &mut lang);
         Self {
             text,
-            language,
+            lang,
             tree_manager,
-            undo_manager: UndoManager::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             input_ignore_stack: Vec::new(),
             paired_delete_stack: Vec::new(),
             text_changed: true,
         }
+    }
+
+    /// Set the text of the source, clearing all editing state
+    pub fn set_text(&mut self, text: Rope) {
+        self.text = text;
+        self.tree_manager.replace(&self.text, &mut self.lang);
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+        self.input_ignore_stack.clear();
+        self.paired_delete_stack.clear();
+        self.text_changed = true;
     }
 
     pub fn text(&self) -> &Rope {
@@ -81,12 +97,11 @@ impl Source {
         undo_stop_after: bool,
     ) {
         // update buffer and tree
-        let undo = edit.apply(&mut self.text, &mut self.tree_manager);
+        let undo = self.apply(edit);
 
         // update undo manager
-        self.undo_manager
-            .add_undo(&undo, edit, undo_stop_before, undo_stop_after);
-        self.undo_manager.clear_redos();
+        self.add_undo(&undo, edit, undo_stop_before, undo_stop_after);
+        self.redo_stack.clear();
 
         // mark that the text has changed
         self.text_changed = true;
@@ -135,7 +150,7 @@ impl Source {
         let (edit, new_selection) = edit_for_insert_newline(
             selections.selection(),
             &self.text,
-            self.language.new_scope_char,
+            self.lang.config.new_scope_char,
         );
         self.apply_edit_helper(&edit, Always, false);
 
@@ -170,20 +185,14 @@ impl Source {
     }
 
     pub fn undo(&mut self, selections: &mut Selections) {
-        if let Some(new_selection) = self
-            .undo_manager
-            .apply_undo(&mut self.text, &mut self.tree_manager)
-        {
+        if let Some(new_selection) = self.apply_undo() {
             self.text_changed = true;
             selections.set_selection(new_selection, self);
         }
     }
 
     pub fn redo(&mut self, selections: &mut Selections) {
-        if let Some(new_selection) = self
-            .undo_manager
-            .apply_redo(&mut self.text, &mut self.tree_manager)
-        {
+        if let Some(new_selection) = self.apply_redo() {
             self.text_changed = true;
             selections.set_selection(new_selection, self);
         }
@@ -196,6 +205,6 @@ impl Source {
         self.paired_delete_stack.clear();
 
         // add a separator to the undo stack
-        self.undo_manager.add_undo_stop()
+        self.add_undo_stop()
     }
 }

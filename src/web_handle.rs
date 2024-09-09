@@ -136,13 +136,10 @@ impl LilypadWebHandle {
     pub fn set_file(&self, file_name: String) {
         if let Some(sender) = &self.command_sender {
             if sender
-                .send(ExternalCommand::SetFileName(file_name))
-                .is_err()
-            {
-                error!("Failed to send command");
-            }
-            if sender
-                .send(ExternalCommand::SetText("".to_string()))
+                .send(ExternalCommand::SetFile {
+                    name: file_name,
+                    contents: "".to_string(),
+                })
                 .is_err()
             {
                 error!("Failed to send command");

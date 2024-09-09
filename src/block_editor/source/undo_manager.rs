@@ -1,15 +1,8 @@
-use ropey::Rope;
 use std::borrow::Cow;
 
-use super::{TextEdit, TextRange};
-use crate::parse::TreeManager;
+use super::{Source, TextEdit, TextRange};
 
-pub struct UndoManager {
-    undo_stack: Vec<UndoItem>,
-    redo_stack: Vec<UndoItem>,
-}
-
-enum UndoItem {
+pub(super) enum UndoItem {
     /// An edit to apply
     Edit(TextEdit<'static>),
 
@@ -24,15 +17,8 @@ pub enum UndoStopCondition {
     Never,
 }
 
-impl UndoManager {
-    pub fn new() -> Self {
-        Self {
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-        }
-    }
-
-    pub fn add_undo(
+impl Source {
+    pub(super) fn add_undo(
         &mut self,
         undo_edit: &TextEdit,
         orig_edit: &TextEdit,
@@ -96,7 +82,7 @@ impl UndoManager {
     }
 
     // Prevents whatever is added to undo next from being undone alongside what is already there
-    pub fn add_undo_stop(&mut self) {
+    pub(super) fn add_undo_stop(&mut self) {
         // add a stop to the undo stack if there is not already one
         if let Some(UndoItem::Edit(_)) = self.undo_stack.last() {
             self.undo_stack.push(UndoItem::Stop)
@@ -110,11 +96,7 @@ impl UndoManager {
     }
 
     // Apply all the undos on the stack until it hits a stop. Adding their inverses to the redo stack.
-    pub fn apply_undo(
-        &mut self,
-        source: &mut Rope,
-        tree_manager: &mut TreeManager,
-    ) -> Option<TextRange> {
+    pub(super) fn apply_undo(&mut self) -> Option<TextRange> {
         // remove a stop from the top of the stack if it is there
         if let Some(UndoItem::Stop) = self.undo_stack.last() {
             self.undo_stack.pop();
@@ -128,7 +110,7 @@ impl UndoManager {
             match item {
                 UndoItem::Stop => break,
                 UndoItem::Edit(edit) => {
-                    let redo = edit.apply(source, tree_manager).owned_text();
+                    let redo = self.apply(&edit);
                     self.redo_stack.push(UndoItem::Edit(redo));
                     selection = Some(TextRange::new_cursor(edit.new_end()));
                 }
@@ -138,11 +120,7 @@ impl UndoManager {
     }
 
     // Apply all the redos on the stack until it hits a stop. Adding their inverses to the undo stack.
-    pub fn apply_redo(
-        &mut self,
-        source: &mut Rope,
-        tree_manager: &mut TreeManager,
-    ) -> Option<TextRange> {
+    pub(super) fn apply_redo(&mut self) -> Option<TextRange> {
         // remove a stop from the top of the stack if it is there
         if let Some(UndoItem::Stop) = self.undo_stack.last() {
             self.undo_stack.pop();
@@ -155,18 +133,13 @@ impl UndoManager {
             match item {
                 UndoItem::Stop => break,
                 UndoItem::Edit(edit) => {
-                    let undo = edit.apply(source, tree_manager).owned_text();
+                    let undo = self.apply(&edit);
                     self.undo_stack.push(UndoItem::Edit(undo));
                     selection = Some(TextRange::new_cursor(edit.new_end()));
                 }
             }
         }
         selection
-    }
-
-    // Clear the redo stack. Should be called on any non undo or redo edit
-    pub fn clear_redos(&mut self) {
-        self.redo_stack.clear();
     }
 
     /// Combine two text edits if they are adjacent and can be combined (both insertions or deletions)

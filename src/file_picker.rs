@@ -86,8 +86,10 @@ impl FilePicker {
                 .unwrap_or_else(|_| "# could not read file".to_string());
             let file_name = file_path.file_name().unwrap().to_string_lossy().to_string();
 
-            commands.push(ExternalCommand::SetFileName(file_name));
-            commands.push(ExternalCommand::SetText(file_contents));
+            commands.push(ExternalCommand::SetFile {
+                name: file_name,
+                contents: file_contents,
+            });
         }
     }
 }

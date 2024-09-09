@@ -8,8 +8,7 @@ use crate::{
         text_drawer::TextDrawer,
         MonospaceFont,
     },
-    lang::LanguageConfig,
-    parse::TreeManager,
+    lang::{tree_manager::TreeManager, Language},
     theme::blocks_theme::BlocksTheme,
 };
 
@@ -18,7 +17,6 @@ pub struct LooseBlock {
     blocks: Vec<Block>,
     padding: Vec<f32>,
     min_size: Vec2,
-    lang: &'static LanguageConfig,
     tree_manager: TreeManager,
     text_drawer: TextDrawer,
     interior_padding: f32,
@@ -53,7 +51,7 @@ impl LooseBlock {
     pub fn new(
         text: &str,
         interior_padding: f32,
-        lang: &'static LanguageConfig,
+        lang: &mut Language,
         font: &MonospaceFont,
     ) -> Self {
         let mut block = Self {
@@ -61,26 +59,25 @@ impl LooseBlock {
             blocks: vec![],
             padding: vec![],
             min_size: Vec2::ZERO,
-            lang,
             tree_manager: TreeManager::new(lang),
-            text_drawer: TextDrawer::new(lang),
+            text_drawer: TextDrawer::new(),
             interior_padding,
         };
-        block.set_text(text, font);
+        block.set_text(text, lang, font);
         block
     }
 
-    fn set_text(&mut self, text: &str, font: &MonospaceFont) {
+    fn set_text(&mut self, text: &str, lang: &mut Language, font: &MonospaceFont) {
         self.text = text.to_string();
         let rope = Rope::from_str(text);
 
-        self.tree_manager.replace(&rope);
+        self.tree_manager.replace(&rope, lang);
         self.text_drawer
-            .highlight(self.tree_manager.get_cursor().node(), &rope);
+            .highlight(self.tree_manager.get_cursor().node(), &rope, lang);
 
         // find blocks
         self.blocks =
-            block_drawer::blocks_for_tree(&mut self.tree_manager.get_cursor(), &rope, self.lang);
+            block_drawer::blocks_for_tree(&mut self.tree_manager.get_cursor(), &rope, lang.config);
         self.padding = block_drawer::make_padding(&self.blocks, rope.len_lines());
 
         // find dimensions

@@ -11,12 +11,14 @@ use crate::{
     block_editor::{
         block_drawer::Block,
         rope_ext::{RopeExt, RopeSliceExt},
-        source::undo_manager::UndoStopCondition,
-        text_range::movement::{HDir, HUnit, TextMovement},
-        text_range::{TextPoint, TextRange},
+        source::{Source, UndoStopCondition},
+        text_range::{
+            movement::{HDir, HUnit, TextMovement},
+            TextPoint, TextRange,
+        },
         BlockType, DragSession, MonospaceFont, GUTTER_WIDTH, OUTER_PAD,
     },
-    lang::NewScopeChar,
+    lang::config::NewScopeChar,
     theme, vscode,
 };
 
@@ -25,18 +27,19 @@ impl TextEditor {
         &mut self,
         mouse_pos: Pos2,
         drag_block: &mut Option<DragSession>,
+        source: &mut Source,
         font: &MonospaceFont,
     ) {
-        let cursor_pos = pt_to_text_coord(mouse_pos, &self.padding, self.source.text(), font);
+        let cursor_pos = pt_to_text_coord(mouse_pos, &self.padding, source.text(), font);
 
-        if let Some(block) = block_for_point(&self.blocks, cursor_pos, self.source.text()) {
+        if let Some(block) = block_for_point(&self.blocks, cursor_pos, source.text()) {
             let mut text_range = block.text_range();
 
             vscode::log_event(
                 "editor-block-drag",
                 HashMap::from([
                     ("type", block.syntax_type.as_str()),
-                    ("lang", self.source.language.name),
+                    ("lang", source.lang.config.name),
                 ]),
             );
 
@@ -44,8 +47,8 @@ impl TextEditor {
             text_range.start.col = 0;
 
             // normalize the text
-            let char_range = text_range.char_range_in(self.source.text());
-            let mut block_text = self.source.text().slice(char_range.clone()).to_string();
+            let char_range = text_range.char_range_in(source.text());
+            let mut block_text = source.text().slice(char_range.clone()).to_string();
             block_text = normalize_indent(block_text);
             if !block_text.ends_with('\n') {
                 // add a newline to the end if it doesn't have one
@@ -71,7 +74,7 @@ impl TextEditor {
             });
 
             // remove dragged block from source
-            self.source.apply_edit(
+            source.apply_edit(
                 &TextEdit::delete(text_range),
                 UndoStopCondition::Always,
                 false,
@@ -84,14 +87,15 @@ impl TextEditor {
         &mut self,
         drag_block: &mut Option<DragSession>,
         drop_point: TextPoint,
+        source: &mut Source,
     ) -> bool {
         // note: using take() also sets to None
         if let Some(drag_block) = drag_block.take() {
             let mut indented_text = set_indent(&drag_block.text, drop_point.col);
 
             // if at the end of the file, and the last line doesn't have a newline, add one
-            if drop_point.line == self.source.text().len_lines() {
-                indented_text.insert_str(0, self.source.text().detect_linebreak());
+            if drop_point.line == source.text().len_lines() {
+                indented_text.insert_str(0, source.text().detect_linebreak());
             }
 
             // apply edit
@@ -100,13 +104,12 @@ impl TextEditor {
                 Cow::Owned(indented_text),
                 TextRange::new_cursor(insert_point),
             );
-            self.source
-                .apply_edit(&edit, UndoStopCondition::Never, true, &mut self.selections);
+            source.apply_edit(&edit, UndoStopCondition::Never, true, &mut self.selections);
 
             // move the cursor from the line after the block to the end of the text
             self.selections.move_cursor(
                 TextMovement::horizontal(HUnit::Grapheme, HDir::Left),
-                &mut self.source,
+                source,
             );
 
             true
@@ -135,13 +138,18 @@ impl TextEditor {
         painter.rect_filled(rect, 0.0, theme::CURSOR);
     }
 
-    pub fn find_drop_point(&mut self, mouse_pos: Pos2, font: &MonospaceFont) -> TextPoint {
+    pub fn find_drop_point(
+        &mut self,
+        mouse_pos: Pos2,
+        source: &mut Source,
+        font: &MonospaceFont,
+    ) -> TextPoint {
         // find the point adjusted so that it is based around between lines
         let adj_pos = Pos2::new(mouse_pos.x, mouse_pos.y + (font.size.y / 2.0));
         let coord = pt_to_unbounded_text_coord(adj_pos, &self.padding, font);
 
         // clamp line to end of source
-        let line = coord.line.min(self.source.text().len_lines());
+        let line = coord.line.min(source.text().len_lines());
 
         // limit to the first non-empty above line's level
         // (or 1 more if it ends in a new scope character)
@@ -151,7 +159,7 @@ impl TextEditor {
                 break 0;
             }
 
-            let line_above = self.source.text().line(relative_whitespace_line - 1);
+            let line_above = source.text().line(relative_whitespace_line - 1);
             let above_indent = line_above.whitespace_at_start();
 
             // if the line above is entirely whitespace, move to the line above
@@ -163,7 +171,7 @@ impl TextEditor {
             // if the line above ends in a new scope character, allow one more indent
             if line_above
                 .excluding_linebreak()
-                .ends_with(self.source.language.new_scope_char.char())
+                .ends_with(source.lang.config.new_scope_char.char())
             {
                 break above_indent + 4;
             }
@@ -171,7 +179,7 @@ impl TextEditor {
             // otherwise, allow up to the same indent as the line above
             break above_indent;
         };
-        let indent = match self.source.language.new_scope_char {
+        let indent = match source.lang.config.new_scope_char {
             // when scope is indent based, allow reducing scope when dragging
             NewScopeChar::Colon => ((coord.col / 4) * 4).min(allowed_indent),
             // when scope is brace based, only allow the maximum indent

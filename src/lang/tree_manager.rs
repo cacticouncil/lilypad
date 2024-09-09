@@ -1,42 +1,36 @@
 ﻿use ropey::Rope;
-use tree_sitter::{InputEdit, Parser, Tree, TreeCursor};
+use tree_sitter::{InputEdit, Tree, TreeCursor};
 
-use crate::lang::LanguageConfig;
+use super::Language;
 
 pub struct TreeManager {
     tree: Tree,
-    parser: Parser,
 }
 
 /* ------- Parsing  ------- */
 impl TreeManager {
     /// create empty tree
-    pub fn new(lang: &LanguageConfig) -> TreeManager {
-        // Create Parser
-        let mut parser = Parser::new();
-        parser.set_language(&lang.tree_sitter()).unwrap();
-
-        // Parse initial source
-        let tree = parser.parse("", None).unwrap();
-
-        TreeManager { tree, parser }
+    pub fn new(lang: &mut Language) -> TreeManager {
+        TreeManager {
+            tree: lang.parser.parse("", None).unwrap(),
+        }
     }
 
     pub fn get_cursor(&self) -> TreeCursor {
         self.tree.walk()
     }
 
-    pub fn replace(&mut self, source: &Rope) {
-        self.parse(source, false);
+    pub fn replace(&mut self, source: &Rope, lang: &mut Language) {
+        self.parse(source, false, lang);
     }
 
-    pub fn update(&mut self, source: &Rope, change: InputEdit) {
+    pub fn update(&mut self, source: &Rope, change: InputEdit, lang: &mut Language) {
         self.tree.edit(&change);
-        self.parse(source, true);
+        self.parse(source, true, lang);
     }
 
-    fn parse(&mut self, source: &Rope, use_old: bool) {
-        self.tree = self
+    fn parse(&mut self, source: &Rope, use_old: bool, lang: &mut Language) {
+        self.tree = lang
             .parser
             .parse_with(
                 &mut |byte, _| {

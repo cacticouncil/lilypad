@@ -1,4 +1,3 @@
-use ropey::Rope;
 use std::collections::HashSet;
 
 mod block_dragging;
@@ -11,21 +10,13 @@ mod widget;
 
 use super::text_drawer::*;
 use super::text_range::*;
-use crate::block_editor::{
-    block_drawer,
-    source::{Source, TextEdit},
-    text_range::TextRange,
-};
-use crate::lang::LanguageConfig;
+use crate::block_editor::{block_drawer, source::TextEdit, text_range::TextRange};
 use crate::lsp::diagnostics::Diagnostic;
 use completion_popup::CompletionPopup;
 use diagnostics_popup::DiagnosticPopup;
 use selections::Selections;
 
 pub struct TextEditor {
-    /// the source code to edit
-    source: Source,
-
     /// the actual and pseudo selection
     selections: Selections,
 
@@ -79,15 +70,14 @@ impl StackFrameLines {
 }
 
 impl TextEditor {
-    pub fn new(source: Rope, lang: &'static LanguageConfig) -> Self {
+    pub fn new() -> Self {
         TextEditor {
-            source: Source::new(source, lang),
             selections: Selections::new(),
             ime_enabled: false,
             ime_selection: TextRange::ZERO,
             diagnostics: vec![],
             diagnostic_selection: Option::None,
-            text_drawer: TextDrawer::new(lang),
+            text_drawer: TextDrawer::new(),
             blocks: vec![],
             padding: vec![],
             breakpoints: HashSet::new(),

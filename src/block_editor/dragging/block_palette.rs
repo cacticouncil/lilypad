@@ -4,10 +4,12 @@ use egui::{Align2, FontId, Rect, Response, ScrollArea, Sense, Stroke, Ui, Vec2, 
 
 use super::loose_block::LooseBlock;
 use crate::block_editor::{DragSession, MonospaceFont};
-use crate::lang::Snippet;
 use crate::theme::blocks_theme::BlocksTheme;
 use crate::vscode;
-use crate::{lang::LanguageConfig, theme};
+use crate::{
+    lang::{config::Snippet, Language},
+    theme,
+};
 
 pub struct BlockPalette {
     shown: bool,
@@ -22,7 +24,7 @@ struct PaletteItem {
 }
 
 impl PaletteItem {
-    fn new(snippet: &Snippet, lang: &'static LanguageConfig, font: &MonospaceFont) -> Self {
+    fn new(snippet: &Snippet, lang: &mut Language, font: &MonospaceFont) -> Self {
         Self {
             id: snippet.id,
             block: LooseBlock::new(snippet.source, 10.0, lang, font),
@@ -40,8 +42,9 @@ impl BlockPalette {
         }
     }
 
-    pub fn populate(&mut self, lang: &'static LanguageConfig, font: &MonospaceFont) {
+    pub fn populate(&mut self, lang: &mut Language, font: &MonospaceFont) {
         self.items = lang
+            .config
             .palettes
             .iter()
             .map(|palette| {
@@ -52,7 +55,7 @@ impl BlockPalette {
                     .collect()
             })
             .collect();
-        self.palette_names = lang.palettes.iter().map(|p| p.name).collect();
+        self.palette_names = lang.config.palettes.iter().map(|p| p.name).collect();
         self.selected_palette = 0;
     }
 

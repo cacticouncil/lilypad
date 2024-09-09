@@ -1,4 +1,6 @@
-use crate::block_editor::BlockType;
+use egui::Color32;
+
+use crate::{block_editor::BlockType, theme::syntax::*};
 
 pub struct LanguageConfig {
     /// Name of the language. Used as an ID and potentially for UI
@@ -8,7 +10,7 @@ pub struct LanguageConfig {
     ts_lang: tree_sitter_language::LanguageFn,
 
     /// Tree-sitter highlight query
-    pub highlight_query: &'static str,
+    pub(super) highlight_query: &'static str,
 
     /// The character that starts a new scope (so should increase the indent)
     pub new_scope_char: NewScopeChar,
@@ -21,6 +23,29 @@ pub struct LanguageConfig {
 
     /// Snippets to use for the palette. Must end with a newline.
     pub palettes: &'static [Palette],
+
+    /// The highlight names to recognize and their associated colors
+    pub highlight: &'static [(&'static str, Color32)],
+}
+
+impl LanguageConfig {
+    pub fn for_file(file_name: &str) -> &'static LanguageConfig {
+        match file_name.split('.').last() {
+            Some("py") => &PYTHON_LANGUAGE,
+            Some("java") => &JAVA_LANGUAGE,
+            Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
+            Some("cs") => &CS_LANGUAGE,
+            _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
+        }
+    }
+
+    pub fn tree_sitter(&self) -> tree_sitter::Language {
+        tree_sitter::Language::new(self.ts_lang)
+    }
+
+    pub fn categorize_node(&self, node: &tree_sitter::Node) -> Option<BlockType> {
+        (self.node_categorizer)(node)
+    }
 }
 
 pub struct Palette {
@@ -66,26 +91,6 @@ impl Snippet {
     }
 }
 
-impl LanguageConfig {
-    pub fn tree_sitter(&self) -> tree_sitter::Language {
-        tree_sitter::Language::new(self.ts_lang)
-    }
-
-    pub fn categorize_node(&self, node: &tree_sitter::Node) -> Option<BlockType> {
-        (self.node_categorizer)(node)
-    }
-}
-
-pub fn lang_for_file(file_name: &str) -> &'static LanguageConfig {
-    match file_name.split('.').last() {
-        Some("py") => &PYTHON_LANGUAGE,
-        Some("java") => &JAVA_LANGUAGE,
-        Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
-        Some("cs") => &CS_LANGUAGE,
-        _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
-    }
-}
-
 const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
     name: "python",
     ts_lang: tree_sitter_python::LANGUAGE,
@@ -104,7 +109,7 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
             "try_statement" => Some(Try),
 
             // normal expressions
-            // TODO: check exhastiveness
+            // TODO: check exhaustiveness
             "import_statement" => Some(Generic),
             "import_from_statement" => Some(Generic),
             "expression_statement" => Some(Generic),
@@ -216,6 +221,7 @@ const PYTHON_LANGUAGE: LanguageConfig = LanguageConfig {
             ],
         ),
     ],
+    highlight: STANDARD_HIGHLIGHT,
 };
 
 const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
@@ -293,6 +299,7 @@ const JAVA_LANGUAGE: LanguageConfig = LanguageConfig {
             ),
         ],
     )],
+    highlight: STANDARD_HIGHLIGHT,
 };
 
 const CS_LANGUAGE: LanguageConfig = LanguageConfig {
@@ -370,6 +377,7 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
             ),
         ],
     )],
+    highlight: STANDARD_HIGHLIGHT,
 };
 
 const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
@@ -436,4 +444,24 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
         string_bounds: &[162],
     },
     palettes: &[Palette::new("General", &[])],
+    highlight: STANDARD_HIGHLIGHT,
 };
+
+const STANDARD_HIGHLIGHT: &[(&str, Color32)] = &[
+    ("function", FUNCTION),
+    ("function.builtin", FUNCTION_BUILT_IN),
+    ("keyword", KEYWORD),
+    ("operator", OPERATOR),
+    ("property", PROPERTY),
+    ("punctuation.special", INTERPOLATION_SURROUNDING),
+    ("string", STRING),
+    ("type", TYPE),
+    ("variable", VARIABLE),
+    ("constructor", CONSTRUCTOR),
+    ("constant", CONSTANT),
+    ("constant.builtin", LITERAL),
+    ("number", LITERAL),
+    ("escape", ESCAPE_SEQUENCE),
+    ("comment", COMMENT),
+    ("embedded", DEFAULT), // treat inside of interpolation like top level
+];

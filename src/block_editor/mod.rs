@@ -3,15 +3,15 @@ use egui::{
     text::Fonts, CentralPanel, FontFamily, FontId, Frame, Pos2, Rect, Sense, SidePanel, Widget,
 };
 use ropey::Rope;
+use source::Source;
 
-use crate::lang::{lang_for_file, LanguageConfig};
+use crate::lang::Language;
 use crate::lsp::completion::VSCodeCompletionItem;
 use crate::theme::blocks_theme::BlocksTheme;
 use crate::{theme, vscode};
 
 mod block_drawer;
 mod dragging;
-mod highlighter;
 mod rope_ext;
 pub mod source;
 mod text_drawer;
@@ -43,8 +43,8 @@ const TOTAL_TEXT_X_OFFSET: f32 = OUTER_PAD + GUTTER_WIDTH + TEXT_L_PAD;
 const SHOW_ERROR_BLOCK_OUTLINES: bool = false;
 
 pub struct BlockEditor {
-    /// the current language used by the editor
-    language: &'static LanguageConfig,
+    /// the source code being edited and the associated language
+    source: Source,
 
     /// the color theme for the blocks
     blocks_theme: BlocksTheme,
@@ -77,7 +77,7 @@ pub struct DragSession {
 pub enum ExternalCommand {
     // setup
     SetText(String),
-    SetFileName(String),
+    SetFile { name: String, contents: String },
     SetBlocksTheme(BlocksTheme),
     SetFont(String, f32),
 
@@ -125,16 +125,16 @@ impl MonospaceFont {
 
 impl BlockEditor {
     pub fn new(file_name: &str, blocks_theme: &str, font: MonospaceFont) -> Self {
-        let lang = lang_for_file(file_name);
+        let lang = Language::for_file(file_name);
         vscode::log_event(
             "opened-file",
-            std::collections::HashMap::from([("lang", lang.name)]),
+            std::collections::HashMap::from([("lang", lang.config.name)]),
         );
         BlockEditor {
-            language: lang,
+            source: Source::new(Rope::new(), lang),
             blocks_theme: BlocksTheme::for_str(blocks_theme),
             font,
-            text_editor: TextEditor::new(Rope::new(), lang),
+            text_editor: TextEditor::new(),
             block_palette: BlockPalette::new(),
             drag_block: None,
             dragging_popup: None,
@@ -155,12 +155,17 @@ impl BlockEditor {
             // handle external commands
             for command in external_commands.iter() {
                 match command {
+                    ExternalCommand::SetText(text) => {
+                        self.source.set_text(Rope::from_str(text));
+                    }
+                    ExternalCommand::SetFile { name, contents } => {
+                        let language = Language::for_file(name);
+                        self.source = Source::new(Rope::from_str(contents), language);
+                        self.block_palette
+                            .populate(&mut self.source.lang, &self.font)
+                    }
                     ExternalCommand::SetBlocksTheme(theme) => {
                         self.blocks_theme = *theme;
-                    }
-                    ExternalCommand::SetFileName(file_name) => {
-                        self.language = lang_for_file(file_name);
-                        self.block_palette.populate(self.language, &self.font)
                     }
                     ExternalCommand::SetFont(font_name, font_size) => {
                         self.font = MonospaceFont::new(font_name, *font_size);
@@ -171,7 +176,8 @@ impl BlockEditor {
             }
 
             if !self.block_palette.is_populated() {
-                self.block_palette.populate(self.language, &self.font);
+                self.block_palette
+                    .populate(&mut self.source.lang, &self.font);
             }
 
             let response =
@@ -204,6 +210,7 @@ impl BlockEditor {
             .frame(Frame::none())
             .show(ui.ctx(), |ui| {
                 ui.add(self.text_editor.widget(
+                    &mut self.source,
                     &mut self.drag_block,
                     external_commands,
                     self.blocks_theme,
@@ -222,7 +229,7 @@ impl BlockEditor {
                 self.dragging_popup = Some(LooseBlock::new(
                     &drag_block.text,
                     40.0,
-                    self.language,
+                    &mut self.source.lang,
                     &self.font,
                 ));
             }

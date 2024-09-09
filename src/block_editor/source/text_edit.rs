@@ -1,4 +1,3 @@
-use ropey::Rope;
 use std::borrow::Cow;
 use tree_sitter::InputEdit;
 
@@ -6,6 +5,8 @@ use crate::{
     block_editor::{text_range::TextPoint, TextRange},
     vscode,
 };
+
+use super::Source;
 
 #[derive(Debug)]
 pub struct TextEdit<'a> {
@@ -74,56 +75,12 @@ impl<'a> TextEdit<'a> {
         }
     }
 
-    /// Apply the text edit on the rope and tree manager. Returns the inverse text edit.
-    pub fn apply(
-        &self,
-        source: &mut Rope,
-        tree_manager: &mut crate::parse::TreeManager,
-    ) -> TextEdit {
-        let char_range = self.range.char_range_in(source);
-        let byte_range = self.range.byte_range_in(source);
-
-        // update buffer
-        let removed = source.get_slice(char_range.clone()).map(|x| x.to_string());
-        source.remove(char_range.clone());
-        source.insert(char_range.start, &self.text);
-
-        // update tree
-        let tree_edit = InputEdit {
-            start_byte: byte_range.start,
-            old_end_byte: byte_range.end,
-            new_end_byte: byte_range.start + self.text.len(),
-            start_position: self.range.start.into(),
-            old_end_position: self.range.end.into(),
-            new_end_position: self.new_end().into(),
-        };
-        tree_manager.update(source, tree_edit);
-
-        // update vscode if not from vscode
-        if self.origin != TextEditOrigin::Vscode {
-            vscode::edited(
-                &self.text,
-                self.range.start.line,
-                self.range.start.col,
-                self.range.end.line,
-                self.range.end.col,
-            );
-        }
-
-        let affected_range = TextRange::new(self.range.start, self.new_end_point);
-        if let Some(removed) = removed {
-            TextEdit::new(Cow::Owned(removed), affected_range)
-        } else {
-            TextEdit::delete(affected_range)
-        }
-    }
-
     pub fn new_end(&self) -> TextPoint {
         self.new_end_point
     }
 
     #[cfg(test)]
-    pub fn apply_to_rope(&self, source: &mut Rope) {
+    pub fn apply_to_rope(&self, source: &mut ropey::Rope) {
         let char_range = self.range.char_range_in(source);
         source.remove(char_range.clone());
         source.insert(char_range.start, &self.text);
@@ -151,5 +108,51 @@ impl<'a> TextEdit<'a> {
         } + last_line_len;
         let end_line = text_range.start.line + line_count - 1;
         TextPoint::new(end_line, end_col)
+    }
+}
+
+impl Source {
+    /// Apply the text edit on the rope and tree manager. Returns the inverse text edit.
+    pub(super) fn apply(&mut self, edit: &TextEdit) -> TextEdit<'static> {
+        let char_range = edit.range.char_range_in(&self.text);
+        let byte_range = edit.range.byte_range_in(&self.text);
+
+        // update buffer
+        let removed = self
+            .text
+            .get_slice(char_range.clone())
+            .map(|x| x.to_string());
+        self.text.remove(char_range.clone());
+        self.text.insert(char_range.start, &edit.text);
+
+        // update tree
+        let tree_edit = InputEdit {
+            start_byte: byte_range.start,
+            old_end_byte: byte_range.end,
+            new_end_byte: byte_range.start + edit.text.len(),
+            start_position: edit.range.start.into(),
+            old_end_position: edit.range.end.into(),
+            new_end_position: edit.new_end().into(),
+        };
+        self.tree_manager
+            .update(&self.text, tree_edit, &mut self.lang);
+
+        // update vscode if not from vscode
+        if edit.origin != TextEditOrigin::Vscode {
+            vscode::edited(
+                &edit.text,
+                edit.range.start.line,
+                edit.range.start.col,
+                edit.range.end.line,
+                edit.range.end.col,
+            );
+        }
+
+        let affected_range = TextRange::new(edit.range.start, edit.new_end_point);
+        if let Some(removed) = removed {
+            TextEdit::new(Cow::Owned(removed), affected_range)
+        } else {
+            TextEdit::delete(affected_range)
+        }
     }
 }
