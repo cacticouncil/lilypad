@@ -468,7 +468,7 @@ impl TextEditor {
                         .set_completions(new_completions, source.text());
                 }
                 ExternalCommand::SetHover(hover) => {
-                    self.documentation_popup.set_hover(hover.to_vec());
+                    self.documentation_popup.set_hover(hover.to_string());
                 }
                 ExternalCommand::SetBreakpoints(new_breakpoints) => {
                     let mut set = HashSet::new();

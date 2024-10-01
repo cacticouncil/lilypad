@@ -27,7 +27,6 @@ use self::text_editor::StackFrameLines;
 use self::text_editor::TextEditor;
 use self::text_range::TextRange;
 use crate::lsp::diagnostics::{Diagnostic, VSCodeCodeAction};
-use crate::lsp::documentation::VSCodeHoverItem;
 
 /// padding around edges of entire editor
 const OUTER_PAD: f32 = 16.0;
@@ -89,7 +88,7 @@ pub enum ExternalCommand {
     SetDiagnostics(Vec<Diagnostic>),
     SetQuickFix(usize, Vec<VSCodeCodeAction>),
     SetCompletions(Vec<VSCodeCompletionItem>),
-    SetHover(Vec<VSCodeHoverItem>),
+    SetHover(String),
 
     // debugging
     SetBreakpoints(Vec<usize>),
