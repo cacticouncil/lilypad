@@ -4,6 +4,7 @@ mod block_dragging;
 mod completion_popup;
 mod coord_conversions;
 mod diagnostics_popup;
+mod documentation_popup;
 mod gutter;
 pub mod selections;
 mod widget;
@@ -14,6 +15,7 @@ use crate::block_editor::{block_drawer, source::TextEdit, text_range::TextRange}
 use crate::lsp::diagnostics::Diagnostic;
 use completion_popup::CompletionPopup;
 use diagnostics_popup::DiagnosticPopup;
+use documentation_popup::DocumentationPopup;
 use selections::Selections;
 
 pub struct TextEditor {
@@ -52,6 +54,9 @@ pub struct TextEditor {
 
     /// overlay view for completions
     completion_popup: CompletionPopup,
+
+    /// overlay view for hover
+    documentation_popup: DocumentationPopup,
 }
 
 #[derive(Clone, Copy)]
@@ -84,6 +89,7 @@ impl TextEditor {
             stack_frame: StackFrameLines::empty(),
             diagnostic_popup: DiagnosticPopup::new(),
             completion_popup: CompletionPopup::new(),
+            documentation_popup: DocumentationPopup::new(),
         }
     }
 }

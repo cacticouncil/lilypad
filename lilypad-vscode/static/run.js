@@ -41,6 +41,14 @@ export function requestCompletions(line, col) {
   });
 }
 
+export function requestHover(line, col) {
+  vscode.postMessage({
+    type: "get_hover",
+    line: line,
+    col: col,
+  });
+}
+
 export function executeCommand(command, args) {
   vscode.postMessage({
     type: "execute_command",
@@ -108,6 +116,9 @@ window.addEventListener("message", event => {
       break;
     case "return_completions":
       handle.set_completions(message.completions);
+      break;
+    case "return_hover_info":
+      handle.set_hover_info(message.hover);
       break;
     case "undo":
       handle.undo();

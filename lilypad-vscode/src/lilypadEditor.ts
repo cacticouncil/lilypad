@@ -240,6 +240,19 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     });
                     break;
                 }
+                case "get_hover": {
+                    const URI = document.uri; 
+                    const cursor = new vscode.Position(message.line, message.col);
+                    const hover = vscode.commands.executeCommand('vscode.executeHoverProvider', URI, cursor);
+                    vscode.commands.executeCommand<vscode.Hover>('vscode.executeHoverProvider', URI, cursor
+                    ).then((hover) => {
+                        webviewPanel.webview.postMessage({
+                            type: "return_hover_info",
+                            hover: hover.contents
+                        });
+                    });
+                    break;
+                }
                 case "register_breakpoints": {
                     // currently just reset all breakpoints, could change this to a diff later if that matters
                     vscode.debug.removeBreakpoints(vscode.debug.breakpoints);

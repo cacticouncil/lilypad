@@ -254,6 +254,19 @@ impl LilypadWebHandle {
     }
 
     #[wasm_bindgen]
+    pub fn set_hover_info(json: JsValue) {
+        let hoverInfo: Vec<VSCodeHoverItem> =
+            serde_wasm_bindgen::from_value(json).expect("Could not deserialize hover info");
+        if let Some(sender) = &self.command_sender {
+            if sender.send(ExternalCommand::SetHover(hoverInfo)).is_err() {
+                error!("Failed to send command");
+            }
+        } else {
+            error!("No command sender");
+        }
+    }
+
+    #[wasm_bindgen]
     pub fn set_breakpoints(&self, json: JsValue) {
         let breakpoints: Vec<usize> =
             serde_wasm_bindgen::from_value(json).expect("Could not deserialize breakpoints");

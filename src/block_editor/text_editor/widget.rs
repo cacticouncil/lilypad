@@ -364,6 +364,12 @@ impl TextEditor {
                         .iter()
                         .position(|d| d.range.contains(coord, source.text()));
                 }
+                if Self::mouse_still_for(0.5, ui) {
+                    let coord =
+                        pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
+                    self.documentation_popup
+                        .request_hover(coord.line, coord.col);
+                }
             }
         };
 
@@ -460,6 +466,9 @@ impl TextEditor {
                 ExternalCommand::SetCompletions(new_completions) => {
                     self.completion_popup
                         .set_completions(new_completions, source.text());
+                }
+                ExternalCommand::SetHover(hover) => {
+                    self.documentation_popup.set_hover(hover.to_vec());
                 }
                 ExternalCommand::SetBreakpoints(new_breakpoints) => {
                     let mut set = HashSet::new();

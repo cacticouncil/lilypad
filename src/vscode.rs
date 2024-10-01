@@ -21,6 +21,9 @@ mod actual {
         #[wasm_bindgen(js_name = requestCompletions)]
         pub fn request_completions(line: usize, col: usize);
 
+        #[wasm_bindgen(js_name = requestHover)]
+        pub fn request_hover(line: usize, col: usize);
+
         #[wasm_bindgen(js_name = executeCommand)]
         pub fn execute_command(command: String, args: JsValue);
 
@@ -54,6 +57,7 @@ mod shim {
     pub fn edited(_: &str, _: usize, _: usize, _: usize, _: usize) {}
     pub fn request_quick_fixes(_: usize, _: usize, _: usize) {}
     pub fn request_completions(_: usize, _: usize) {}
+    pub fn request_hover(_: usize, _: usize) {}
     pub fn execute_command(_: String, _: wasm_bindgen::JsValue) {}
     pub fn execute_workspace_edit(_: wasm_bindgen::JsValue) {}
     pub fn register_breakpoints(_: Vec<usize>) {}
