@@ -144,7 +144,7 @@ impl BlockEditor {
     pub fn widget<'a>(&'a mut self, external_commands: &'a [ExternalCommand]) -> impl Widget + 'a {
         move |ui: &mut egui::Ui| -> egui::Response {
             // trigger started on the first frame
-            if ui.ctx().frame_nr() == 0 {
+            if ui.ctx().cumulative_pass_nr() == 0 {
                 vscode::started();
             }
 

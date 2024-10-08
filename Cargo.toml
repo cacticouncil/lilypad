@@ -23,12 +23,12 @@ lto = true
 
 [dependencies]
 # egui
-egui = "0.28"
-eframe = { version = "0.28", default-features = false, features = [
+egui = "0.29"
+eframe = { version = "0.29", default-features = false, features = [
     "wgpu",
     "default_fonts", # TODO: load fonts instead of bundling them
 ] }
-egui_inbox = "0.5"
+egui_inbox = "0.6"
 
 # logging
 log = "0.4"
@@ -48,7 +48,7 @@ regex = { version = "1.9", default-features = false, features = [
 ] }
 
 # tree sitter
-tree-sitter = "0.23"
+tree-sitter = "0.24"
 tree-sitter-language = "0.1"
 tree-sitter-python = "0.23"
 tree-sitter-java = "0.23"
@@ -64,14 +64,4 @@ console_error_panic_hook = "0.1"
 
 # native stuff
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rfd = "0.14"
-
-
-[patch.crates-io]
-# patch egui with my web event propagation fix
-egui = { git = "https://github.com/liamrosenfeld/egui", branch = "web-event-propagation" }
-eframe = { git = "https://github.com/liamrosenfeld/egui", branch = "web-event-propagation" }
-
-# path tree-sitter with my copyable language function
-tree-sitter = { git = "https://github.com/tree-sitter/tree-sitter" }
-tree-sitter-language = { git = "https://github.com/tree-sitter/tree-sitter" }
+rfd = "0.15"
