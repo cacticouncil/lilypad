@@ -60,7 +60,7 @@ impl TextDrawer {
     pub fn highlight_source(&mut self, source: &mut Source) {
         let mut highlighter = source.lang.highlighter.borrow_mut();
         let highlight_config = source.lang.highlight_config.borrow_mut();
-        let node = &source.get_tree_cursor().node();
+        let node = source.get_tree_cursor().node();
         let highlights = highlighter
             .highlight_existing_tree(source.text().slice(..), node, &highlight_config)
             .peekable();
@@ -72,7 +72,7 @@ impl TextDrawer {
         let mut highlighter = lang.highlighter.borrow_mut();
         let highlight_config = lang.highlight_config.borrow_mut();
         let highlights = highlighter
-            .highlight_existing_tree(source.slice(..), &root_node, &highlight_config)
+            .highlight_existing_tree(source.slice(..), root_node, &highlight_config)
             .peekable();
 
         self.handle_highlights(highlights, source, lang.config);

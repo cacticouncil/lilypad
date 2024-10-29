@@ -7,9 +7,16 @@
 //   - support for ropey
 
 use ropey::RopeSlice;
-use std::{borrow::Cow, iter, mem, ops, str};
+use std::{
+    borrow::Cow,
+    iter,
+    marker::PhantomData,
+    mem::{self, MaybeUninit},
+    ops, slice, str,
+};
 use tree_sitter::{
-    Language, Node, Point, Query, QueryCaptures, QueryCursor, QueryError, Range, TextProvider, Tree,
+    ffi, Language, Node, Point, Query, QueryCapture, QueryCaptures, QueryCursor, QueryError,
+    QueryMatch, Range, TextProvider, Tree,
 };
 
 /// Indicates which highlight should be applied to a region of source code.
@@ -80,12 +87,80 @@ struct HighlightIter<'a> {
 struct HighlightIterLayer<'a> {
     _tree: Option<Tree>,
     cursor: QueryCursor,
-    captures: iter::Peekable<QueryCaptures<'a, 'a, RopeProvider<'a>, &'a [u8]>>,
+    captures: iter::Peekable<_QueryCaptures<'a, 'a, RopeProvider<'a>, &'a [u8]>>,
     config: &'a HighlightConfiguration,
     highlight_end_stack: Vec<usize>,
     scope_stack: Vec<LocalScope<'a>>,
     ranges: Vec<Range>,
     depth: usize,
+}
+
+pub struct _QueryCaptures<'query, 'tree: 'query, T: TextProvider<I>, I: AsRef<[u8]>> {
+    ptr: *mut ffi::TSQueryCursor,
+    query: &'query Query,
+    text_provider: T,
+    buffer1: Vec<u8>,
+    buffer2: Vec<u8>,
+    _current_match: Option<(QueryMatch<'query, 'tree>, usize)>,
+    _phantom: PhantomData<(&'tree (), I)>,
+}
+struct _QueryMatch<'cursor, 'tree> {
+    pub _pattern_index: usize,
+    pub _captures: &'cursor [QueryCapture<'tree>],
+    _id: u32,
+    _cursor: *mut ffi::TSQueryCursor,
+}
+impl<'tree> _QueryMatch<'_, 'tree> {
+    fn new(m: &ffi::TSQueryMatch, cursor: *mut ffi::TSQueryCursor) -> Self {
+        _QueryMatch {
+            _cursor: cursor,
+            _id: m.id,
+            _pattern_index: m.pattern_index as usize,
+            _captures: (m.capture_count > 0)
+                .then(|| unsafe {
+                    slice::from_raw_parts(
+                        m.captures.cast::<QueryCapture<'tree>>(),
+                        m.capture_count as usize,
+                    )
+                })
+                .unwrap_or_default(),
+        }
+    }
+}
+
+impl<'query, 'tree: 'query, T: TextProvider<I>, I: AsRef<[u8]>> Iterator
+    for _QueryCaptures<'query, 'tree, T, I>
+{
+    type Item = (QueryMatch<'query, 'tree>, usize);
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            loop {
+                let mut capture_index = 0u32;
+                let mut m = MaybeUninit::<ffi::TSQueryMatch>::uninit();
+                if ffi::ts_query_cursor_next_capture(
+                    self.ptr,
+                    m.as_mut_ptr(),
+                    core::ptr::addr_of_mut!(capture_index),
+                ) {
+                    let result = std::mem::transmute::<_QueryMatch, QueryMatch>(_QueryMatch::new(
+                        &m.assume_init(),
+                        self.ptr,
+                    ));
+                    if result.satisfies_text_predicates(
+                        self.query,
+                        &mut self.buffer1,
+                        &mut self.buffer2,
+                        &mut self.text_provider,
+                    ) {
+                        return Some((result, capture_index as usize));
+                    }
+                    result.remove();
+                } else {
+                    return None;
+                }
+            }
+        }
+    }
 }
 
 impl Default for Highlighter {
@@ -107,7 +182,7 @@ impl Highlighter {
     pub fn highlight_existing_tree<'a>(
         &'a mut self,
         source: RopeSlice<'a>,
-        node: &'a Node,
+        node: Node,
         config: &'a HighlightConfiguration,
     ) -> impl Iterator<Item = HighlightEvent> + 'a {
         let rope_provider = RopeProvider(source);
@@ -282,14 +357,20 @@ impl HighlightConfiguration {
 impl<'a> HighlightIterLayer<'a> {
     fn new_from_tree(
         source: RopeProvider<'a>,
-        node: &'a Node,
+        node: Node,
         config: &'a HighlightConfiguration,
     ) -> Self {
         let mut cursor = QueryCursor::new();
 
         // `QueryCursor` is really just a pointer, so it's ok to move.
         let cursor_ref = unsafe { mem::transmute::<_, &'static mut QueryCursor>(&mut cursor) };
-        let captures = cursor_ref.captures(&config.query, *node, source).peekable();
+        let captures =
+            unsafe {
+                std::mem::transmute::<QueryCaptures<_, _>, _QueryCaptures<_, _>>(
+                    cursor_ref.captures(&config.query, node, source),
+                )
+            }
+            .peekable();
 
         HighlightIterLayer {
             highlight_end_stack: Vec::new(),

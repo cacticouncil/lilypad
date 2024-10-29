@@ -41,7 +41,7 @@ impl TextEditor {
             ScrollArea::both()
                 .auto_shrink([false; 2])
                 .scroll_bar_visibility(ScrollBarVisibility::VisibleWhenNeeded)
-                .id_source("text_editor")
+                .id_salt("text_editor")
                 .drag_to_scroll(false)
                 .show_viewport(ui, |ui, viewport| {
                     // allocate space

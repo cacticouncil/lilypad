@@ -78,7 +78,7 @@ impl BlockPalette {
         move |ui: &mut Ui| -> Response {
             ScrollArea::vertical()
                 .auto_shrink([false; 2])
-                .id_source("block_palette")
+                .id_salt("block_palette")
                 .drag_to_scroll(false)
                 .show(ui, |ui| {
                     let content_size = self.find_size();
@@ -104,7 +104,7 @@ impl BlockPalette {
                                 Vec2::new(100.0, 10.0),
                             ),
                             |ui: &mut Ui| -> Response {
-                                egui::ComboBox::from_id_source("palette_selector")
+                                egui::ComboBox::from_id_salt("palette_selector")
                                     .selected_text(
                                         *self
                                             .palette_names

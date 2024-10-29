@@ -19,7 +19,7 @@ A text-based visual code editor architected to supported multiple languages and 
   - Windows: [Roboto Mono](https://fonts.google.com/specimen/Roboto+Mono)
 - Web
   - [wasm-pack](https://rustwasm.github.io/wasm-pack/)
-  - LLVM (using the language grammars with wasm requires `llvm-ar`)
+  - LLVM (using the language grammars with wasm requires `llvm-ar`, add path to zhsprofile in order to build project)
   - [Just Command Runner](https://github.com/casey/just)
   - [Host These Things Please](https://crates.io/crates/https) (optional)
 
