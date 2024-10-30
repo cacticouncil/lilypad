@@ -1,0 +1,21 @@
+{
+  "name": "lilypad-web",
+  "publisher": "CactiCouncil",
+  "displayName": "Lilypad",
+  "description": "Lilypad editor for web browsers",
+  "repository": "https://github.com/cacticouncil/lilypad",
+  "version": "0.1.0",
+  "icon": "lilypadIcon.png",
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "main": "lilypad_web.js",
+  "files": [
+    "lilypad_web_bg.wasm",
+    "lilypad_web.js",
+    "./run.js",
+    "./index.html",
+    "README.md"
+  ]
+}
