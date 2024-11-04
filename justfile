@@ -9,7 +9,8 @@ wasm-vscode-dev:
     wasm-pack build --target web --dev --no-typescript --out-dir lilypad-vscode/static
 
 wasm-web:
-    wasm-pack build --target web --release --no-typescript --out-dir lilypad-web/editor
+    wasm-pack build --target web --release --no-typescript --out-dir lilypad-web/editor/src
+    cd lilypad-web/editor && npm run build
 
 wasm-web-dev:
-    wasm-pack build --target web --dev --no-typescript --out-dir lilypad-web/editor
+    wasm-pack build --target web --dev --no-typescript --out-dir lilypad-web/editor/src

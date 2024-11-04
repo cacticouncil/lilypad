@@ -1,9 +1,0 @@
-{
-  "name": "lilypad-web",
-  "publisher": "CactiCouncil",
-  "description": "Lilypad editor for web browsers",
-  "repository": "https://github.com/cacticouncil/lilypad",
-  "version": "0.1.0",
-  "icon": "lilypadIcon.png",
-  "main": "editor.js"
-}
