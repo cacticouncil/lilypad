@@ -38,8 +38,6 @@ A text-based visual code editor architected to supported multiple languages and 
 
 #### In Browser
 
-(Steps 1-4 re-build project)
-
-1. `just wasm-web` (builds .wasm files and builds code bundle)
+1. `just wasm-web` (builds .wasm files and code bundle)
 2. `cd lilypad-web`
 7. `http-server -p 8000`
