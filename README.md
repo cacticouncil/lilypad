@@ -21,6 +21,7 @@ A text-based visual code editor architected to supported multiple languages and 
   - [wasm-pack](https://rustwasm.github.io/wasm-pack/)
   - LLVM (using the language grammars with wasm requires `llvm-ar`, add path to zhsprofile in order to build project)
   - [Just Command Runner](https://github.com/casey/just)
+  - `npm install webpack webpack-cli --save-dev`
   - [Host These Things Please](https://crates.io/crates/https) (optional)
 
 ### Running
@@ -40,4 +41,4 @@ A text-based visual code editor architected to supported multiple languages and 
 
 1. `just wasm-web` (builds .wasm files and code bundle)
 2. `cd lilypad-web`
-7. `http-server -p 8000`
+3. `http-server -p 8000`
