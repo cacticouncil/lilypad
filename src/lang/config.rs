@@ -325,12 +325,9 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
             "for_statement" => Some(For),
             "try_statement" => Some(Try),
             "switch_statement" => Some(Switch),
-            "case_switch_label" => Some(Divider),
-            "default_switch_label" => Some(Divider),
-            // normal expressions (incomplete)
+            "switch_section" => Some(Divider),
             "import_declaration" => Some(Generic),
-            "expression_statement" => Some(Generic),
-            "local_variable_declaration" => {
+            "local_decleration_statement" => {
                 // don't create a block for a for loop's variable declaration
                 if node.parent().map_or("", |p| p.kind()) == "for_statement" {
                     None
@@ -342,7 +339,10 @@ const CS_LANGUAGE: LanguageConfig = LanguageConfig {
             "break_statement" => Some(Generic),
             "return_statement" => Some(Generic),
             "assert_statement" => Some(Generic),
+            "local_function_statement" => Some(Generic),
+            "expression_statement" => Some(Generic),
 
+            "using_directive" => Some(Generic),
             // comments
             "line_comment" => Some(Comment),
             "block_comment" => Some(Comment),

@@ -1,4 +1,6 @@
 # clang environment variables for web assembly
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+
 export AR := "llvm-ar"
 export CFLAGS_wasm32_unknown_unknown := `echo "-I$(pwd)/wasm-sysroot -Wbad-function-cast -Wcast-function-type -fno-builtin"`
 
