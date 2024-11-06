@@ -243,13 +243,27 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                 case "get_hover": {
                     const URI = document.uri; 
                     const cursor = new vscode.Position(message.line, message.col);
-                    const hover = vscode.commands.executeCommand('vscode.executeHoverProvider', URI, cursor);
-                    vscode.commands.executeCommand<vscode.Hover>('vscode.executeHoverProvider', URI, cursor
+                    vscode.commands.executeCommand<vscode.Hover[]>(
+                        'vscode.executeHoverProvider', 
+                        URI, 
+                        cursor
                     ).then((hover) => {
-                        webviewPanel.webview.postMessage({
-                            type: "return_hover_info",
-                            hover: hover.contents
-                        });
+                        if (hover && hover[0] && hover[0].contents && hover[0].contents[0]) {
+                            const content = hover[0].contents[0];
+                            let hoverContent = '';
+                            if (content instanceof vscode.MarkdownString) {
+                                hoverContent = content.value;
+                            } else if (typeof content === 'string') {
+                                hoverContent = content;
+                            }
+                            webviewPanel.webview.postMessage({
+                                type: "return_hover_info",
+                                hover: hoverContent
+                            });
+                            console.log('Hover info:', hoverContent);
+                        } else {
+                            console.log('No hover information available');
+                        }
                     });
                     break;
                 }

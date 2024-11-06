@@ -14,6 +14,9 @@ impl Documentation {
     pub fn request_hover(&self) {
         vscode::request_hover(self.range.start.line, self.range.start.col);
     }
+    pub fn set_hover(&mut self, message: String) {
+        self.message = message;
+    }
 
     #[allow(dead_code)]
     pub fn example() -> Documentation {

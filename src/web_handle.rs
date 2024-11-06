@@ -11,6 +11,7 @@ use crate::block_editor::{
 use crate::lsp::{
     completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCodeAction},
+    documentation::Documentation,
 };
 use crate::theme::blocks_theme::BlocksTheme;
 use crate::vscode;
@@ -33,7 +34,7 @@ impl LilypadWebHandle {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         eframe::WebLogger::init(log::LevelFilter::Debug).ok();
-
+        log::error!("Lilypad Web Handle created");
         panic::set_hook(Box::new(panic_hook));
 
         Self {
@@ -254,11 +255,11 @@ impl LilypadWebHandle {
     }
 
     #[wasm_bindgen]
-    pub fn set_hover_info(json: JsValue) {
-        let hoverInfo: Vec<VSCodeHoverItem> =
+    pub fn set_hover_info(&self, json: JsValue) {
+        let hover_info: String =
             serde_wasm_bindgen::from_value(json).expect("Could not deserialize hover info");
         if let Some(sender) = &self.command_sender {
-            if sender.send(ExternalCommand::SetHover(hoverInfo)).is_err() {
+            if sender.send(ExternalCommand::SetHover(hover_info)).is_err() {
                 error!("Failed to send command");
             }
         } else {

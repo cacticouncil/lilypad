@@ -13,6 +13,7 @@ use super::text_drawer::*;
 use super::text_range::*;
 use crate::block_editor::{block_drawer, source::TextEdit, text_range::TextRange};
 use crate::lsp::diagnostics::Diagnostic;
+use crate::lsp::documentation::Documentation;
 use completion_popup::CompletionPopup;
 use diagnostics_popup::DiagnosticPopup;
 use documentation_popup::DocumentationPopup;
@@ -30,6 +31,9 @@ pub struct TextEditor {
 
     /// diagnostics for current cursor position
     diagnostics: Vec<Diagnostic>,
+
+    /// documentation for current cursor position
+    documentation: Documentation,
 
     /// index of diagnostic selected in the popup
     diagnostic_selection: Option<usize>,
@@ -81,6 +85,7 @@ impl TextEditor {
             ime_enabled: false,
             ime_selection: TextRange::ZERO,
             diagnostics: vec![],
+            documentation: Documentation::example(),
             diagnostic_selection: Option::None,
             text_drawer: TextDrawer::new(),
             blocks: vec![],

@@ -145,6 +145,13 @@ impl TextEditor {
                         );
                     }
 
+                    // draw documentation popup
+                    let documentation = &self.documentation;
+                    ui.put(
+                        Rect::from_min_size(Pos2::new(0.0, 0.0) + offset, Vec2::new(200.0, 200.0)),
+                        self.documentation_popup.widget(&documentation, font),
+                    );
+
                     // Set IME output (in screen coords)
                     if let Some(cursor_rect) = cursor_rect {
                         let transform = ui
@@ -364,11 +371,12 @@ impl TextEditor {
                         .iter()
                         .position(|d| d.range.contains(coord, source.text()));
                 }
-                if Self::mouse_still_for(0.5, ui) {
+                if Self::mouse_still_for(1.0, ui) {
                     let coord =
                         pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
                     self.documentation_popup
                         .request_hover(coord.line, coord.col);
+                    log::info!("{}", self.documentation_popup.get_hover());
                 }
             }
         };
@@ -469,6 +477,7 @@ impl TextEditor {
                 }
                 ExternalCommand::SetHover(hover) => {
                     self.documentation_popup.set_hover(hover.to_string());
+                    self.documentation.set_hover(hover.to_string());
                 }
                 ExternalCommand::SetBreakpoints(new_breakpoints) => {
                     let mut set = HashSet::new();
