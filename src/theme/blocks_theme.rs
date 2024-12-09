@@ -28,7 +28,7 @@ static SYNTAX_COLORED_BLOCKS: BlocksTheme = BlocksTheme::new(|block_type, _| {
     use crate::block_editor::BlockType::*;
 
     match block_type {
-        Object => Some(Color32::from_rgb(247, 109, 60)),
+        Object => Some(Color32::from_rgb(255, 71, 72)),
         FunctionDef => Some(Color32::from_rgb(163, 93, 213)),
         While => Some(Color32::from_rgb(245, 163, 0)),
         If => Some(Color32::from_rgb(103, 199, 40)),

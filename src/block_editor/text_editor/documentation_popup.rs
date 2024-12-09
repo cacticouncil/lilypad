@@ -5,7 +5,7 @@ use ropey::Rope;
 
 use crate::{
     block_editor::{MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
-    lsp::documentation::Documentation,
+    lsp::documentation::{self, Documentation},
     theme,
     util_widgets::SelectableRow,
     vscode,
@@ -13,12 +13,16 @@ use crate::{
 
 pub struct DocumentationPopup {
     message: String,
+    line: usize,
+    col: usize,
 }
 
 impl DocumentationPopup {
     pub fn new() -> Self {
         DocumentationPopup {
             message: String::from(" "),
+            line: 0,
+            col: 0,
         }
     }
     pub fn widget<'a>(
@@ -35,7 +39,7 @@ impl DocumentationPopup {
 
             // draw message
             ui.painter().text(
-                rect.min,
+                rect.min * 2.0,
                 Align2::LEFT_TOP,
                 &documentation.message,
                 font.id.clone(),
@@ -54,8 +58,60 @@ impl DocumentationPopup {
         &self.message
     }
 
-    pub fn request_hover(&self, line: usize, col: usize) {
+    pub fn get_line(&self) -> f32 {
+        self.line as f32
+    }
+
+    pub fn get_col(&self) -> f32 {
+        self.col as f32
+    }
+
+    pub fn request_hover(&mut self, line: usize, col: usize) {
         vscode::request_hover(line, col);
+        self.line = line;
+        self.col = col;
+    }
+    pub fn calc_origin(
+        &self,
+        documentation: &Documentation,
+        offset: Vec2,
+        padding: &[f32],
+        font: &MonospaceFont,
+    ) -> Vec2 {
+        // find height
+        let height = font.size.y;
+
+        // find the vertical start by finding top of line and then subtracting box size
+        let total_padding: f32 = padding
+            .iter()
+            .take(documentation.range.start.line + 1)
+            .sum();
+        let documentation_start = OUTER_PAD
+            + total_padding
+            + (documentation.range.start.line as f32 * font.size.y)
+            + offset.y;
+        let y = if height > documentation_start {
+            // put it below the line if there isn't enough room above
+            documentation_start + font.size.y
+        } else {
+            documentation_start - height
+        };
+
+        // find the horizontal start
+        let x =
+            TOTAL_TEXT_X_OFFSET + (documentation.range.start.col as f32 * font.size.x) + offset.x;
+
+        Vec2::new(x * 2.0, y * 2.0)
+    }
+
+    pub fn calc_size(&self, documentation: &Documentation, font: &MonospaceFont) -> Pos2 {
+        // find dimensions
+        let num_newlines = documentation.message.chars().filter(|&c| c == '\n').count();
+        let height = (num_newlines + 1) as f32 * font.size.y;
+        let text_len = documentation.message.chars().filter(|&c| c != '`').count();
+        let width = text_len as f32 * font.size.x;
+
+        Pos2::new(width, height)
     }
 }
 

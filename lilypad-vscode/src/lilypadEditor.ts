@@ -260,9 +260,9 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                                 type: "return_hover_info",
                                 hover: hoverContent
                             });
-                            console.log('Hover info:', hoverContent);
+                           // console.log('Hover info:', hoverContent);
                         } else {
-                            console.log('No hover information available');
+                            //console.log('No hover information available');
                         }
                     });
                     break;

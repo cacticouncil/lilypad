@@ -1314,6 +1314,7 @@ dependencies = [
  "tree-sitter-java",
  "tree-sitter-language",
  "tree-sitter-python",
+ "tree-sitter-rust",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -2349,6 +2350,16 @@ name = "tree-sitter-python"
 version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65661b1a3e24139e2e54207e47d910ab07e28790d78efc7d5dc3a11ce2a110eb"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-rust"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cffbbcb780348fbae8395742ae5b34c1fd794e4085d43aac9f259387f9a84dc8"
 dependencies = [
  "cc",
  "tree-sitter-language",

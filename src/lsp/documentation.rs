@@ -16,6 +16,7 @@ impl Documentation {
     }
     pub fn set_hover(&mut self, message: String) {
         self.message = message;
+        self.range = TextRange::new(TextPoint::new(0, 0), TextPoint::new(0, 0));
     }
 
     #[allow(dead_code)]

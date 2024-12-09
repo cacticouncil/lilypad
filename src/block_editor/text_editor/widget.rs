@@ -148,8 +148,16 @@ impl TextEditor {
                     // draw documentation popup
                     let documentation = &self.documentation;
                     ui.put(
-                        Rect::from_min_size(Pos2::new(0.0, 0.0) + offset, Vec2::new(200.0, 200.0)),
-                        self.documentation_popup.widget(&documentation, font),
+                        Rect::from_min_size(
+                            self.documentation_popup.calc_size(documentation, font),
+                            self.documentation_popup.calc_origin(
+                                documentation,
+                                offset,
+                                &self.padding,
+                                font,
+                            ),
+                        ),
+                        self.documentation_popup.widget(documentation, font),
                     );
 
                     // Set IME output (in screen coords)
@@ -231,6 +239,8 @@ impl TextEditor {
         for diagnostic in &self.diagnostics {
             diagnostic.draw(&self.padding, source.text(), offset, font, painter);
         }
+        self.documentation
+            .draw(&self.padding, source.text(), offset, font, painter);
 
         // draw cursor
         if has_focus {
