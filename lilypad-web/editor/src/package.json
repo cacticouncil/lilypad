@@ -1,0 +1,13 @@
+{
+  "name": "lilypad",
+  "type": "module",
+  "version": "0.2.0",
+  "files": [
+    "lilypad_web_bg.wasm",
+    "lilypad_web.js"
+  ],
+  "main": "lilypad_web.js",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
