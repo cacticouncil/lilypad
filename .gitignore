@@ -138,3 +138,40 @@ target/
 ## wasm pack
 
 pkg/
+
+### macOS ###
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+#lilypad-web web assembly and javascript bindings 
+lilypad-web/editor/dist/*.wasm
+lilypad-web/editor/dist/*.js
+
+lilypad-web/editor/src/*
+!lilypad-web/editor/src/run.js
+!lilypad-web/editor/src/README.md
+!lilypad-web/editor/src/package.json
