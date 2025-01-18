@@ -14,9 +14,17 @@ impl Documentation {
     pub fn request_hover(&self) {
         vscode::request_hover(self.range.start.line, self.range.start.col);
     }
-    pub fn set_hover(&mut self, message: String) {
+    pub fn set_hover(&mut self, message: String, range: TextRange) {
         self.message = message;
-        self.range = TextRange::new(TextPoint::new(0, 0), TextPoint::new(0, 0));
+        self.range = range;
+        // self.range = TextRange::new(TextPoint::new(0, 0), TextPoint::new(0, 0));
+    }
+
+    pub fn new() -> Documentation {
+        Documentation {
+            message: String::from(" "),
+            range: TextRange::ZERO,
+        }
     }
 
     #[allow(dead_code)]

@@ -35,7 +35,7 @@ impl LanguageConfig {
             Some("java") => &JAVA_LANGUAGE,
             Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
             Some("cs") => &CS_LANGUAGE,
-            //Some("rs") => &RUST_LANGUAGE,
+            Some("rs") => &RUST_LANGUAGE,
             _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
         }
     }

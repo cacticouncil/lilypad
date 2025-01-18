@@ -85,7 +85,7 @@ impl TextEditor {
             ime_enabled: false,
             ime_selection: TextRange::ZERO,
             diagnostics: vec![],
-            documentation: Documentation::example(),
+            documentation: Documentation::new(),
             diagnostic_selection: Option::None,
             text_drawer: TextDrawer::new(),
             blocks: vec![],

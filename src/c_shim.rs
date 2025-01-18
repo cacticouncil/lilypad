@@ -153,10 +153,15 @@ pub unsafe extern "C" fn iswalnum(c: c_int) -> bool {
     char::from_u32(c as u32).map_or(false, |c| c.is_alphanumeric())
 }
 
-/*#[no_mangle]
+#[no_mangle]
 pub unsafe extern "C" fn iswdigit(c: c_int) -> bool {
-    char::from_u32(c as u32).map_or(false, |c| (c.is_digit(16)))
-}*/
+    char::from_u32(c as u32).map_or(false, |c| c.is_digit(10))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn iswalpha(c: c_int) -> bool {
+    char::from_u32(c as u32).map_or(false, |c| c.is_alphabetic())
+}
 
 /* --------------------------------- time.h --------------------------------- */
 

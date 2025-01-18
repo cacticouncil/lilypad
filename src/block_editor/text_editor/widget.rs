@@ -147,18 +147,20 @@ impl TextEditor {
 
                     // draw documentation popup
                     let documentation = &self.documentation;
-                    ui.put(
-                        Rect::from_min_size(
-                            self.documentation_popup.calc_size(documentation, font),
-                            self.documentation_popup.calc_origin(
-                                documentation,
-                                offset,
-                                &self.padding,
-                                font,
+                    if !(documentation.message == " ") {
+                        ui.put(
+                            Rect::from_min_size(
+                                self.documentation_popup.calc_origin(
+                                    documentation,
+                                    offset,
+                                    &self.padding,
+                                    font,
+                                ),
+                                self.documentation_popup.calc_size(documentation, font),
                             ),
-                        ),
-                        self.documentation_popup.widget(documentation, font),
-                    );
+                            self.documentation_popup.widget(documentation, font),
+                        );
+                    }
 
                     // Set IME output (in screen coords)
                     if let Some(cursor_rect) = cursor_rect {
@@ -371,6 +373,11 @@ impl TextEditor {
                         }
                     }
                 }
+                let coord = pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
+                if !self.documentation.range.contains(coord, source.text()) {
+                    self.documentation.message = " ".to_string();
+                    self.documentation.range = TextRange::ZERO;
+                }
 
                 // if the mouse has been still for a bit with no selection, find the diagnostic under the cursor
                 if self.diagnostic_selection.is_none() && Self::mouse_still_for(0.25, ui) {
@@ -381,12 +388,11 @@ impl TextEditor {
                         .iter()
                         .position(|d| d.range.contains(coord, source.text()));
                 }
-                if Self::mouse_still_for(1.0, ui) {
+                if Self::mouse_still_for(1.0, ui) && self.documentation.message == " " {
                     let coord =
                         pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
                     self.documentation_popup
                         .request_hover(coord.line, coord.col);
-                    log::info!("{}", self.documentation_popup.get_hover());
                 }
             }
         };
@@ -485,9 +491,10 @@ impl TextEditor {
                     self.completion_popup
                         .set_completions(new_completions, source.text());
                 }
-                ExternalCommand::SetHover(hover) => {
-                    self.documentation_popup.set_hover(hover.to_string());
-                    self.documentation.set_hover(hover.to_string());
+                ExternalCommand::SetHover(hover, range) => {
+                    self.documentation_popup
+                        .set_hover(hover.to_string(), *range);
+                    self.documentation.set_hover(hover.to_string(), *range);
                 }
                 ExternalCommand::SetBreakpoints(new_breakpoints) => {
                     let mut set = HashSet::new();

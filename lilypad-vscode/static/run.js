@@ -118,7 +118,7 @@ window.addEventListener("message", event => {
       handle.set_completions(message.completions);
       break;
     case "return_hover_info":
-      handle.set_hover_info(message.hover);
+      handle.set_hover_info(message.hover, message.range);
       break;
     case "undo":
       handle.undo();

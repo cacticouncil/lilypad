@@ -118,3 +118,15 @@ impl Point {
         ((self.x.pow(2) + self.y.pow(2)) as f64).sqrt()
     }
 }
+
+
+
+fn my_function() {
+    if condition {
+        println!("Here");
+    } else if condition {
+        println!("here");
+    } else {
+        println!("oops");
+    }    
+}

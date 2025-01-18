@@ -250,6 +250,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     ).then((hover) => {
                         if (hover && hover[0] && hover[0].contents && hover[0].contents[0]) {
                             const content = hover[0].contents[0];
+                            console.log(content);
                             let hoverContent = '';
                             if (content instanceof vscode.MarkdownString) {
                                 hoverContent = content.value;
@@ -258,9 +259,9 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                             }
                             webviewPanel.webview.postMessage({
                                 type: "return_hover_info",
-                                hover: hoverContent
+                                hover: hoverContent,
+                                range: hover[0].range
                             });
-                           // console.log('Hover info:', hoverContent);
                         } else {
                             //console.log('No hover information available');
                         }

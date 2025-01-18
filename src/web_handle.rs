@@ -255,11 +255,14 @@ impl LilypadWebHandle {
     }
 
     #[wasm_bindgen]
-    pub fn set_hover_info(&self, json: JsValue) {
-        let hover_info: String =
-            serde_wasm_bindgen::from_value(json).expect("Could not deserialize hover info");
+    pub fn set_hover_info(&self, hover_info: String, json: JsValue) {
+        let range: TextRange =
+            serde_wasm_bindgen::from_value(json).expect("Could not deserialize range");
         if let Some(sender) = &self.command_sender {
-            if sender.send(ExternalCommand::SetHover(hover_info)).is_err() {
+            if sender
+                .send(ExternalCommand::SetHover(hover_info, range))
+                .is_err()
+            {
                 error!("Failed to send command");
             }
         } else {

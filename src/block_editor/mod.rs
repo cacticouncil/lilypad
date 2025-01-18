@@ -88,7 +88,7 @@ pub enum ExternalCommand {
     SetDiagnostics(Vec<Diagnostic>),
     SetQuickFix(usize, Vec<VSCodeCodeAction>),
     SetCompletions(Vec<VSCodeCompletionItem>),
-    SetHover(String),
+    SetHover(String, TextRange),
 
     // debugging
     SetBreakpoints(Vec<usize>),

@@ -1,28 +1,23 @@
-use std::collections::HashMap;
-
+use crate::block_editor::text_range::{TextPoint, TextRange};
 use egui::{Align2, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2, Widget};
 use ropey::Rope;
 
 use crate::{
     block_editor::{MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     lsp::documentation::{self, Documentation},
-    theme,
-    util_widgets::SelectableRow,
-    vscode,
+    theme, vscode,
 };
 
 pub struct DocumentationPopup {
     message: String,
-    line: usize,
-    col: usize,
+    range: TextRange,
 }
 
 impl DocumentationPopup {
     pub fn new() -> Self {
         DocumentationPopup {
             message: String::from(" "),
-            line: 0,
-            col: 0,
+            range: TextRange::new(TextPoint::new(0, 0), TextPoint::new(0, 0)),
         }
     }
     pub fn widget<'a>(
@@ -39,7 +34,7 @@ impl DocumentationPopup {
 
             // draw message
             ui.painter().text(
-                rect.min * 2.0,
+                rect.min,
                 Align2::LEFT_TOP,
                 &documentation.message,
                 font.id.clone(),
@@ -50,36 +45,24 @@ impl DocumentationPopup {
         }
     }
 
-    pub fn set_hover(&mut self, message: String) {
+    pub fn set_hover(&mut self, message: String, range: TextRange) {
         self.message = message;
-    }
-
-    pub fn get_hover(&self) -> &str {
-        &self.message
-    }
-
-    pub fn get_line(&self) -> f32 {
-        self.line as f32
-    }
-
-    pub fn get_col(&self) -> f32 {
-        self.col as f32
+        self.range = range;
     }
 
     pub fn request_hover(&mut self, line: usize, col: usize) {
         vscode::request_hover(line, col);
-        self.line = line;
-        self.col = col;
     }
+
     pub fn calc_origin(
         &self,
         documentation: &Documentation,
         offset: Vec2,
         padding: &[f32],
         font: &MonospaceFont,
-    ) -> Vec2 {
-        // find height
-        let height = font.size.y;
+    ) -> Pos2 {
+        let mut height = font.size.y;
+        height += (documentation.message.len()) as f32 * font.size.y;
 
         // find the vertical start by finding top of line and then subtracting box size
         let total_padding: f32 = padding
@@ -101,17 +84,22 @@ impl DocumentationPopup {
         let x =
             TOTAL_TEXT_X_OFFSET + (documentation.range.start.col as f32 * font.size.x) + offset.x;
 
-        Vec2::new(x * 2.0, y * 2.0)
+        Pos2::new(x, y)
     }
 
-    pub fn calc_size(&self, documentation: &Documentation, font: &MonospaceFont) -> Pos2 {
+    pub fn calc_size(&self, documentation: &Documentation, font: &MonospaceFont) -> Vec2 {
         // find dimensions
         let num_newlines = documentation.message.chars().filter(|&c| c == '\n').count();
         let height = (num_newlines + 1) as f32 * font.size.y;
-        let text_len = documentation.message.chars().filter(|&c| c != '`').count();
-        let width = text_len as f32 * font.size.x;
+        let longest_line_len = documentation
+            .message
+            .lines()
+            .map(|line| line.chars().count())
+            .max()
+            .unwrap_or(0);
+        let width = (longest_line_len + 1) as f32 * font.size.x;
 
-        Pos2::new(width, height)
+        Vec2::new(width, height)
     }
 }
 
@@ -135,11 +123,6 @@ impl Documentation {
             total_padding += padding[line_num];
 
             // find bottom of current line
-            let y = total_padding + ((line_num + 1) as f32 * font.size.y) + OUTER_PAD;
-
-            // find the start and end of the line
-            let x = TOTAL_TEXT_X_OFFSET + (line_range.start.col as f32 * font.size.x);
-            let width = (line_range.end.col - line_range.start.col) as f32 * font.size.x;
         }
     }
 }
