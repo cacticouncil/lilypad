@@ -148,7 +148,8 @@ impl TextEditor {
                     // Set IME output (in screen coords)
                     if let Some(cursor_rect) = cursor_rect {
                         let transform = ui
-                            .memory(|m| m.layer_transforms.get(&ui.layer_id()).copied())
+                            .ctx()
+                            .layer_transform_to_global(ui.layer_id())
                             .unwrap_or_default();
 
                         ui.ctx().output_mut(|o| {
