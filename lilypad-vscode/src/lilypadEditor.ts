@@ -250,7 +250,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     ).then((hover) => {
                         if (hover && hover[0] && hover[0].contents && hover[0].contents[0]) {
                             const content = hover[0].contents[0];
-                            console.log(content);
+                            //console.log(content);
                             let hoverContent = '';
                             if (content instanceof vscode.MarkdownString) {
                                 hoverContent = content.value;
