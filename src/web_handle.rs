@@ -11,7 +11,6 @@ use crate::block_editor::{
 use crate::lsp::{
     completion::VSCodeCompletionItem,
     diagnostics::{Diagnostic, VSCodeCodeAction},
-    documentation::Documentation,
 };
 use crate::theme::blocks_theme::BlocksTheme;
 use crate::vscode;

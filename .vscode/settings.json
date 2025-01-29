@@ -1,4 +1,5 @@
 {
     "editor.formatOnSave": true,
+    "glassit.alpha": 250,
     // "rust-analyzer.cargo.target": "wasm32-unknown-unknown"
 }

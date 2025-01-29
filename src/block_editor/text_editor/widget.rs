@@ -374,7 +374,9 @@ impl TextEditor {
                     }
                 }
                 let coord = pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
-                if !self.documentation.range.contains(coord, source.text()) {
+                if self.documentation.message != " ".to_string()
+                    && !self.documentation.range.contains(coord, source.text())
+                {
                     self.documentation.message = " ".to_string();
                     self.documentation.range = TextRange::ZERO;
                 }
@@ -388,11 +390,10 @@ impl TextEditor {
                         .iter()
                         .position(|d| d.range.contains(coord, source.text()));
                 }
-                if Self::mouse_still_for(1.0, ui) && self.documentation.message == " " {
+                if Self::mouse_still_for(0.5, ui) && self.documentation.message == " ".to_string() {
                     let coord =
                         pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
-                    self.documentation_popup
-                        .request_hover(coord.line, coord.col);
+                    self.documentation.request_hover(coord.line, coord.col);
                 }
             }
         };
@@ -492,8 +493,6 @@ impl TextEditor {
                         .set_completions(new_completions, source.text());
                 }
                 ExternalCommand::SetHover(hover, range) => {
-                    self.documentation_popup
-                        .set_hover(hover.to_string(), *range);
                     self.documentation.set_hover(hover.to_string(), *range);
                 }
                 ExternalCommand::SetBreakpoints(new_breakpoints) => {

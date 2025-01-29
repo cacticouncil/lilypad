@@ -1,24 +1,17 @@
-use crate::block_editor::text_range::{TextPoint, TextRange};
-use egui::{Align2, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2, Widget};
-use ropey::Rope;
-
 use crate::{
     block_editor::{MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
-    lsp::documentation::{self, Documentation},
-    theme, vscode,
+    lsp::documentation::BlockType,
+    lsp::documentation::Documentation,
+    theme,
 };
+use egui::{Align2, Color32, Painter, Pos2, Response, Ui, Vec2, Widget};
+use ropey::Rope;
 
-pub struct DocumentationPopup {
-    message: String,
-    range: TextRange,
-}
+pub struct DocumentationPopup {}
 
 impl DocumentationPopup {
     pub fn new() -> Self {
-        DocumentationPopup {
-            message: String::from(" "),
-            range: TextRange::new(TextPoint::new(0, 0), TextPoint::new(0, 0)),
-        }
+        Self {}
     }
     pub fn widget<'a>(
         &'a mut self,
@@ -27,31 +20,60 @@ impl DocumentationPopup {
     ) -> impl Widget + 'a {
         move |ui: &mut Ui| -> Response {
             let (id, rect) = ui.allocate_space(ui.available_size());
-            let response = ui.interact(rect, id, egui::Sense::click_and_drag());
-
+            let response = ui.interact(rect, id, egui::Sense::hover());
             // set background color
             ui.painter().rect_filled(rect, 0.0, theme::POPUP_BACKGROUND);
+            let mut current_y = rect.min.y; // Start at the top of the rect
+                                            //let painter = ui.painter();
+            for i in &documentation.hover_info.all_blocks {
+                let text = &i.0;
+                //  let language: Language = Language::for_file(&self.hover_info.language);
+                // Measure the text size to get its height
+                let text_size = ui.painter().layout(
+                    (text).to_string(),
+                    font.id.clone(),
+                    theme::syntax::DEFAULT,
+                    rect.max.x - rect.min.x, // Use the available width for wrapping
+                );
 
-            // draw message
-            ui.painter().text(
-                rect.min,
-                Align2::LEFT_TOP,
-                &documentation.message,
-                font.id.clone(),
-                theme::syntax::DEFAULT,
-            );
+                // Render the text block
+                match i.1 {
+                    BlockType::CodeBlock => {
+                        /* let mut colored_text = Source::new(Rope::from(text as &str), language);
+                        let mut text_drawer = TextDrawer::new();
+                        text_drawer.highlight_source(&mut colored_text);
+                        text_drawer.draw(
+                            &[1.0],
+                            Vec2::new(rect.min.x, rect.min.y),
+                            None,
+                            font,
+                            painter,
+                        );*/
+                        ui.painter().text(
+                            egui::pos2(rect.min.x, current_y),
+                            Align2::LEFT_TOP,
+                            text,
+                            font.id.clone(),
+                            Color32::from_rgb(170, 215, 255),
+                        );
+                    }
+                    BlockType::RegularBlock => {
+                        ui.painter().text(
+                            egui::pos2(rect.min.x, current_y),
+                            Align2::LEFT_TOP,
+                            text,
+                            font.id.clone(),
+                            theme::syntax::DEFAULT,
+                        );
+                    }
+                }
+
+                // Move down by the height of the block
+                current_y += text_size.size().y; // Add spacing between blocks
+            }
 
             response
         }
-    }
-
-    pub fn set_hover(&mut self, message: String, range: TextRange) {
-        self.message = message;
-        self.range = range;
-    }
-
-    pub fn request_hover(&mut self, line: usize, col: usize) {
-        vscode::request_hover(line, col);
     }
 
     pub fn calc_origin(
@@ -88,8 +110,11 @@ impl DocumentationPopup {
     }
 
     pub fn calc_size(&self, documentation: &Documentation, font: &MonospaceFont) -> Vec2 {
+        let max_hover_width = 500.0;
+        let max_hover_height = 400.0;
         // find dimensions
-        let num_newlines = documentation.message.chars().filter(|&c| c == '\n').count();
+        let num_newlines = documentation.message.chars().filter(|&c| c == '\n').count()
+            + &documentation.hover_info.all_blocks.len();
         let height = (num_newlines + 1) as f32 * font.size.y;
         let longest_line_len = documentation
             .message
@@ -98,7 +123,8 @@ impl DocumentationPopup {
             .max()
             .unwrap_or(0);
         let width = (longest_line_len + 1) as f32 * font.size.x;
-
+        let width = width.min(max_hover_width);
+        let height = height.min(max_hover_height);
         Vec2::new(width, height)
     }
 }
@@ -108,19 +134,19 @@ impl Documentation {
         &self,
         padding: &[f32],
         source: &Rope,
-        offset: Vec2,
-        font: &MonospaceFont,
-        painter: &Painter,
+        _offset: Vec2,
+        _font: &MonospaceFont,
+        _painter: &Painter,
     ) {
         let range = self.range.ordered();
         let line_ranges = range.individual_lines(source);
 
-        let mut total_padding: f32 = padding.iter().take(range.start.line).sum();
+        let mut _total_padding: f32 = padding.iter().take(range.start.line).sum();
 
         for line_range in line_ranges {
             let line_num = line_range.start.line;
 
-            total_padding += padding[line_num];
+            _total_padding += padding[line_num];
 
             // find bottom of current line
         }

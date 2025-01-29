@@ -119,14 +119,13 @@ impl Point {
     }
 }
 
-
-
 fn my_function() {
+    let condition = true;
     if condition {
         println!("Here");
     } else if condition {
         println!("here");
     } else {
         println!("oops");
-    }    
+    }
 }
