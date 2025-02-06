@@ -1,3 +1,5 @@
+use std::num;
+
 use crate::{
     block_editor::{MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     lsp::documentation::BlockType,
@@ -7,12 +9,34 @@ use crate::{
 use egui::{Align2, Color32, Painter, Pos2, Response, Ui, Vec2, Widget};
 use ropey::Rope;
 
-pub struct DocumentationPopup {}
+pub struct DocumentationPopup {
+    pub is_hovered: bool,
+    pub is_above: bool,
+    pub popup_size: Vec2,
+}
 
 impl DocumentationPopup {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            is_hovered: false,
+            popup_size: Vec2::new(0.0, 0.0),
+            is_above: false,
+        }
     }
+
+    pub fn make_rect(&self, pos: Pos2) -> egui::Rect {
+        egui::Rect::from_min_size(pos, self.popup_size)
+    }
+
+    pub fn check_if_hovered(&mut self, pos: Pos2, size: Vec2) -> bool {
+        self.is_hovered = pos.x >= size.x
+            && ((pos.y <= size.y && !self.is_above) || (pos.y >= size.y && self.is_above));
+        log::info!("pos: {:?}", pos);
+        log::info!("size: {:?}", size);
+        log::info!("is_hovered: {}", self.is_hovered);
+        self.is_hovered
+    }
+
     pub fn widget<'a>(
         &'a mut self,
         documentation: &'a Documentation,
@@ -77,15 +101,24 @@ impl DocumentationPopup {
     }
 
     pub fn calc_origin(
-        &self,
+        &mut self,
         documentation: &Documentation,
         offset: Vec2,
         padding: &[f32],
         font: &MonospaceFont,
     ) -> Pos2 {
         let mut height = font.size.y;
-        height += (documentation.message.len()) as f32 * font.size.y;
-
+        let num_newlines = &documentation
+            .hover_info
+            .all_blocks
+            .iter()
+            .fold(0, |acc, block| {
+                acc + block.0.chars().filter(|&c| c == '\n').count()
+            })
+            + &documentation.hover_info.all_blocks.len()
+            - 1;
+        height += num_newlines as f32 * font.size.y;
+        log::info!("num_newlines: {}", num_newlines);
         // find the vertical start by finding top of line and then subtracting box size
         let total_padding: f32 = padding
             .iter()
@@ -97,8 +130,10 @@ impl DocumentationPopup {
             + offset.y;
         let y = if height > documentation_start {
             // put it below the line if there isn't enough room above
+            self.is_above = false;
             documentation_start + font.size.y
         } else {
+            self.is_above = true;
             documentation_start - height
         };
 
@@ -113,16 +148,22 @@ impl DocumentationPopup {
         let max_hover_width = 500.0;
         let max_hover_height = 400.0;
         // find dimensions
-        let num_newlines = documentation.message.chars().filter(|&c| c == '\n').count()
+        let num_newlines = &documentation
+            .hover_info
+            .all_blocks
+            .iter()
+            .fold(0, |acc, block| {
+                acc + block.0.chars().filter(|&c| c == '\n').count()
+            })
             + &documentation.hover_info.all_blocks.len();
-        let height = (num_newlines + 1) as f32 * font.size.y;
+        let height = (num_newlines) as f32 * font.size.y;
         let longest_line_len = documentation
             .message
             .lines()
             .map(|line| line.chars().count())
             .max()
             .unwrap_or(0);
-        let width = (longest_line_len + 1) as f32 * font.size.x;
+        let width = (longest_line_len) as f32 * font.size.x;
         let width = width.min(max_hover_width);
         let height = height.min(max_hover_height);
         Vec2::new(width, height)
@@ -130,6 +171,7 @@ impl DocumentationPopup {
 }
 
 impl Documentation {
+    #[warn(dead_code)]
     pub fn draw(
         &self,
         padding: &[f32],

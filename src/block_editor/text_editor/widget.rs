@@ -1,3 +1,4 @@
+use eframe::glow::POINT;
 use egui::{
     output::IMEOutput, scroll_area::ScrollBarVisibility, CursorIcon, Event, EventFilter, ImeEvent,
     Key, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
@@ -5,7 +6,9 @@ use egui::{
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use super::{
-    coord_conversions::pt_to_unbounded_text_coord, gutter::Gutter, TextEdit, TextEditor, TextPoint,
+    coord_conversions::{pt_to_text_coord, pt_to_unbounded_text_coord},
+    gutter::Gutter,
+    TextEdit, TextEditor, TextPoint,
 };
 use crate::{
     block_editor::{
@@ -130,6 +133,7 @@ impl TextEditor {
 
                     // draw diagnostic popup
                     if let Some(diagnostic_selection) = self.diagnostic_selection {
+                        log::info!("drawing diagnostic popup");
                         let diagnostic = &self.diagnostics[diagnostic_selection];
                         ui.put(
                             Rect::from_min_size(
@@ -357,7 +361,8 @@ impl TextEditor {
                 }
             }
         }
-
+        log::info!("Response ID: {:?}", response.id);
+        log::info!("Respone Layer ID: {:?}", response.layer_id);
         // find diagnostic under cursor
         // TODO: multiple diagnostics displayed at once
         if response.hovered() {
@@ -373,12 +378,13 @@ impl TextEditor {
                         }
                     }
                 }
-                let coord = pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
-                if self.documentation.message != " ".to_string()
-                    && !self.documentation.range.contains(coord, source.text())
-                {
-                    self.documentation.message = " ".to_string();
-                    self.documentation.range = TextRange::ZERO;
+                if self.documentation.message != " ".to_string() {
+                    let coord =
+                        pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
+                    if !self.documentation.range.contains(coord, source.text()) {
+                        self.documentation.message = " ".to_string();
+                        self.documentation.range = TextRange::ZERO;
+                    }
                 }
 
                 // if the mouse has been still for a bit with no selection, find the diagnostic under the cursor
@@ -394,6 +400,7 @@ impl TextEditor {
                     let coord =
                         pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
                     self.documentation.request_hover(coord.line, coord.col);
+                    self.documentation_popup.is_hovered = true;
                 }
             }
         };

@@ -17,7 +17,7 @@ pub mod c_shim;
 use block_editor::{BlockEditor, ExternalCommand, MonospaceFont};
 use egui::Sense;
 use egui_inbox::UiInbox;
-
+use std::sync::Arc;
 pub struct LilypadWeb {
     block_editor: BlockEditor,
     inbox: UiInbox<ExternalCommand>,
@@ -33,13 +33,14 @@ impl LilypadWeb {
         inbox: UiInbox<ExternalCommand>,
     ) -> Self {
         // Uncomment to enable debug options:
-        // _cc.egui_ctx.set_style(Arc::new(egui::Style {
-        //     debug: egui::style::DebugOptions {
-        //         show_widget_hits: true,
-        //         ..Default::default()
-        //     },
-        //     ..Default::default()
-        // }));
+        _cc.egui_ctx.set_style(Arc::new(egui::Style {
+            debug: egui::style::DebugOptions {
+                debug_on_hover: true,
+                show_widget_hits: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        }));
         Self {
             block_editor: BlockEditor::new(
                 &file_name,

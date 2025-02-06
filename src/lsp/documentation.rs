@@ -1,3 +1,5 @@
+use egui::debug_text::print;
+
 use crate::block_editor::text_range::{TextPoint, TextRange};
 use crate::vscode;
 
@@ -20,6 +22,8 @@ pub struct HoverInfo {
 }
 
 fn create_hover_info(info: &str) -> HoverInfo {
+    //Uncomment for debugging
+    //  log::info!("info: {}", info.replace("\n", "\\n"));
     let mut lang = "";
     let mut lang_end = "";
     if info.find("python").is_some() {
@@ -33,13 +37,17 @@ fn create_hover_info(info: &str) -> HoverInfo {
         lang = "csharp";
     }
     let re = regex::Regex::new(r"<.*?>").unwrap();
-    let mut parsed_info = re.replace_all(info, "").to_string();
-    parsed_info = parsed_info.replace("&nbsp;", " ").to_string();
+    let parsed_info = re.replace_all(info, "").to_string();
+    let re = regex::Regex::new(r"\s*\n\s*").unwrap();
+    let parsed_info = re.replace_all(&parsed_info, "\n").to_string();
+    let parsed_info = parsed_info.replace("&nbsp;", " ").to_string();
     let blocks: Vec<_> = parsed_info.split("```").collect();
     let mut all_blocks: Vec<(String, BlockType)> = vec![];
-    for i in blocks {
+    for mut i in blocks {
         if i.len() >= 9 && i[0..8].find(lang).is_some() {
             let temp = i.replace(lang, "").to_string();
+            let temp_str = i.replace(&("test_".to_owned() + lang), "").to_string();
+            i = &temp_str;
             if temp.len() == 0 {
                 continue;
             }
@@ -51,7 +59,10 @@ fn create_hover_info(info: &str) -> HoverInfo {
             all_blocks.push((i.trim().to_string(), BlockType::RegularBlock));
         }
     }
-
+    /* Uncomment for debugging
+    for block in all_blocks.iter() {
+        log::info!("block: {:?}", block.0.replace("\n", "\\n"));
+    }*/
     HoverInfo {
         language: lang_end.to_string(),
         all_blocks: all_blocks,
