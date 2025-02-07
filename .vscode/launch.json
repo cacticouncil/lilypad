@@ -5,41 +5,22 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "lldb",
+            "type": "lldb-dap",
             "request": "launch",
             "name": "Debug executable 'lilypad_native'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=lilypad_native",
-                    "--package=lilypad"
-                ],
-                "filter": {
-                    "name": "lilypad_native",
-                    "kind": "bin"
-                }
-            },
+            "program": "${workspaceFolder}/target/debug/lilypad_native",
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "cargo: build lilypad_native"
         },
         {
-            "type": "lldb",
+            "type": "lldb-dap",
             "request": "launch",
-            "name": "Debug unit tests in executable 'lilypad_native'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=lilypad_native",
-                    "--package=lilypad"
-                ],
-                "filter": {
-                    "name": "lilypad_native",
-                    "kind": "bin"
-                }
-            },
+            "name": "Debug test 'lilypad_native'",
+            "program": "${workspaceFolder}/target/debug/deps/lilypad_native-*",
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "cargo: test lilypad_native"
         }
     ]
 }
