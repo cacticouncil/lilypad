@@ -22,7 +22,7 @@ impl Padding {
         }
     }
 
-    pub fn cumulative_iter<'a>(&'a self) -> impl Iterator<Item = f32> + 'a {
+    pub fn cumulative_iter(&self) -> impl Iterator<Item = f32> + '_ {
         self.cumulative.iter().copied()
     }
 

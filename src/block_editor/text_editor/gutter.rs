@@ -38,7 +38,7 @@ impl<'a> Gutter<'a> {
     }
 }
 
-impl<'a> Widget for Gutter<'a> {
+impl Widget for Gutter<'_> {
     fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
         let (id, rect) = ui.allocate_space(ui.available_size());
         let response = ui.interact(rect, id, egui::Sense::click());
@@ -66,7 +66,7 @@ impl<'a> Widget for Gutter<'a> {
     }
 }
 
-impl<'a> Gutter<'a> {
+impl Gutter<'_> {
     fn draw(&self, preview_line: Option<usize>, offset: Vec2, painter: &Painter) {
         for (num, line_cumulative_padding) in self.padding.cumulative_iter().enumerate() {
             let y_pos =

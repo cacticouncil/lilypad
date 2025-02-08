@@ -1,6 +1,6 @@
 use egui::{
     output::IMEOutput, scroll_area::ScrollBarVisibility, CursorIcon, Event, EventFilter, ImeEvent,
-    Key, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
+    Key, Modifiers, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
 };
 use std::{collections::HashSet, ops::RangeInclusive};
 
@@ -108,7 +108,7 @@ impl TextEditor {
                             Rect::from_min_size(
                                 self.completion_popup.calc_origin(
                                     self.selections.selection().start,
-                                    &self.blocks.padding(),
+                                    self.blocks.padding(),
                                     font,
                                 ) + offset,
                                 self.completion_popup.calc_size(font),
@@ -136,7 +136,7 @@ impl TextEditor {
                                 self.diagnostic_popup.calc_origin(
                                     diagnostic,
                                     offset,
-                                    &self.blocks.padding(),
+                                    self.blocks.padding(),
                                     font,
                                 ),
                                 self.diagnostic_popup.calc_size(diagnostic, font),
@@ -187,14 +187,14 @@ impl TextEditor {
         // draw selection under text and blocks
         self.selections.draw_pseudo_selection(
             offset,
-            &self.blocks.padding(),
+            self.blocks.padding(),
             source.text(),
             font,
             painter,
         );
         self.selections.draw_selection(
             offset,
-            &self.blocks.padding(),
+            self.blocks.padding(),
             source.text(),
             font,
             painter,
@@ -217,7 +217,7 @@ impl TextEditor {
         let text_padding = Vec2::new(TOTAL_TEXT_X_OFFSET, OUTER_PAD);
         let text_offset = text_padding + offset;
         self.text_drawer.draw(
-            &self.blocks.padding(),
+            self.blocks.padding(),
             text_offset,
             Some(visible_lines),
             font,
@@ -232,14 +232,14 @@ impl TextEditor {
         // draw diagnostic underlines
         // TODO: draw higher priorities on top
         for diagnostic in &self.diagnostics {
-            diagnostic.draw(&self.blocks.padding(), source.text(), offset, font, painter);
+            diagnostic.draw(self.blocks.padding(), source.text(), offset, font, painter);
         }
 
         // draw cursor
         if has_focus {
             Some(
                 self.selections
-                    .draw_cursor(offset, &self.blocks.padding(), font, ui),
+                    .draw_cursor(offset, self.blocks.padding(), font, ui),
             )
         } else {
             None
@@ -317,12 +317,12 @@ impl TextEditor {
                 if is_being_dragged {
                     if dragged_block.is_none() {
                         self.selections
-                            .expand_selection(pos, &self.blocks.padding(), source, font);
+                            .expand_selection(pos, self.blocks.padding(), source, font);
                     }
                 } else if ui.input(|i| i.pointer.primary_pressed()) && pos.x >= GUTTER_WIDTH {
                     if mods.shift {
                         self.selections
-                            .expand_selection(pos, &self.blocks.padding(), source, font);
+                            .expand_selection(pos, self.blocks.padding(), source, font);
                     } else {
                         // if option is held, remove the current block from the source and place it in drag_block
                         if mods.alt {
@@ -332,7 +332,7 @@ impl TextEditor {
                         } else {
                             self.selections.mouse_clicked(
                                 pos,
-                                &self.blocks.padding(),
+                                self.blocks.padding(),
                                 source,
                                 font,
                             );
@@ -364,7 +364,7 @@ impl TextEditor {
                     if let Some(diagnostic) = self.diagnostics.get(diagnostic_selection) {
                         let coord = pt_to_unbounded_text_coord(
                             pointer_pos - offset,
-                            &self.blocks.padding(),
+                            self.blocks.padding(),
                             font,
                         );
                         if !diagnostic.range.contains(coord, source.text()) {
@@ -377,7 +377,7 @@ impl TextEditor {
                 if self.diagnostic_selection.is_none() && Self::mouse_still_for(0.25, ui) {
                     let coord = pt_to_unbounded_text_coord(
                         pointer_pos - offset,
-                        &self.blocks.padding(),
+                        self.blocks.padding(),
                         font,
                     );
                     self.diagnostic_selection = self

@@ -91,7 +91,7 @@ impl LooseBlock {
         self.blocks
             .draw(offset, width, None, blocks_theme, font, painter);
         self.text_drawer
-            .draw(&self.blocks.padding(), offset, None, font, painter);
+            .draw(self.blocks.padding(), offset, None, font, painter);
     }
 
     pub fn min_size(&self) -> Vec2 {

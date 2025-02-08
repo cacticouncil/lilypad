@@ -30,7 +30,7 @@ impl TextEditor {
         source: &mut Source,
         font: &MonospaceFont,
     ) {
-        let cursor_pos = pt_to_text_coord(mouse_pos, &self.blocks.padding(), source.text(), font);
+        let cursor_pos = pt_to_text_coord(mouse_pos, self.blocks.padding(), source.text(), font);
 
         if let Some(block) = block_for_point(self.blocks.trees(), cursor_pos, source.text()) {
             let mut text_range = block.text_range();
@@ -146,7 +146,7 @@ impl TextEditor {
     ) -> TextPoint {
         // find the point adjusted so that it is based around between lines
         let adj_pos = Pos2::new(mouse_pos.x, mouse_pos.y + (font.size.y / 2.0));
-        let coord = pt_to_unbounded_text_coord(adj_pos, &self.blocks.padding(), font);
+        let coord = pt_to_unbounded_text_coord(adj_pos, self.blocks.padding(), font);
 
         // clamp line to end of source
         let line = coord.line.min(source.text().len_lines());
