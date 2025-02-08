@@ -6,6 +6,7 @@ use ropey::Rope;
 use super::TextEdit;
 use crate::{
     block_editor::{
+        blocks::Padding,
         rope_ext::RopeSliceExt,
         text_range::{TextPoint, TextRange},
         MonospaceFont, TOTAL_TEXT_X_OFFSET,
@@ -150,9 +151,9 @@ impl CompletionPopup {
         Vec2::new(width, height)
     }
 
-    pub fn calc_origin(&self, cursor: TextPoint, padding: &[f32], font: &MonospaceFont) -> Pos2 {
+    pub fn calc_origin(&self, cursor: TextPoint, padding: &Padding, font: &MonospaceFont) -> Pos2 {
         // find the bottom of the current selection
-        let total_padding: f32 = padding.iter().take(cursor.line + 1).sum();
+        let total_padding: f32 = padding.cumulative(cursor.line + 1);
         let y = (cursor.line as f32 + 2.0) * font.size.y + total_padding;
         let x = (cursor.col as f32) * font.size.x + TOTAL_TEXT_X_OFFSET;
         Pos2::new(x, y)

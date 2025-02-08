@@ -3,7 +3,7 @@ use ropey::Rope;
 use std::collections::HashSet;
 
 use crate::{
-    block_editor::{MonospaceFont, GUTTER_WIDTH},
+    block_editor::{blocks::Padding, MonospaceFont, GUTTER_WIDTH, OUTER_PAD},
     theme, vscode,
 };
 
@@ -13,7 +13,7 @@ pub struct Gutter<'a> {
     curr_line: usize,
     breakpoints: &'a mut HashSet<usize>,
     stack_frame: StackFrameLines,
-    padding: &'a [f32],
+    padding: &'a Padding,
     source: &'a Rope,
     font: &'a MonospaceFont,
 }
@@ -23,7 +23,7 @@ impl<'a> Gutter<'a> {
         curr_line: usize,
         breakpoints: &'a mut HashSet<usize>,
         stack_frame: StackFrameLines,
-        padding: &'a [f32],
+        padding: &'a Padding,
         source: &'a Rope,
         font: &'a MonospaceFont,
     ) -> Self {
@@ -40,17 +40,12 @@ impl<'a> Gutter<'a> {
 
 impl<'a> Widget for Gutter<'a> {
     fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
-        // if document is empty, still draw line number 1
-        if self.padding.is_empty() {
-            self.padding = &[0.0];
-        }
-
         let (id, rect) = ui.allocate_space(ui.available_size());
         let response = ui.interact(rect, id, egui::Sense::click());
 
         if response.clicked() {
             if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
-                self.handle_click(pointer_pos);
+                self.handle_click(pointer_pos - rect.min.to_vec2());
             }
         }
 
@@ -66,9 +61,9 @@ impl<'a> Widget for Gutter<'a> {
 
 impl<'a> Gutter<'a> {
     fn draw(&self, offset: Vec2, painter: &Painter) {
-        let mut y_pos = offset.y;
-        for (num, padding) in self.padding.iter().enumerate() {
-            y_pos += padding;
+        for (num, line_cumulative_padding) in self.padding.cumulative_iter().enumerate() {
+            let y_pos =
+                offset.y + line_cumulative_padding + (self.font.size.y * num as f32) + OUTER_PAD;
 
             // draw a background color for the stack trace lines
             // TODO: look better (maybe highlight the code instead of the gutter?)
@@ -114,8 +109,6 @@ impl<'a> Gutter<'a> {
                 self.font.id.clone(),
                 color,
             );
-
-            y_pos += self.font.size.y;
         }
     }
 

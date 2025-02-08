@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     block_editor::{
-        block_drawer::Block,
+        blocks::Block,
         rope_ext::{RopeExt, RopeSliceExt},
         source::{Source, UndoStopCondition},
         text_range::{
@@ -30,9 +30,9 @@ impl TextEditor {
         source: &mut Source,
         font: &MonospaceFont,
     ) {
-        let cursor_pos = pt_to_text_coord(mouse_pos, &self.padding, source.text(), font);
+        let cursor_pos = pt_to_text_coord(mouse_pos, &self.blocks.padding(), source.text(), font);
 
-        if let Some(block) = block_for_point(&self.blocks, cursor_pos, source.text()) {
+        if let Some(block) = block_for_point(self.blocks.trees(), cursor_pos, source.text()) {
             let mut text_range = block.text_range();
 
             vscode::log_event(
@@ -61,7 +61,7 @@ impl TextEditor {
                     col: block.col,
                     line: block.line,
                 },
-                &self.padding,
+                self.blocks.padding(),
                 font,
             );
             let relative_pos =
@@ -128,7 +128,7 @@ impl TextEditor {
     ) {
         const THICKNESS: f32 = 4.0;
 
-        let line_padding_above = self.padding.iter().take(drop_point.line).sum::<f32>();
+        let line_padding_above = self.blocks.padding().cumulative(drop_point.line);
         let y = (drop_point.line as f32) * font.size.y + OUTER_PAD + line_padding_above;
         let x = (drop_point.col as f32) * font.size.x + OUTER_PAD + GUTTER_WIDTH;
 
@@ -146,7 +146,7 @@ impl TextEditor {
     ) -> TextPoint {
         // find the point adjusted so that it is based around between lines
         let adj_pos = Pos2::new(mouse_pos.x, mouse_pos.y + (font.size.y / 2.0));
-        let coord = pt_to_unbounded_text_coord(adj_pos, &self.padding, font);
+        let coord = pt_to_unbounded_text_coord(adj_pos, &self.blocks.padding(), font);
 
         // clamp line to end of source
         let line = coord.line.min(source.text().len_lines());
@@ -191,11 +191,7 @@ impl TextEditor {
 }
 
 /* ---------------------------- Helper Functions ---------------------------- */
-fn block_for_point<'a>(
-    blocks: &'a Vec<Block>,
-    point: TextPoint,
-    source: &Rope,
-) -> Option<&'a Block> {
+fn block_for_point<'a>(blocks: &'a [Block], point: TextPoint, source: &Rope) -> Option<&'a Block> {
     let mut curr_block: Option<&Block> = None;
     let mut curr_level = blocks;
     'outer: while !curr_level.is_empty() {

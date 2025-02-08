@@ -10,7 +10,7 @@ use crate::lsp::completion::VSCodeCompletionItem;
 use crate::theme::blocks_theme::BlocksTheme;
 use crate::{theme, vscode};
 
-mod block_drawer;
+mod blocks;
 mod dragging;
 mod rope_ext;
 pub mod source;
@@ -18,7 +18,7 @@ mod text_drawer;
 pub mod text_editor;
 pub mod text_range;
 
-pub use block_drawer::BlockType;
+pub use blocks::BlockType;
 
 use self::dragging::block_palette::BlockPalette;
 use self::dragging::loose_block::LooseBlock;

@@ -4,7 +4,7 @@ use egui::{Align2, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2, Widget};
 use ropey::Rope;
 
 use crate::{
-    block_editor::{MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
+    block_editor::{blocks::Padding, MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     lsp::diagnostics::{Diagnostic, VSCodeCodeAction},
     theme,
     util_widgets::SelectableRow,
@@ -82,7 +82,7 @@ impl DiagnosticPopup {
         &self,
         diagnostic: &Diagnostic,
         offset: Vec2,
-        padding: &[f32],
+        padding: &Padding,
         font: &MonospaceFont,
     ) -> Pos2 {
         // find height
@@ -92,7 +92,7 @@ impl DiagnosticPopup {
         }
 
         // find the vertical start by finding top of line and then subtracting box size
-        let total_padding: f32 = padding.iter().take(diagnostic.range.start.line + 1).sum();
+        let total_padding: f32 = padding.cumulative(diagnostic.range.start.line + 1);
         let diagnostic_start = OUTER_PAD
             + total_padding
             + (diagnostic.range.start.line as f32 * font.size.y)
@@ -136,7 +136,7 @@ impl DiagnosticPopup {
 impl Diagnostic {
     pub fn draw(
         &self,
-        padding: &[f32],
+        padding: &Padding,
         source: &Rope,
         offset: Vec2,
         font: &MonospaceFont,
@@ -145,15 +145,12 @@ impl Diagnostic {
         let range = self.range.ordered();
         let line_ranges = range.individual_lines(source);
 
-        let mut total_padding: f32 = padding.iter().take(range.start.line).sum();
-
         for line_range in line_ranges {
             let line_num = line_range.start.line;
 
-            total_padding += padding[line_num];
-
             // find bottom of current line
-            let y = total_padding + ((line_num + 1) as f32 * font.size.y) + OUTER_PAD;
+            let y =
+                padding.cumulative(line_num) + ((line_num + 1) as f32 * font.size.y) + OUTER_PAD;
 
             // find the start and end of the line
             let x = TOTAL_TEXT_X_OFFSET + (line_range.start.col as f32 * font.size.x);

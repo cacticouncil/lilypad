@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     block_editor::{
-        block_drawer,
+        blocks::BlockTrees,
         source::{Source, UndoStopCondition},
         text_range::{
             movement::{HDir, HUnit, TextMovement, VDir, VUnit},
@@ -86,14 +86,14 @@ impl TextEditor {
                     if offset.x > -1.0 * GUTTER_WIDTH {
                         ui.put(
                             Rect::from_min_size(
-                                Pos2::new(0.0, OUTER_PAD) + offset,
+                                offset.to_pos2(),
                                 Vec2::new(GUTTER_WIDTH, content_size.y),
                             ),
                             Gutter::new(
                                 self.selections.selection().end.line,
                                 &mut self.breakpoints,
                                 self.stack_frame,
-                                &self.padding,
+                                self.blocks.padding(),
                                 source.text(),
                                 font,
                             ),
@@ -108,7 +108,7 @@ impl TextEditor {
                             Rect::from_min_size(
                                 self.completion_popup.calc_origin(
                                     self.selections.selection().start,
-                                    &self.padding,
+                                    &self.blocks.padding(),
                                     font,
                                 ) + offset,
                                 self.completion_popup.calc_size(font),
@@ -136,7 +136,7 @@ impl TextEditor {
                                 self.diagnostic_popup.calc_origin(
                                     diagnostic,
                                     offset,
-                                    &self.padding,
+                                    &self.blocks.padding(),
                                     font,
                                 ),
                                 self.diagnostic_popup.calc_size(diagnostic, font),
@@ -185,10 +185,20 @@ impl TextEditor {
         painter.rect_filled(painter.clip_rect(), 0.0, theme::BACKGROUND);
 
         // draw selection under text and blocks
-        self.selections
-            .draw_pseudo_selection(offset, &self.padding, source.text(), font, painter);
-        self.selections
-            .draw_selection(offset, &self.padding, source.text(), font, painter);
+        self.selections.draw_pseudo_selection(
+            offset,
+            &self.blocks.padding(),
+            source.text(),
+            font,
+            painter,
+        );
+        self.selections.draw_selection(
+            offset,
+            &self.blocks.padding(),
+            source.text(),
+            font,
+            painter,
+        );
 
         // find which lines are visible in the viewport
         let visible_lines = self.visible_lines(viewport, font);
@@ -196,8 +206,7 @@ impl TextEditor {
         // draw text and blocks
         let block_padding = Vec2::new(OUTER_PAD + GUTTER_WIDTH, OUTER_PAD);
         let block_offset = block_padding + offset;
-        block_drawer::draw_blocks(
-            &self.blocks,
+        self.blocks.draw(
             block_offset,
             content_width - (block_padding.x + OUTER_PAD),
             Some(visible_lines.clone()),
@@ -208,7 +217,7 @@ impl TextEditor {
         let text_padding = Vec2::new(TOTAL_TEXT_X_OFFSET, OUTER_PAD);
         let text_offset = text_padding + offset;
         self.text_drawer.draw(
-            &self.padding,
+            &self.blocks.padding(),
             text_offset,
             Some(visible_lines),
             font,
@@ -223,12 +232,15 @@ impl TextEditor {
         // draw diagnostic underlines
         // TODO: draw higher priorities on top
         for diagnostic in &self.diagnostics {
-            diagnostic.draw(&self.padding, source.text(), offset, font, painter);
+            diagnostic.draw(&self.blocks.padding(), source.text(), offset, font, painter);
         }
 
         // draw cursor
         if has_focus {
-            Some(self.selections.draw_cursor(offset, &self.padding, font, ui))
+            Some(
+                self.selections
+                    .draw_cursor(offset, &self.blocks.padding(), font, ui),
+            )
         } else {
             None
         }
@@ -240,12 +252,8 @@ impl TextEditor {
             {
                 let mut cursor = source.get_tree_cursor();
                 self.blocks =
-                    block_drawer::blocks_for_tree(&mut cursor, source.text(), source.lang.config);
+                    BlockTrees::for_ts_tree(&mut cursor, source.text(), source.lang.config);
             }
-
-            // get padding
-            let line_count = source.text().len_lines();
-            self.padding = block_drawer::make_padding(&self.blocks, line_count);
 
             // highlight text
             self.text_drawer.highlight_source(source);
@@ -258,21 +266,23 @@ impl TextEditor {
         let mut bottom_line: Option<usize> = None;
 
         let mut current_height = OUTER_PAD;
-        for (i, padding) in self.padding.iter().enumerate() {
+        for (line_num, line_cumulative_padding) in
+            self.blocks.padding().cumulative_iter().enumerate()
+        {
             if current_height < viewport.min.y {
-                top_line = i;
+                top_line = line_num;
             }
 
-            current_height += padding + font.size.y;
+            current_height = line_cumulative_padding + (font.size.y * line_num as f32);
 
             if current_height > viewport.max.y {
-                bottom_line = Some(i);
+                bottom_line = Some(line_num);
                 break;
             }
         }
 
         // if the text ends within the viewport, just go until the end of the text
-        let bottom_line = bottom_line.unwrap_or_else(|| self.padding.len() - 1);
+        let bottom_line = bottom_line.unwrap_or_else(|| self.blocks.padding().count() - 1);
 
         top_line..=bottom_line
     }
@@ -307,12 +317,12 @@ impl TextEditor {
                 if is_being_dragged {
                     if dragged_block.is_none() {
                         self.selections
-                            .expand_selection(pos, &self.padding, source, font);
+                            .expand_selection(pos, &self.blocks.padding(), source, font);
                     }
                 } else if ui.input(|i| i.pointer.primary_pressed()) && pos.x >= GUTTER_WIDTH {
                     if mods.shift {
                         self.selections
-                            .expand_selection(pos, &self.padding, source, font);
+                            .expand_selection(pos, &self.blocks.padding(), source, font);
                     } else {
                         // if option is held, remove the current block from the source and place it in drag_block
                         if mods.alt {
@@ -320,8 +330,12 @@ impl TextEditor {
                                 self.start_block_drag(pos, dragged_block, source, font);
                             }
                         } else {
-                            self.selections
-                                .mouse_clicked(pos, &self.padding, source, font);
+                            self.selections.mouse_clicked(
+                                pos,
+                                &self.blocks.padding(),
+                                source,
+                                font,
+                            );
                         }
                     }
                     self.completion_popup.clear();
@@ -348,8 +362,11 @@ impl TextEditor {
                     // if still in the current diagnostic range, keep the popup open.
                     // otherwise, clear the selection
                     if let Some(diagnostic) = self.diagnostics.get(diagnostic_selection) {
-                        let coord =
-                            pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
+                        let coord = pt_to_unbounded_text_coord(
+                            pointer_pos - offset,
+                            &self.blocks.padding(),
+                            font,
+                        );
                         if !diagnostic.range.contains(coord, source.text()) {
                             self.diagnostic_selection = None;
                         }
@@ -358,8 +375,11 @@ impl TextEditor {
 
                 // if the mouse has been still for a bit with no selection, find the diagnostic under the cursor
                 if self.diagnostic_selection.is_none() && Self::mouse_still_for(0.25, ui) {
-                    let coord =
-                        pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
+                    let coord = pt_to_unbounded_text_coord(
+                        pointer_pos - offset,
+                        &self.blocks.padding(),
+                        font,
+                    );
                     self.diagnostic_selection = self
                         .diagnostics
                         .iter()
@@ -753,7 +773,7 @@ impl TextEditor {
         // height is just height of text
         let height = source.text().len_lines() as f32 * font.size.y
             + OUTER_PAD
-            + self.padding.iter().sum::<f32>()
+            + self.blocks.padding().total()
             + 200.0; // extra space for over-scroll
 
         Vec2::new(width, height)
