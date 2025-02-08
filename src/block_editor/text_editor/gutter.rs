@@ -1,4 +1,4 @@
-use egui::{Align2, Painter, Pos2, Rect, Vec2, Widget};
+use egui::{Align2, Color32, Painter, Pos2, Rect, Vec2, Widget};
 use ropey::Rope;
 use std::collections::HashSet;
 
@@ -49,18 +49,25 @@ impl<'a> Widget for Gutter<'a> {
             }
         }
 
+        let mut preview_line: Option<usize> = None;
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
+
+            // draw breakpoint preview
+            if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
+                let loc = pt_to_text_coord(pointer_pos, self.padding, self.source, self.font);
+                preview_line = Some(loc.line);
+            }
         }
 
-        self.draw(rect.min.to_vec2(), ui.painter());
+        self.draw(preview_line, rect.min.to_vec2(), ui.painter());
 
         response
     }
 }
 
 impl<'a> Gutter<'a> {
-    fn draw(&self, offset: Vec2, painter: &Painter) {
+    fn draw(&self, preview_line: Option<usize>, offset: Vec2, painter: &Painter) {
         for (num, line_cumulative_padding) in self.padding.cumulative_iter().enumerate() {
             let y_pos =
                 offset.y + line_cumulative_padding + (self.font.size.y * num as f32) + OUTER_PAD;
@@ -89,9 +96,16 @@ impl<'a> Gutter<'a> {
             }
 
             // draw a red dot before line numbers that have breakpoints
-            if self.breakpoints.contains(&num) {
+            let color: Option<Color32> = if self.breakpoints.contains(&num) {
+                Some(theme::BREAKPOINT)
+            } else if preview_line == Some(num) {
+                Some(theme::PREVIEW_BREAKPOINT)
+            } else {
+                None
+            };
+            if let Some(color) = color {
                 let dot_pos = Pos2::new(offset.x + 10.0, y_pos + (self.font.size.y / 2.0));
-                painter.circle_filled(dot_pos, 4.0, theme::BREAKPOINT);
+                painter.circle_filled(dot_pos, 4.0, color);
             }
 
             // draw the line number
