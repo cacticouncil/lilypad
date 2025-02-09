@@ -1,31 +1,12 @@
-use std::ops::RangeInclusive;
-
-use egui::{Painter, Pos2, Rect, Stroke, Vec2};
 use tree_sitter::{Node, TreeCursor};
 
+use super::{Block, BlockTrees, BlockType, Padding};
+use crate::block_editor::{
+    rope_ext::RopeSliceExt,
+    text_range::{TextPoint, TextRange},
+    SHOW_ERROR_BLOCK_OUTLINES,
+};
 use crate::lang::config::{LanguageConfig, NewScopeChar};
-use crate::theme::blocks_theme::BlocksTheme;
-
-use super::rope_ext::RopeSliceExt;
-use super::text_range::{TextPoint, TextRange};
-use super::{MonospaceFont, SHOW_ERROR_BLOCK_OUTLINES};
-
-/* ------------------------------ tree handling ----------------------------- */
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum BlockType {
-    Object,
-    FunctionDef,
-    While,
-    If,
-    For,
-    Try,
-    Switch,
-    Generic,
-    Comment,
-    Error,
-    Divider,
-}
 
 impl BlockType {
     fn from_node(node: &Node, lang: &LanguageConfig) -> Option<Self> {
@@ -56,14 +37,6 @@ impl BlockType {
     }
 }
 
-pub struct Block {
-    pub line: usize,
-    pub col: usize,
-    pub height: usize,
-    pub syntax_type: BlockType,
-    pub children: Vec<Block>,
-}
-
 impl Block {
     fn from_node(node: &Node, lang: &LanguageConfig) -> Option<Self> {
         let syntax_type = BlockType::from_node(node, lang)?;
@@ -86,33 +59,34 @@ impl Block {
     }
 }
 
-/* ----------------------- tree sitter tree to blocks ----------------------- */
+impl BlockTrees {
+    pub fn for_ts_tree(
+        cursor: &mut TreeCursor,
+        source: &ropey::Rope,
+        lang: &LanguageConfig,
+    ) -> Self {
+        let mut trees = tree_to_blocks(cursor, lang);
 
-pub fn blocks_for_tree(
-    cursor: &mut TreeCursor,
-    source: &ropey::Rope,
-    lang: &LanguageConfig,
-) -> Vec<Block> {
-    let mut blocks = tree_to_blocks(cursor, lang);
+        merge_comments(&mut trees, source);
 
-    merge_comments(&mut blocks, source);
+        // insert divider blocks for 2+ lines of whitespace
+        let newline_chunks = find_whitespace_chunks(source, 2);
+        for chunk_start_line in newline_chunks {
+            insert_divider(&mut trees, chunk_start_line);
+        }
 
-    // insert divider blocks for 2+ lines of whitespace
-    let newline_chunks = find_whitespace_chunks(source, 2);
-    for chunk_start_line in newline_chunks {
-        insert_divider(&mut blocks, chunk_start_line);
+        merge_adjacent_generic_blocks(&mut trees);
+
+        // if languages uses braces for new scopes,
+        // adjust the block starts so that they contain their children
+        // (since it would be possible for a block to start further in than its children)
+        if lang.new_scope_char == NewScopeChar::Brace {
+            adjust_block_starts(&mut trees);
+        }
+
+        let padding = Padding::for_blocks(&trees, source.len_lines());
+        BlockTrees { trees, padding }
     }
-
-    merge_adjacent_generic_blocks(&mut blocks);
-
-    // if languages uses braces for new scopes,
-    // adjust the block starts so that they contain their children
-    // (since it would be possible for a block to start further in than its children)
-    if lang.new_scope_char == NewScopeChar::Brace {
-        adjust_block_starts(&mut blocks);
-    }
-
-    blocks
 }
 
 /// Converts a tree sitter tree to a tree of blocks (with no additional processing)
@@ -295,201 +269,4 @@ fn adjust_block_starts(blocks: &mut Vec<Block>) -> usize {
         }
     }
     max_col
-}
-
-/* --------------------------------- drawing -------------------------------- */
-
-const OUTER_CORNER_RAD: f32 = 6.0;
-const MIN_CORNER_RAD: f32 = 1.5;
-
-const BLOCK_STROKE_WIDTH: f32 = 1.5;
-const BLOCK_INNER_PAD: f32 = 3.0;
-const BLOCK_TOP_PAD: f32 = 1.0;
-
-pub fn draw_blocks(
-    blocks: &Vec<Block>,
-    offset: Vec2,
-    width: f32,
-    visible_lines: Option<RangeInclusive<usize>>,
-    blocks_theme: BlocksTheme,
-    font: &MonospaceFont,
-    painter: &Painter,
-) {
-    draw_blocks_helper(
-        blocks,
-        0,
-        0.0,
-        offset,
-        width,
-        visible_lines,
-        blocks_theme,
-        font,
-        painter,
-    );
-}
-
-fn draw_blocks_helper(
-    blocks: &Vec<Block>,
-    level: usize,
-    mut total_padding: f32,
-    offset: Vec2,
-    width: f32,
-    visible_lines: Option<RangeInclusive<usize>>,
-    blocks_theme: BlocksTheme,
-    font: &MonospaceFont,
-    painter: &Painter,
-) -> f32 {
-    for block in blocks {
-        if block.syntax_type == BlockType::Divider {
-            // do not draw this block
-            total_padding = draw_blocks_helper(
-                &block.children,
-                level,
-                total_padding,
-                offset,
-                width,
-                visible_lines.clone(),
-                blocks_theme,
-                font,
-                painter,
-            );
-        } else {
-            total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
-
-            // draw children first to get total size
-            let inside_padding = draw_blocks_helper(
-                &block.children,
-                level + 1,
-                total_padding,
-                offset,
-                width,
-                visible_lines.clone(),
-                blocks_theme,
-                font,
-                painter,
-            ) - total_padding;
-
-            let block_visible = match visible_lines.clone() {
-                Some(visible) => {
-                    block.line <= *visible.end() && *visible.start() <= block.line + block.height
-                }
-                None => true,
-            };
-
-            if block_visible {
-                draw_block(
-                    block,
-                    level,
-                    total_padding,
-                    inside_padding,
-                    offset,
-                    width,
-                    blocks_theme,
-                    font,
-                    painter,
-                );
-            }
-
-            total_padding += inside_padding;
-            total_padding += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
-        }
-    }
-
-    total_padding
-}
-
-fn draw_block(
-    block: &Block,
-    level: usize,
-    padding_above: f32,
-    padding_inside: f32,
-    offset: Vec2,
-    width: f32,
-    blocks_theme: BlocksTheme,
-    font: &MonospaceFont,
-    painter: &Painter,
-) {
-    // No color for invisible nodes
-    let color = match (blocks_theme.color_for)(block.syntax_type, level) {
-        Some(color) => color,
-        None => return,
-    };
-
-    let start_pt = Pos2::new(
-        (block.col as f32) * font.size.x - (BLOCK_STROKE_WIDTH / 2.0),
-        (block.line as f32) * font.size.y - (BLOCK_STROKE_WIDTH / 2.0) - (BLOCK_INNER_PAD / 2.0)
-            + padding_above,
-    );
-
-    // determine the margin based on level
-    let right_margin = (level as f32) * (BLOCK_INNER_PAD + BLOCK_STROKE_WIDTH);
-
-    // get the size of the rectangle to draw
-    let size = Vec2::new(
-        width - start_pt.x - right_margin,
-        ((block.height as f32) * font.size.y) + (BLOCK_INNER_PAD * 2.0) + padding_inside,
-    );
-
-    // nested corner radii should be r_inner = r_outer - distance
-    let rounding = f32::max(
-        OUTER_CORNER_RAD - (level as f32 * BLOCK_INNER_PAD),
-        MIN_CORNER_RAD,
-    );
-
-    // draw it
-    let rect = Rect::from_min_size(start_pt + offset, size);
-    let stroke = Stroke::new(BLOCK_STROKE_WIDTH, color);
-    painter.rect_stroke(rect, rounding, stroke);
-}
-
-/* ---------------------------- padding for text ---------------------------- */
-
-pub fn make_padding(blocks: &Vec<Block>, line_count: usize) -> Vec<f32> {
-    let mut padding = vec![0.0; line_count];
-    padding_helper(blocks, &mut padding);
-    padding
-}
-
-fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f32>) {
-    // do not calculate padding for empty file
-    // (there will still be one block for an empty file)
-    if padding.is_empty() {
-        return;
-    }
-
-    for block in blocks {
-        if block.syntax_type != BlockType::Divider {
-            padding[block.line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD + BLOCK_TOP_PAD;
-
-            let end_line = block.line + block.height;
-            if end_line < padding.len() {
-                padding[end_line] += BLOCK_STROKE_WIDTH + BLOCK_INNER_PAD;
-            }
-        }
-        padding_helper(&block.children, padding);
-    }
-}
-
-/* -------------------------------- debugging ------------------------------- */
-
-#[allow(dead_code)]
-pub fn print_blocks_debug(blocks: &[Block]) {
-    print_blocks_debug_helper(blocks, "", true);
-}
-
-fn print_blocks_debug_helper(blocks: &[Block], indent: &str, last: bool) {
-    let join_symbol = if last { "└─ " } else { "├─ " };
-
-    let new_indent = format!("{}{}", indent, if last { "    " } else { "│  " });
-    for (idx, block) in blocks.iter().enumerate() {
-        let last_child = idx == blocks.len() - 1;
-        println!(
-            "{}{}{:?} ({:?})",
-            indent,
-            join_symbol,
-            block.syntax_type,
-            block.text_range()
-        );
-        print_blocks_debug_helper(&block.children, &new_indent, last_child);
-    }
 }

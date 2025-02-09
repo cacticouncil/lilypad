@@ -30,7 +30,7 @@ pub struct LanguageConfig {
 
 impl LanguageConfig {
     pub fn for_file(file_name: &str) -> &'static LanguageConfig {
-        match file_name.split('.').last() {
+        match file_name.split('.').next_back() {
             Some("py") => &PYTHON_LANGUAGE,
             Some("java") => &JAVA_LANGUAGE,
             Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,

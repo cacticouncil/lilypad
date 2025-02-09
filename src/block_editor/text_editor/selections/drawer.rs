@@ -1,10 +1,12 @@
+use std::cmp::max;
+
 use egui::{Color32, Painter, Pos2, Rect, Ui, Vec2};
 use ropey::Rope;
 
 use super::{Selections, CURSOR_OFF_DURATION, CURSOR_ON_DURATION};
 use crate::{
     block_editor::{
-        text_editor::TextPoint, text_range::TextRange, MonospaceFont, OUTER_PAD,
+        blocks::Padding, text_editor::TextPoint, text_range::TextRange, MonospaceFont, OUTER_PAD,
         TOTAL_TEXT_X_OFFSET,
     },
     theme,
@@ -15,12 +17,12 @@ impl Selections {
     pub fn draw_cursor(
         &self,
         offset: Vec2,
-        padding: &[f32],
+        padding: &Padding,
         font: &MonospaceFont,
         ui: &Ui,
     ) -> Rect {
         // we want to draw the cursor where the mouse has last been (selection end)
-        let total_pad: f32 = padding.iter().take(self.selection.end.line + 1).sum();
+        let total_pad: f32 = padding.cumulative(self.selection.end.line);
         let block = Rect::from_min_size(
             Pos2::new(
                 TOTAL_TEXT_X_OFFSET + (self.selection.end.col as f32) * font.size.x,
@@ -48,7 +50,7 @@ impl Selections {
     pub fn draw_selection(
         &self,
         offset: Vec2,
-        padding: &[f32],
+        padding: &Padding,
         source: &Rope,
         font: &MonospaceFont,
         painter: &Painter,
@@ -69,7 +71,7 @@ impl Selections {
     pub fn draw_pseudo_selection(
         &self,
         offset: Vec2,
-        padding: &[f32],
+        padding: &Padding,
         source: &Rope,
         font: &MonospaceFont,
         painter: &Painter,
@@ -92,17 +94,13 @@ impl Selections {
         selection: TextRange,
         color: Color32,
         offset: Vec2,
-        padding: &[f32],
+        padding: &Padding,
         source: &Rope,
         font: &MonospaceFont,
         painter: &Painter,
     ) {
         let selection = selection.ordered();
         let line_ranges = selection.individual_lines(source);
-
-        // start the the total padding through the first line so the selection
-        // block is placed on the text of the first line (instead of the padding above it)
-        let mut total_padding: f32 = padding.iter().take(selection.start.line + 1).sum();
 
         for line_range in line_ranges {
             // one line per range so the line number is the start of the range
@@ -112,10 +110,15 @@ impl Selections {
             let width = line_range.end.col - line_range.start.col
                 + if line_num != selection.end.line { 1 } else { 0 }; // 1 is added to the width to include the newline
 
+            // start the padding through the first line so the selection
+            // block is placed on the text of the first line (instead of the padding above it)
+            let padding_above: f32 =
+                padding.cumulative(max(selection.start.line, line_num.saturating_sub(1)));
+
             self.draw_selection_block(
                 TextPoint::new(line_num, line_range.start.col),
                 width,
-                total_padding,
+                padding_above,
                 line_num != selection.start.line,
                 color,
                 offset,
@@ -123,11 +126,6 @@ impl Selections {
                 font,
                 painter,
             );
-
-            // the padding for the first line was adding before the loop
-            if line_num != selection.start.line {
-                total_padding += padding[line_num];
-            }
         }
     }
 
@@ -139,12 +137,12 @@ impl Selections {
         has_block_above: bool,
         color: Color32,
         offset: Vec2,
-        padding: &[f32],
+        padding: &Padding,
         font: &MonospaceFont,
         painter: &Painter,
     ) {
         let line_padding = if has_block_above {
-            padding[start.line]
+            padding.individual(start.line)
         } else {
             0.0
         };

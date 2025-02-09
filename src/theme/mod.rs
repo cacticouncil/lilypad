@@ -43,6 +43,7 @@ pub const POPUP_BACKGROUND: Color32 = Color32::from_rgb(0x1E, 0x22, 0x27);
 pub const LINE_NUMBERS: Color32 = one_dark::GUTTER_GREY;
 
 pub const BREAKPOINT: Color32 = Color32::from_rgb(0xFF, 0x45, 0x45);
+pub const PREVIEW_BREAKPOINT: Color32 = Color32::from_rgb(0x71, 0x1F, 0x1C);
 pub const STACK_FRAME_SELECTED: Color32 = Color32::from_rgb(0x00, 0xFF, 0x00);
 pub const STACK_FRAME_DEEPEST: Color32 = Color32::from_rgb(0xFF, 0xFF, 0x00);
 

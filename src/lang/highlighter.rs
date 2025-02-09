@@ -363,7 +363,9 @@ impl<'a> HighlightIterLayer<'a> {
         let mut cursor = QueryCursor::new();
 
         // `QueryCursor` is really just a pointer, so it's ok to move.
-        let cursor_ref = unsafe { mem::transmute::<_, &'static mut QueryCursor>(&mut cursor) };
+        let cursor_ref = unsafe {
+            mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(&mut cursor)
+        };
         let captures =
             unsafe {
                 std::mem::transmute::<QueryCaptures<_, _>, _QueryCaptures<_, _>>(
@@ -418,7 +420,7 @@ impl<'a> HighlightIterLayer<'a> {
     }
 }
 
-impl<'a> HighlightIter<'a> {
+impl HighlightIter<'_> {
     fn emit_event(
         &mut self,
         offset: usize,
@@ -463,7 +465,7 @@ impl<'a> HighlightIter<'a> {
     }
 }
 
-impl<'a> Iterator for HighlightIter<'a> {
+impl Iterator for HighlightIter<'_> {
     type Item = HighlightEvent;
 
     #[allow(unused_assignments)]
@@ -540,7 +542,7 @@ impl<'a> Iterator for HighlightIter<'a> {
                     for prop in layer.config.query.property_settings(match_.pattern_index) {
                         if prop.key.as_ref() == "local.scope-inherits" {
                             scope.inherits =
-                                prop.value.as_ref().map_or(true, |r| r.as_ref() == "true");
+                                prop.value.as_ref().is_none_or(|r| r.as_ref() == "true");
                         }
                     }
                     layer.scope_stack.push(scope);

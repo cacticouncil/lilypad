@@ -2,20 +2,14 @@ use egui::{Painter, Response, Sense, Ui, Vec2, Widget};
 use ropey::Rope;
 
 use crate::{
-    block_editor::{
-        block_drawer::{self, Block},
-        rope_ext::RopeExt,
-        text_drawer::TextDrawer,
-        MonospaceFont,
-    },
+    block_editor::{blocks::BlockTrees, rope_ext::RopeExt, text_drawer::TextDrawer, MonospaceFont},
     lang::{tree_manager::TreeManager, Language},
     theme::blocks_theme::BlocksTheme,
 };
 
 pub struct LooseBlock {
     text: String,
-    blocks: Vec<Block>,
-    padding: Vec<f32>,
+    blocks: BlockTrees,
     min_size: Vec2,
     tree_manager: TreeManager,
     text_drawer: TextDrawer,
@@ -56,8 +50,7 @@ impl LooseBlock {
     ) -> Self {
         let mut block = Self {
             text: String::new(),
-            blocks: vec![],
-            padding: vec![],
+            blocks: BlockTrees::default(),
             min_size: Vec2::ZERO,
             tree_manager: TreeManager::new(lang),
             text_drawer: TextDrawer::new(),
@@ -77,14 +70,13 @@ impl LooseBlock {
 
         // find blocks
         self.blocks =
-            block_drawer::blocks_for_tree(&mut self.tree_manager.get_cursor(), &rope, lang.config);
-        self.padding = block_drawer::make_padding(&self.blocks, rope.len_lines());
+            BlockTrees::for_ts_tree(&mut self.tree_manager.get_cursor(), &rope, lang.config);
 
         // find dimensions
         let max_chars = rope.lines().map(|l| l.len_chars()).max().unwrap_or(0);
         let width = max_chars as f32 * font.size.x + self.interior_padding;
         let line_count = rope.len_lines() - if rope.ends_with('\n') { 1 } else { 0 };
-        let height = (font.size.y * line_count as f32) + self.padding.iter().sum::<f32>();
+        let height = (font.size.y * line_count as f32) + self.blocks.padding().total();
         self.min_size = Vec2::new(width, height);
     }
 
@@ -96,17 +88,10 @@ impl LooseBlock {
         font: &MonospaceFont,
         painter: &Painter,
     ) {
-        block_drawer::draw_blocks(
-            &self.blocks,
-            offset,
-            width,
-            None,
-            blocks_theme,
-            font,
-            painter,
-        );
+        self.blocks
+            .draw(offset, width, None, blocks_theme, font, painter);
         self.text_drawer
-            .draw(&self.padding, offset, None, font, painter);
+            .draw(self.blocks.padding(), offset, None, font, painter);
     }
 
     pub fn min_size(&self) -> Vec2 {

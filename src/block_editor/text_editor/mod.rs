@@ -9,9 +9,10 @@ mod gutter;
 pub mod selections;
 mod widget;
 
+use super::blocks::BlockTrees;
 use super::text_drawer::*;
 use super::text_range::*;
-use crate::block_editor::{block_drawer, source::TextEdit, text_range::TextRange};
+use crate::block_editor::{source::TextEdit, text_range::TextRange};
 use crate::lsp::diagnostics::Diagnostic;
 use crate::lsp::documentation::Documentation;
 use completion_popup::CompletionPopup;
@@ -42,10 +43,7 @@ pub struct TextEditor {
     text_drawer: TextDrawer,
 
     /// blocks to draw
-    blocks: Vec<block_drawer::Block>,
-
-    /// the padding above each individual line
-    padding: Vec<f32>,
+    blocks: BlockTrees,
 
     /// line numbers that have breakpoints
     breakpoints: HashSet<usize>,
@@ -88,8 +86,7 @@ impl TextEditor {
             documentation: Documentation::new(),
             diagnostic_selection: Option::None,
             text_drawer: TextDrawer::new(),
-            blocks: vec![],
-            padding: vec![],
+            blocks: BlockTrees::default(),
             breakpoints: HashSet::new(),
             stack_frame: StackFrameLines::empty(),
             diagnostic_popup: DiagnosticPopup::new(),

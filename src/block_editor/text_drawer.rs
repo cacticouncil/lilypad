@@ -9,7 +9,7 @@ use std::{
     ops::{Range, RangeInclusive},
 };
 
-use super::{source::Source, MonospaceFont};
+use super::{blocks::Padding, source::Source, MonospaceFont};
 use crate::{
     lang::{
         config::LanguageConfig,
@@ -31,16 +31,13 @@ impl TextDrawer {
 
     pub fn draw(
         &self,
-        padding: &[f32],
+        padding: &Padding,
         offset: Vec2,
         visible_lines: Option<RangeInclusive<usize>>,
         font: &MonospaceFont,
         painter: &Painter,
     ) {
-        let mut total_padding = 0.0;
         for (num, layout) in self.cache.iter().enumerate() {
-            total_padding += padding[num];
-
             if let Some(range) = &visible_lines {
                 if num < *range.start() {
                     continue;
@@ -51,7 +48,7 @@ impl TextDrawer {
 
             let total_offset = Vec2 {
                 x: offset.x,
-                y: ((num as f32) * font.size.y) + total_padding + offset.y,
+                y: ((num as f32) * font.size.y) + padding.cumulative(num) + offset.y,
             };
             layout.draw(total_offset, font, painter);
         }

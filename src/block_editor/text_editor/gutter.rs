@@ -1,9 +1,9 @@
-use egui::{Align2, Painter, Pos2, Rect, Vec2, Widget};
+use egui::{Align2, Color32, Painter, Pos2, Rect, Vec2, Widget};
 use ropey::Rope;
 use std::collections::HashSet;
 
 use crate::{
-    block_editor::{MonospaceFont, GUTTER_WIDTH},
+    block_editor::{blocks::Padding, MonospaceFont, GUTTER_WIDTH, OUTER_PAD},
     theme, vscode,
 };
 
@@ -13,7 +13,7 @@ pub struct Gutter<'a> {
     curr_line: usize,
     breakpoints: &'a mut HashSet<usize>,
     stack_frame: StackFrameLines,
-    padding: &'a [f32],
+    padding: &'a Padding,
     source: &'a Rope,
     font: &'a MonospaceFont,
 }
@@ -23,7 +23,7 @@ impl<'a> Gutter<'a> {
         curr_line: usize,
         breakpoints: &'a mut HashSet<usize>,
         stack_frame: StackFrameLines,
-        padding: &'a [f32],
+        padding: &'a Padding,
         source: &'a Rope,
         font: &'a MonospaceFont,
     ) -> Self {
@@ -38,37 +38,39 @@ impl<'a> Gutter<'a> {
     }
 }
 
-impl<'a> Widget for Gutter<'a> {
+impl Widget for Gutter<'_> {
     fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
-        // if document is empty, still draw line number 1
-        if self.padding.is_empty() {
-            self.padding = &[0.0];
-        }
-
         let (id, rect) = ui.allocate_space(ui.available_size());
         let response = ui.interact(rect, id, egui::Sense::click());
 
         if response.clicked() {
             if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
-                self.handle_click(pointer_pos);
+                self.handle_click(pointer_pos - rect.min.to_vec2());
             }
         }
 
+        let mut preview_line: Option<usize> = None;
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
+
+            // draw breakpoint preview
+            if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
+                let loc = pt_to_text_coord(pointer_pos, self.padding, self.source, self.font);
+                preview_line = Some(loc.line);
+            }
         }
 
-        self.draw(rect.min.to_vec2(), ui.painter());
+        self.draw(preview_line, rect.min.to_vec2(), ui.painter());
 
         response
     }
 }
 
-impl<'a> Gutter<'a> {
-    fn draw(&self, offset: Vec2, painter: &Painter) {
-        let mut y_pos = offset.y;
-        for (num, padding) in self.padding.iter().enumerate() {
-            y_pos += padding;
+impl Gutter<'_> {
+    fn draw(&self, preview_line: Option<usize>, offset: Vec2, painter: &Painter) {
+        for (num, line_cumulative_padding) in self.padding.cumulative_iter().enumerate() {
+            let y_pos =
+                offset.y + line_cumulative_padding + (self.font.size.y * num as f32) + OUTER_PAD;
 
             // draw a background color for the stack trace lines
             // TODO: look better (maybe highlight the code instead of the gutter?)
@@ -94,9 +96,16 @@ impl<'a> Gutter<'a> {
             }
 
             // draw a red dot before line numbers that have breakpoints
-            if self.breakpoints.contains(&num) {
+            let color: Option<Color32> = if self.breakpoints.contains(&num) {
+                Some(theme::BREAKPOINT)
+            } else if preview_line == Some(num) {
+                Some(theme::PREVIEW_BREAKPOINT)
+            } else {
+                None
+            };
+            if let Some(color) = color {
                 let dot_pos = Pos2::new(offset.x + 10.0, y_pos + (self.font.size.y / 2.0));
-                painter.circle_filled(dot_pos, 4.0, theme::BREAKPOINT);
+                painter.circle_filled(dot_pos, 4.0, color);
             }
 
             // draw the line number
@@ -114,8 +123,6 @@ impl<'a> Gutter<'a> {
                 self.font.id.clone(),
                 color,
             );
-
-            y_pos += self.font.size.y;
         }
     }
 

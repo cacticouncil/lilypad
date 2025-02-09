@@ -3,8 +3,9 @@ use tree_sitter::TreeCursor;
 
 use super::Selections;
 use crate::block_editor::{
-    rope_ext::RopeExt, source::Source, text_editor::coord_conversions::pt_to_text_coord,
-    text_range::movement::TextMovement, MonospaceFont, TextRange,
+    blocks::Padding, rope_ext::RopeExt, source::Source,
+    text_editor::coord_conversions::pt_to_text_coord, text_range::movement::TextMovement,
+    MonospaceFont, TextRange,
 };
 
 impl Selections {
@@ -94,7 +95,7 @@ impl Selections {
     pub fn mouse_clicked(
         &mut self,
         pos: Pos2,
-        padding: &[f32],
+        padding: &Padding,
         source: &mut Source,
         font: &MonospaceFont,
     ) {
@@ -105,7 +106,7 @@ impl Selections {
     pub fn expand_selection(
         &mut self,
         pos: Pos2,
-        padding: &[f32],
+        padding: &Padding,
         source: &Source,
         font: &MonospaceFont,
     ) {
