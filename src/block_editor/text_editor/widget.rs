@@ -192,13 +192,8 @@ impl TextEditor {
             font,
             painter,
         );
-        self.selections.draw_selection(
-            offset,
-            self.blocks.padding(),
-            source.text(),
-            font,
-            painter,
-        );
+        self.selections
+            .draw_selection(offset, self.blocks.padding(), source.text(), font, painter);
 
         // find which lines are visible in the viewport
         let visible_lines = self.visible_lines(viewport, font);
@@ -273,7 +268,8 @@ impl TextEditor {
                 top_line = line_num;
             }
 
-            current_height = line_cumulative_padding + (font.size.y * line_num as f32);
+            current_height =
+                OUTER_PAD + line_cumulative_padding + (font.size.y * (line_num + 1) as f32);
 
             if current_height > viewport.max.y {
                 bottom_line = Some(line_num);
@@ -330,12 +326,8 @@ impl TextEditor {
                                 self.start_block_drag(pos, dragged_block, source, font);
                             }
                         } else {
-                            self.selections.mouse_clicked(
-                                pos,
-                                self.blocks.padding(),
-                                source,
-                                font,
-                            );
+                            self.selections
+                                .mouse_clicked(pos, self.blocks.padding(), source, font);
                         }
                     }
                     self.completion_popup.clear();
