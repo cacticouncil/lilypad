@@ -37,7 +37,9 @@ pub mod diagnostic {
 pub const INTERFACE_TEXT: Color32 = one_dark::WHITE;
 pub const BACKGROUND: Color32 = one_dark::BLACK;
 pub const CURSOR: Color32 = Color32::from_rgb(0x52, 0x8B, 0xFF);
-pub const SELECTION: Color32 = Color32::from_rgb(0x3D, 0x45, 0x55);
+pub const SELECTION: Color32 = Color32::from_rgba_premultiplied(0x56, 0x63, 0x78, 0x40);
+pub const SEARCH_RESULT: Color32 = Color32::from_rgb(0x3D, 0x45, 0x55);
+pub const SEARCH_RESULT_SELECTED: Color32 = Color32::from_rgb(0x97, 0x91, 0x8E);
 pub const PSEUDO_SELECTION: Color32 = Color32::from_rgba_premultiplied(0x32, 0x09, 0x03, 0x50);
 pub const POPUP_BACKGROUND: Color32 = Color32::from_rgb(0x1E, 0x22, 0x27);
 pub const LINE_NUMBERS: Color32 = one_dark::GUTTER_GREY;

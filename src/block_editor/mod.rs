@@ -1,7 +1,7 @@
-use egui::Vec2;
 use egui::{
     text::Fonts, CentralPanel, FontFamily, FontId, Frame, Pos2, Rect, Sense, SidePanel, Widget,
 };
+use egui::{Event, Key, Modifiers, Vec2};
 use ropey::Rope;
 use source::Source;
 
@@ -13,6 +13,7 @@ use crate::{theme, vscode};
 mod blocks;
 mod dragging;
 mod rope_ext;
+mod search;
 pub mod source;
 mod text_drawer;
 pub mod text_editor;
@@ -22,6 +23,7 @@ pub use blocks::BlockType;
 
 use self::dragging::block_palette::BlockPalette;
 use self::dragging::loose_block::LooseBlock;
+use self::search::SearchPopup;
 use self::source::TextEdit;
 use self::text_editor::StackFrameLines;
 use self::text_editor::TextEditor;
@@ -57,6 +59,9 @@ pub struct BlockEditor {
 
     /// the palette of blocks that can be dragged into the editor
     block_palette: BlockPalette,
+
+    /// the find (and replace view)
+    search_popup: SearchPopup,
 
     /// text that is currently getting dragged
     drag_block: Option<DragSession>,
@@ -136,6 +141,7 @@ impl BlockEditor {
             font,
             text_editor: TextEditor::new(),
             block_palette: BlockPalette::new(),
+            search_popup: SearchPopup::new(),
             drag_block: None,
             dragging_popup: None,
         }
@@ -206,16 +212,45 @@ impl BlockEditor {
                 ));
             });
 
+        // trigger find popup if command-f is pressed
+        // TODO: this should be moved to a more general place as more hotkeys are added
+        let events = ui.input(|i| i.events.clone());
+        for event in events {
+            if let Event::Key {
+                modifiers,
+                key,
+                pressed: true,
+                ..
+            } = event
+            {
+                if modifiers.matches_logically(Modifiers::COMMAND) && key == Key::F {
+                    self.search_popup.show();
+                }
+            }
+        }
+
         CentralPanel::default()
             .frame(Frame::none())
             .show(ui.ctx(), |ui| {
-                ui.add(self.text_editor.widget(
+                // draw the editor
+                let editor_response = ui.add(self.text_editor.widget(
                     &mut self.source,
                     &mut self.drag_block,
+                    &mut self.search_popup.results,
                     external_commands,
                     self.blocks_theme,
                     &self.font,
                 ));
+
+                // draw the find popup
+                ui.put(
+                    Rect::from_min_size(
+                        ui.max_rect().right_top() + Vec2::new(-205.0, 5.0),
+                        Vec2::new(200.0, 30.0),
+                    ),
+                    self.search_popup
+                        .widget(&self.source, editor_response.changed()),
+                );
             });
     }
 

@@ -1,15 +1,18 @@
 use egui::{
-    output::IMEOutput, scroll_area::ScrollBarVisibility, CursorIcon, Event, EventFilter, ImeEvent,
-    Key, Modifiers, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
+    output::IMEOutput, scroll_area::ScrollBarVisibility, style::ScrollAnimation, CursorIcon, Event,
+    EventFilter, ImeEvent, Key, Modifiers, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
 };
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use super::{
-    coord_conversions::pt_to_unbounded_text_coord, gutter::Gutter, TextEdit, TextEditor, TextPoint,
+    coord_conversions::{pt_to_unbounded_text_coord, text_coord_to_pt},
+    gutter::Gutter,
+    TextEdit, TextEditor, TextPoint,
 };
 use crate::{
     block_editor::{
         blocks::BlockTrees,
+        search::SearchResults,
         source::{Source, UndoStopCondition},
         text_range::{
             movement::{HDir, HUnit, TextMovement, VDir, VUnit},
@@ -33,6 +36,7 @@ impl TextEditor {
         &'a mut self,
         source: &'a mut Source,
         drag_block: &'a mut Option<DragSession>,
+        search_results: &'a mut Option<SearchResults>,
         external_commands: &'a [ExternalCommand],
         blocks_theme: BlocksTheme,
         font: &'a MonospaceFont,
@@ -41,7 +45,7 @@ impl TextEditor {
             ScrollArea::both()
                 .auto_shrink([false; 2])
                 .scroll_bar_visibility(ScrollBarVisibility::VisibleWhenNeeded)
-                .id_salt("text_editor")
+                .id_salt("text_editor_scroll")
                 .drag_to_scroll(false)
                 .show_viewport(ui, |ui, viewport| {
                     // allocate space
@@ -65,9 +69,33 @@ impl TextEditor {
                     let drop_point =
                         self.handle_pointer(ui, offset, &mut response, drag_block, source, font);
                     self.handle_external_commands(external_commands, source);
-                    self.event(source, ui);
-                    self.update_text_if_needed(source);
+                    if response.has_focus() {
+                        self.handle_input_events(source, ui);
+                    }
+                    self.update_text_if_needed(source, &mut response);
                     // TODO: if the selection moved out of view, scroll to it
+
+                    // set the selection to the current find result if it closed
+                    if let Some(results) = search_results {
+                        if results.will_clear_and_select() {
+                            self.selections.set_selection(results.current(), source);
+                            *search_results = None;
+                        }
+                    }
+
+                    // scroll to the new search if it's out of view
+                    if let Some(results) = search_results {
+                        if results.check_and_clear_scroll_to_current() {
+                            let current = results.current();
+                            let pos = text_coord_to_pt(current.start, self.blocks.padding(), font);
+                            let rect = Rect::from_min_size(
+                                pos + offset,
+                                Vec2::new((current.end.col - current.start.col) as f32, 1.0)
+                                    * font.size,
+                            );
+                            ui.scroll_to_rect_animation(rect, None, ScrollAnimation::none());
+                        }
+                    }
 
                     // draw the text editor
                     let cursor_rect = self.draw(
@@ -77,6 +105,7 @@ impl TextEditor {
                         response.has_focus(),
                         drop_point,
                         source,
+                        search_results,
                         blocks_theme,
                         font,
                         ui,
@@ -176,6 +205,7 @@ impl TextEditor {
         has_focus: bool,
         block_drop_point: Option<TextPoint>,
         source: &Source,
+        search_results: &Option<SearchResults>,
         blocks_theme: BlocksTheme,
         font: &MonospaceFont,
         ui: &Ui,
@@ -183,6 +213,11 @@ impl TextEditor {
         // draw background
         let painter = ui.painter();
         painter.rect_filled(painter.clip_rect(), 0.0, theme::BACKGROUND);
+
+        // draw search results
+        if let Some(search_results) = search_results {
+            search_results.draw(offset, self.blocks.padding(), source.text(), font, painter);
+        }
 
         // draw selection under text and blocks
         self.selections.draw_pseudo_selection(
@@ -241,8 +276,11 @@ impl TextEditor {
         }
     }
 
-    fn update_text_if_needed(&mut self, source: &mut Source) {
+    fn update_text_if_needed(&mut self, source: &mut Source, response: &mut Response) {
         if source.has_text_changed_since_last_check() {
+            // mark response and changed
+            response.mark_changed();
+
             // get blocks
             {
                 let mut cursor = source.get_tree_cursor();
@@ -389,7 +427,7 @@ impl TextEditor {
         }
     }
 
-    fn event(&mut self, source: &mut Source, ui: &Ui) {
+    fn handle_input_events(&mut self, source: &mut Source, ui: &Ui) {
         let mut events = ui.input(|i| i.filtered_events(&EVENT_FILTER));
 
         if self.ime_enabled {

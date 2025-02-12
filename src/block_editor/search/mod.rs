@@ -1,11 +1,10 @@
 use egui::{Color32, Painter, Rect, Response, Stroke, TextEdit, Ui, Vec2, Widget};
 use ropey::Rope;
 
+use super::{blocks::Padding, source::Source, text_range::TextRange, MonospaceFont};
 use crate::theme;
 
-use super::{source::Source, text_range::TextRange, MonospaceFont};
-
-mod boyer_moore;
+mod rope_search;
 
 const MARGIN: Vec2 = Vec2::splat(2.5);
 
@@ -79,7 +78,9 @@ impl SearchPopup {
         if text_response.lost_focus() {
             if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 text_response.request_focus();
-                self.results.as_mut().map(|r| r.select_next());
+                if let Some(r) = self.results.as_mut() {
+                    r.select_next()
+                }
             } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.close();
             }
@@ -96,7 +97,9 @@ impl SearchPopup {
             egui::Button::new("^").fill(theme::POPUP_BACKGROUND),
         );
         if up_response.clicked() {
-            self.results.as_mut().map(|r| r.select_prev());
+            if let Some(r) = self.results.as_mut() {
+                r.select_prev()
+            }
         }
 
         // down button
@@ -108,7 +111,9 @@ impl SearchPopup {
             egui::Button::new("v").fill(theme::POPUP_BACKGROUND),
         );
         if down_response.clicked() {
-            self.results.as_mut().map(|r| r.select_next());
+            if let Some(r) = self.results.as_mut() {
+                r.select_next()
+            }
         }
 
         // close button
@@ -126,9 +131,9 @@ impl SearchPopup {
 
     fn close(&mut self) {
         self.show = false;
-        self.results
-            .as_mut()
-            .map(|r| r.will_clear_and_select = true);
+        if let Some(r) = self.results.as_mut() {
+            r.will_clear_and_select = true
+        };
     }
 }
 
@@ -141,10 +146,9 @@ pub struct SearchResults {
 
 impl SearchResults {
     pub fn search(source: &Rope, pat: &str) -> Option<Self> {
-        let starts = boyer_moore::boyer_moore_search(source, pat);
-        let ranges: Vec<TextRange> = starts
-            .iter()
-            .map(|start| TextRange::from_char_range_in(source, *start..(*start + pat.len())))
+        let iter = rope_search::SearchIter::from_rope_slice(source, pat);
+        let ranges: Vec<TextRange> = iter
+            .map(|(start, end)| TextRange::from_char_range_in(source, start..end))
             .collect();
         if ranges.is_empty() {
             None
