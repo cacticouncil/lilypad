@@ -1,12 +1,12 @@
 use std::num;
 
 use crate::{
-    block_editor::{MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
+    block_editor::{blocks::Padding, MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     lsp::documentation::BlockType,
     lsp::documentation::Documentation,
     theme,
 };
-use egui::{Align2, Color32, Painter, Pos2, Response, Ui, Vec2, Widget};
+use egui::{Align2, Color32, Painter, Pos2, Response, RichText, Ui, Vec2, Widget};
 use ropey::Rope;
 
 pub struct DocumentationPopup {
@@ -44,57 +44,41 @@ impl DocumentationPopup {
     ) -> impl Widget + 'a {
         move |ui: &mut Ui| -> Response {
             let (id, rect) = ui.allocate_space(ui.available_size());
-            let response = ui.interact(rect, id, egui::Sense::hover());
-            // set background color
-            ui.painter().rect_filled(rect, 0.0, theme::POPUP_BACKGROUND);
-            let mut current_y = rect.min.y; // Start at the top of the rect
-                                            //let painter = ui.painter();
-            for i in &documentation.hover_info.all_blocks {
-                let text = &i.0;
-                //  let language: Language = Language::for_file(&self.hover_info.language);
-                // Measure the text size to get its height
-                let text_size = ui.painter().layout(
-                    (text).to_string(),
-                    font.id.clone(),
-                    theme::syntax::DEFAULT,
-                    rect.max.x - rect.min.x, // Use the available width for wrapping
-                );
+            let response = ui.interact(rect, id, egui::Sense::click_and_drag());
 
-                // Render the text block
-                match i.1 {
-                    BlockType::CodeBlock => {
-                        /* let mut colored_text = Source::new(Rope::from(text as &str), language);
-                        let mut text_drawer = TextDrawer::new();
-                        text_drawer.highlight_source(&mut colored_text);
-                        text_drawer.draw(
-                            &[1.0],
-                            Vec2::new(rect.min.x, rect.min.y),
-                            None,
-                            font,
-                            painter,
-                        );*/
-                        ui.painter().text(
-                            egui::pos2(rect.min.x, current_y),
-                            Align2::LEFT_TOP,
-                            text,
-                            font.id.clone(),
-                            Color32::from_rgb(170, 215, 255),
-                        );
-                    }
-                    BlockType::RegularBlock => {
-                        ui.painter().text(
-                            egui::pos2(rect.min.x, current_y),
-                            Align2::LEFT_TOP,
-                            text,
-                            font.id.clone(),
-                            theme::syntax::DEFAULT,
-                        );
-                    }
-                }
+            // Set background color within the allocated rectangle
+            let frame = egui::Frame::none()
+                .fill(theme::POPUP_BACKGROUND) // Matches previous rect_filled color
+                .inner_margin(1.0) // Adds some padding inside the box
+                .rounding(5.0); // Optional rounded corners
 
-                // Move down by the height of the block
-                current_y += text_size.size().y; // Add spacing between blocks
-            }
+            frame.show(&mut ui.child_ui(rect, *ui.layout(), None), |ui| {
+                let scroll_response = egui::ScrollArea::vertical()
+                    .id_source(format!("hover_scroll_{}", self.popup_size.length()))
+                    .auto_shrink([true; 2]) // Prevents unwanted shrinking
+                    .show(ui, |ui| {
+                        ui.set_width(rect.width()); // Ensures content width matches the allocated rect
+                        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                            // Draw the message
+                            for i in &documentation.hover_info.all_blocks {
+                                let text = &i.0;
+                                match i.1 {
+                                    BlockType::CodeBlock => {
+                                        ui.monospace(
+                                            RichText::new(text)
+                                                .color(Color32::from_rgb(170, 215, 255)),
+                                        );
+                                    }
+                                    BlockType::RegularBlock => {
+                                        ui.monospace(
+                                            RichText::new(text).color(theme::syntax::DEFAULT),
+                                        );
+                                    }
+                                }
+                            }
+                        });
+                    });
+            });
 
             response
         }
@@ -104,7 +88,7 @@ impl DocumentationPopup {
         &mut self,
         documentation: &Documentation,
         offset: Vec2,
-        padding: &[f32],
+        padding: &Padding,
         font: &MonospaceFont,
     ) -> Pos2 {
         let mut height = font.size.y;
@@ -120,10 +104,8 @@ impl DocumentationPopup {
         height += num_newlines as f32 * font.size.y;
         log::info!("num_newlines: {}", num_newlines);
         // find the vertical start by finding top of line and then subtracting box size
-        let total_padding: f32 = padding
-            .iter()
-            .take(documentation.range.start.line + 1)
-            .sum();
+        let total_padding: f32 = padding.cumulative(documentation.range.start.line + 1);
+
         let documentation_start = OUTER_PAD
             + total_padding
             + (documentation.range.start.line as f32 * font.size.y)
@@ -174,7 +156,7 @@ impl Documentation {
     #[warn(dead_code)]
     pub fn draw(
         &self,
-        padding: &[f32],
+        padding: &Padding,
         source: &Rope,
         _offset: Vec2,
         _font: &MonospaceFont,
@@ -182,15 +164,5 @@ impl Documentation {
     ) {
         let range = self.range.ordered();
         let line_ranges = range.individual_lines(source);
-
-        let mut _total_padding: f32 = padding.iter().take(range.start.line).sum();
-
-        for line_range in line_ranges {
-            let line_num = line_range.start.line;
-
-            _total_padding += padding[line_num];
-
-            // find bottom of current line
-        }
     }
 }

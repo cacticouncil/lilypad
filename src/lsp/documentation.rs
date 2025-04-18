@@ -1,4 +1,5 @@
 use egui::debug_text::print;
+use regex::Regex;
 
 use crate::block_editor::text_range::{TextPoint, TextRange};
 use crate::vscode;
@@ -35,12 +36,16 @@ fn create_hover_info(info: &str) -> HoverInfo {
     } else if info.find("csharp").is_some() {
         lang_end = "cs";
         lang = "csharp";
+    } else if info.find("java").is_some() {
+        lang_end = "java";
+        lang = "java";
     }
     let re = regex::Regex::new(r"<.*?>").unwrap();
     let parsed_info = re.replace_all(info, "").to_string();
     let re = regex::Regex::new(r"\s*\n\s*").unwrap();
     let parsed_info = re.replace_all(&parsed_info, "\n").to_string();
     let parsed_info = parsed_info.replace("&nbsp;", " ").to_string();
+    let parsed_info = parsed_info.replace(r"\n", " ").to_string();
     let blocks: Vec<_> = parsed_info.split("```").collect();
     let mut all_blocks: Vec<(String, BlockType)> = vec![];
     for mut i in blocks {

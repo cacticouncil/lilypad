@@ -151,13 +151,13 @@ impl TextEditor {
 
                     // draw documentation popup
                     let documentation = &self.documentation;
-                    if !(documentation.message == " ") {
+                    if !(documentation.message == " ") && self.diagnostic_selection.is_none() {
                         ui.put(
                             Rect::from_min_size(
                                 self.documentation_popup.calc_origin(
                                     documentation,
                                     offset,
-                                    &self.padding,
+                                    &self.blocks.padding(),
                                     font,
                                 ),
                                 self.documentation_popup.calc_size(documentation, font),
@@ -213,13 +213,8 @@ impl TextEditor {
             font,
             painter,
         );
-        self.selections.draw_selection(
-            offset,
-            self.blocks.padding(),
-            source.text(),
-            font,
-            painter,
-        );
+        self.selections
+            .draw_selection(offset, self.blocks.padding(), source.text(), font, painter);
 
         // find which lines are visible in the viewport
         let visible_lines = self.visible_lines(viewport, font);
@@ -255,8 +250,6 @@ impl TextEditor {
         for diagnostic in &self.diagnostics {
             diagnostic.draw(self.blocks.padding(), source.text(), offset, font, painter);
         }
-        self.documentation
-            .draw(&self.padding, source.text(), offset, font, painter);
 
         // draw cursor
         if has_focus {
@@ -353,12 +346,8 @@ impl TextEditor {
                                 self.start_block_drag(pos, dragged_block, source, font);
                             }
                         } else {
-                            self.selections.mouse_clicked(
-                                pos,
-                                self.blocks.padding(),
-                                source,
-                                font,
-                            );
+                            self.selections
+                                .mouse_clicked(pos, self.blocks.padding(), source, font);
                         }
                     }
                     self.completion_popup.clear();
@@ -397,8 +386,11 @@ impl TextEditor {
                     }
                 }
                 if self.documentation.message != " ".to_string() {
-                    let coord =
-                        pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
+                    let coord = pt_to_unbounded_text_coord(
+                        pointer_pos - offset,
+                        &self.blocks.padding(),
+                        font,
+                    );
                     if !self.documentation.range.contains(coord, source.text()) {
                         self.documentation.message = " ".to_string();
                         self.documentation.range = TextRange::ZERO;
@@ -418,8 +410,11 @@ impl TextEditor {
                         .position(|d| d.range.contains(coord, source.text()));
                 }
                 if Self::mouse_still_for(0.5, ui) && self.documentation.message == " ".to_string() {
-                    let coord =
-                        pt_to_unbounded_text_coord(pointer_pos - offset, &self.padding, font);
+                    let coord = pt_to_unbounded_text_coord(
+                        pointer_pos - offset,
+                        &self.blocks.padding(),
+                        font,
+                    );
                     self.documentation.request_hover(coord.line, coord.col);
                     self.documentation_popup.is_hovered = true;
                 }
