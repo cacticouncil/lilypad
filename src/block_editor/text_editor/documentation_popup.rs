@@ -1,6 +1,5 @@
 use std::num;
 
-use crate::Context::open_url;
 use crate::{
     block_editor::{blocks::Padding, MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     lsp::documentation::Documentation,
@@ -38,6 +37,7 @@ impl DocumentationPopup {
         font: &'a MonospaceFont,
     ) {
         ui.style_mut().url_in_tooltip = true;
+        //todo: clicking on a link in the rust hover info blows up evertyihng
         egui_commonmark::CommonMarkViewer::new().show(
             ui,
             &mut self.markdown_cache,
