@@ -168,6 +168,55 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             changeBreakpointsSubscription.dispose();
             stackItemSubscription.dispose();
         });
+        function convertHoverToEguiMarkdown(hoverResult) {
+            if (!hoverResult) {
+                return "";
+            }
+            //In vscode api, hover can be a markdown string, a markedstring(deprecated) or an
+            //array of both of them, or an array of just one of them
+            let markdownContent = "";
+            if (Array.isArray(hoverResult.contents)) {
+                for (const content of hoverResult.contents) {
+                    if (typeof content === 'string') {
+                        markdownContent += processMarkdownString(content) + "\n\n";
+                    } else if (content instanceof vscode.MarkdownString) {
+                        markdownContent += processMarkdownString(content.value) + "\n\n";
+                    }
+                }
+            } else if (typeof hoverResult.contents === 'string') {
+                markdownContent = processMarkdownString(hoverResult.contents);
+            } else if (hoverResult.contents instanceof vscode.MarkdownString) {
+                markdownContent = processMarkdownString(hoverResult.contents.value);
+            }
+            //yeah idk about this one but it works
+            return markdownContent.trim();
+        }
+        //Make vscode extension's markdown string like egui commonmark
+        function processMarkdownString(markdown) {
+            if (!markdown) return "";
+            
+            let processed = markdown;
+            
+            //Code blocks always start with ``` followed by the language name(so far)
+            processed = processed.replace(/```(\w+)/g, '```$1');
+
+            //processed = processed.replace(/sharp/g, '#'); //Tried to see if replacing ```csharp 
+            //with ```c# would fix the fact that csharp text not colored
+            processed = processed.replace(/\[([^\]]+)\]\(command:[^\)]+\)/g, '$1');
+            processed = processed.replace(/`([^`]+)`/g, '`$1`');
+            
+            //Remove ul and header in random python hover info is ##
+            processed = processed.replace(/^(#+)([^\s#])/gm, '$1 $2');
+            processed = processed.replace(/<\/?ul[\/]?>/g, '');
+
+            //Get rid of the <!-- --> module hash in python hover infos
+            processed = processed.replace(/^(\s*[-*+])([^\s])/gm, '$1 $2');
+            processed = processed.replace(/<!--\s*.*?\s*-->/g, '');
+            //get rid of run/debug in rust main function hover(there is a little button in the hover info on normal vscode that you can click run but)
+            processed = processed.replace(/▶︎ Run  | ⚙︎ Debug/g, '')
+            return processed;
+        }
+
 
         // Receive message from the webview.
         webviewPanel.webview.onDidReceiveMessage(message => {
@@ -248,22 +297,25 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                         URI, 
                         cursor
                     ).then((hover) => {
-                        if (hover && hover[0] && hover[0].contents && hover[0].contents[0]) {
-                            
-                            const content = hover[0].contents[0];
-                            let hoverContent = '';
-                            if (content instanceof vscode.MarkdownString) {
-                                hoverContent = content.value;
-                            } else if (typeof content === 'string') {
-                                hoverContent = content;
+                        if (hover && hover[0]) {
+                            //if (hover[0].)
+                           // console.log("Hover info:", hover.length);
+                            let hoverToConvert = hover[0];
+                            if (hover.length > 1) {
+                                hoverToConvert = hover[1];
                             }
+                            const hoverContent = convertHoverToEguiMarkdown(hoverToConvert);
+                            //console.log("Hover content:", hoverContent);
+                        
+                            
                             webviewPanel.webview.postMessage({
                                 type: "return_hover_info",
                                 hover: hoverContent,
                                 range: hover[0].range
                             });
+                        
                         } else {
-                            //console.log('No hover information available');
+                            //No hover info
                         }
                     });
                     break;

@@ -143,5 +143,5 @@ fn draw_block(
     // draw it
     let rect = Rect::from_min_size(start_pt + offset, size);
     let stroke = Stroke::new(BLOCK_CONFIG.stroke_width, color);
-    painter.rect_stroke(rect, rounding, stroke);
+    painter.rect_stroke(rect, rounding, stroke, egui::StrokeKind::Inside);
 }

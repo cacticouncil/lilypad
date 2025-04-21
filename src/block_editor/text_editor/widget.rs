@@ -41,6 +41,8 @@ impl TextEditor {
         font: &'a MonospaceFont,
     ) -> impl Widget + 'a {
         move |ui: &mut Ui| -> egui::Response {
+            ui.style_mut().url_in_tooltip = true;
+
             ScrollArea::both()
                 .auto_shrink([false; 2])
                 .scroll_bar_visibility(ScrollBarVisibility::VisibleWhenNeeded)
@@ -55,7 +57,6 @@ impl TextEditor {
                     // setup interactivity
                     let sense = Sense::click_and_drag();
                     let mut response = ui.interact(rect, auto_id, sense);
-                    response.fake_primary_click = false;
                     ui.memory_mut(|mem| mem.set_focus_lock_filter(auto_id, EVENT_FILTER));
 
                     // find the offset to the content
@@ -152,18 +153,27 @@ impl TextEditor {
                     // draw documentation popup
                     let documentation = &self.documentation;
                     if !(documentation.message == " ") && self.diagnostic_selection.is_none() {
-                        ui.put(
-                            Rect::from_min_size(
-                                self.documentation_popup.calc_origin(
-                                    documentation,
-                                    offset,
-                                    &self.blocks.padding(),
-                                    font,
-                                ),
-                                self.documentation_popup.calc_size(documentation, font),
-                            ),
-                            self.documentation_popup.widget(documentation, font),
+                        let origin = self.documentation_popup.calc_origin(
+                            documentation,
+                            offset,
+                            &self.blocks.padding(),
+                            font,
                         );
+                        let line_count = documentation.message.lines().count();
+                        let height = (line_count as f32 * 16.0).clamp(20.0, 500.0); // min 20, max 500
+
+                        egui::Area::new(egui::Id::new("hover window"))
+                            .fixed_pos(origin)
+                            .show(ui.ctx(), |ui| {
+                                ui.set_min_height(height);
+                                //Increase the maximum horizontal width to 800.0
+                                ui.set_max_width(800.0);
+                                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                                    egui::ScrollArea::vertical().show(ui, |ui| {
+                                        self.documentation_popup.widget(ui, documentation, font);
+                                    });
+                                });
+                            });
                     }
 
                     // Set IME output (in screen coords)

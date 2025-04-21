@@ -56,7 +56,7 @@ impl LilypadWeb {
 impl eframe::App for LilypadWeb {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let available_rect = ctx.available_rect();
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui: &mut egui::Ui| {
             let external_commands = self.inbox.read(ui).collect::<Vec<ExternalCommand>>();
 
             let response = ui.allocate_rect(available_rect, Sense::hover());
