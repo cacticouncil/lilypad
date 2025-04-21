@@ -1,5 +1,3 @@
-use egui::debug_text::print;
-use regex::Regex;
 
 use crate::block_editor::text_range::{TextPoint, TextRange};
 use crate::vscode;

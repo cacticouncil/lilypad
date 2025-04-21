@@ -35,11 +35,11 @@ impl eframe::App for LilypadNative {
         egui::SidePanel::left("file-picker")
             .default_width(200.0)
             .resizable(false)
-            .frame(Frame::none())
+            .frame(Frame::NONE)
             .show(ctx, |ui| ui.add(self.file_picker.widget(&mut commands)));
 
         egui::CentralPanel::default()
-            .frame(Frame::none())
+            .frame(Frame::NONE)
             .show(ctx, |ui| {
                 ui.add(self.block_editor.widget(&commands));
             });

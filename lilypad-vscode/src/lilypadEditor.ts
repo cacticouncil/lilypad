@@ -168,7 +168,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             changeBreakpointsSubscription.dispose();
             stackItemSubscription.dispose();
         });
-        function convertHoverToEguiMarkdown(hoverResult) {
+        function convertHoverToEguiMarkdown(hoverResult: any) {
             if (!hoverResult) {
                 return "";
             }
@@ -192,8 +192,8 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             return markdownContent.trim();
         }
         //Make vscode extension's markdown string like egui commonmark
-        function processMarkdownString(markdown) {
-            if (!markdown) return "";
+        function processMarkdownString(markdown: any) {
+            if (!markdown) {return "";}
             
             let processed = markdown;
             
@@ -213,7 +213,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             processed = processed.replace(/^(\s*[-*+])([^\s])/gm, '$1 $2');
             processed = processed.replace(/<!--\s*.*?\s*-->/g, '');
             //get rid of run/debug in rust main function hover(there is a little button in the hover info on normal vscode that you can click run but)
-            processed = processed.replace(/▶︎ Run  | ⚙︎ Debug/g, '')
+            processed = processed.replace(/▶︎ Run  | ⚙︎ Debug/g, '');
             return processed;
         }
 
@@ -298,8 +298,8 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                         cursor
                     ).then((hover) => {
                         if (hover && hover[0]) {
-                            //if (hover[0].)
-                           // console.log("Hover info:", hover.length);
+                            // if (hover[0].)
+                            // console.log("Hover info:", hover.length);
                             let hoverToConvert = hover[0];
                             if (hover.length > 1) {
                                 hoverToConvert = hover[1];
