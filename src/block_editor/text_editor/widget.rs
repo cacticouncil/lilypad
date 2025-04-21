@@ -1,4 +1,3 @@
-use eframe::glow::POINT;
 use egui::{
     output::IMEOutput, scroll_area::ScrollBarVisibility, CursorIcon, Event, EventFilter, ImeEvent,
     Key, Modifiers, Rect, Response, ScrollArea, Sense, Ui, Vec2, Widget,
@@ -6,9 +5,7 @@ use egui::{
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use super::{
-    coord_conversions::{pt_to_text_coord, pt_to_unbounded_text_coord},
-    gutter::Gutter,
-    TextEdit, TextEditor, TextPoint,
+    coord_conversions::pt_to_unbounded_text_coord, gutter::Gutter, TextEdit, TextEditor, TextPoint,
 };
 use crate::{
     block_editor::{
@@ -41,8 +38,6 @@ impl TextEditor {
         font: &'a MonospaceFont,
     ) -> impl Widget + 'a {
         move |ui: &mut Ui| -> egui::Response {
-            ui.style_mut().url_in_tooltip = true;
-
             ScrollArea::both()
                 .auto_shrink([false; 2])
                 .scroll_bar_visibility(ScrollBarVisibility::VisibleWhenNeeded)
@@ -166,11 +161,11 @@ impl TextEditor {
                             .fixed_pos(origin)
                             .show(ui.ctx(), |ui| {
                                 ui.set_min_height(height);
-                                //Increase the maximum horizontal width to 800.0
-                                ui.set_max_width(800.0);
+                                //Max width is window size - how far from left hover is.
+                                ui.set_max_width(expanded_size.x - origin.x - 5.0);
                                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                                     egui::ScrollArea::vertical().show(ui, |ui| {
-                                        self.documentation_popup.widget(ui, documentation, font);
+                                        self.documentation_popup.widget(ui, documentation);
                                     });
                                 });
                             });

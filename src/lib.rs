@@ -17,7 +17,6 @@ pub mod c_shim;
 use block_editor::{BlockEditor, ExternalCommand, MonospaceFont};
 use egui::Sense;
 use egui_inbox::UiInbox;
-use std::sync::Arc;
 pub struct LilypadWeb {
     block_editor: BlockEditor,
     inbox: UiInbox<ExternalCommand>,

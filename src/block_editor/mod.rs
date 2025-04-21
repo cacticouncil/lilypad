@@ -198,7 +198,7 @@ impl BlockEditor {
             .exact_width(palette_size.x)
             .show_separator_line(false)
             .resizable(false)
-            .frame(Frame::none())
+            .frame(Frame::NONE)
             .show(ui.ctx(), |ui| {
                 ui.add(self.block_palette.widget(
                     &mut self.drag_block,
@@ -208,7 +208,7 @@ impl BlockEditor {
             });
 
         CentralPanel::default()
-            .frame(Frame::none())
+            .frame(Frame::NONE)
             .show(ui.ctx(), |ui| {
                 ui.add(self.text_editor.widget(
                     &mut self.source,

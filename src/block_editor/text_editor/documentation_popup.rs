@@ -1,20 +1,12 @@
-use std::num;
-
-use crate::Context::open_url;
 use crate::{
     block_editor::{blocks::Padding, MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     lsp::documentation::Documentation,
-    theme,
 };
-use egui::{Align2, Color32, Painter, Pos2, Response, RichText, Ui, Vec2, Widget};
+use egui::{Pos2, Vec2};
 use egui_commonmark::CommonMarkCache;
-use ropey::Rope;
-
 pub struct DocumentationPopup {
     pub markdown_cache: CommonMarkCache,
     pub is_hovered: bool,
-    pub is_above: bool,
-    pub popup_size: Vec2,
 }
 
 impl DocumentationPopup {
@@ -22,21 +14,10 @@ impl DocumentationPopup {
         Self {
             markdown_cache: CommonMarkCache::default(),
             is_hovered: false,
-            popup_size: Vec2::new(0.0, 0.0),
-            is_above: false,
         }
     }
 
-    pub fn make_rect(&self, pos: Pos2) -> egui::Rect {
-        egui::Rect::from_min_size(pos, self.popup_size)
-    }
-
-    pub fn widget<'a>(
-        &'a mut self,
-        ui: &mut egui::Ui,
-        documentation: &'a Documentation,
-        font: &'a MonospaceFont,
-    ) {
+    pub fn widget<'a>(&'a mut self, ui: &mut egui::Ui, documentation: &'a Documentation) {
         ui.style_mut().url_in_tooltip = true;
         egui_commonmark::CommonMarkViewer::new().show(
             ui,
@@ -66,17 +47,4 @@ impl DocumentationPopup {
     }
 }
 
-impl Documentation {
-    #[warn(dead_code)]
-    pub fn draw(
-        &self,
-        padding: &Padding,
-        source: &Rope,
-        _offset: Vec2,
-        _font: &MonospaceFont,
-        _painter: &Painter,
-    ) {
-        let range = self.range.ordered();
-        let line_ranges = range.individual_lines(source);
-    }
-}
+impl Documentation {}
