@@ -2,18 +2,17 @@ use crate::{
     block_editor::{blocks::Padding, MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     lsp::documentation::Documentation,
 };
+use egui::OpenUrl;
 use egui::{Pos2, Vec2};
 use egui_commonmark::CommonMarkCache;
 pub struct DocumentationPopup {
     pub markdown_cache: CommonMarkCache,
-    pub is_hovered: bool,
 }
 
 impl DocumentationPopup {
     pub fn new() -> Self {
         Self {
             markdown_cache: CommonMarkCache::default(),
-            is_hovered: false,
         }
     }
 

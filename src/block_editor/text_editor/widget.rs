@@ -421,7 +421,6 @@ impl TextEditor {
                         font,
                     );
                     self.documentation.request_hover(coord.line, coord.col);
-                    self.documentation_popup.is_hovered = true;
                 }
             }
         };
