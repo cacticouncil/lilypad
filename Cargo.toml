@@ -62,7 +62,7 @@ wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1"
-egui_commonmark = "0.20.0"
+egui_commonmark = {version = "0.20.0", features = ["better_syntax_highlighting"]}
 
 # native stuff
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

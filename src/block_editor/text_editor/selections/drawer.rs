@@ -159,6 +159,6 @@ impl TextRange {
             Vec2::new(width as f32 * font.size.x, font.size.y + line_padding),
         );
 
-        painter.rect(block, 0.0, fill, stroke);
+        painter.rect(block, 0.0, fill, stroke, egui::StrokeKind::Middle);
     }
 }

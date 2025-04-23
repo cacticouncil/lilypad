@@ -409,8 +409,8 @@ impl TextEditor {
                 }
             }
         }
-        log::info!("Response ID: {:?}", response.id);
-        log::info!("Respone Layer ID: {:?}", response.layer_id);
+        //log::info!("Response ID: {:?}", response.id);
+        //log::info!("Respone Layer ID: {:?}", response.layer_id);
         // find diagnostic under cursor
         // TODO: multiple diagnostics displayed at once
         if response.hovered() {
