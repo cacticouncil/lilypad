@@ -1,6 +1,6 @@
 use std::cmp::max;
 
-use egui::{Color32, Painter, Pos2, Rect, Ui, Vec2};
+use egui::{Color32, Painter, Pos2, Rect, Stroke, Ui, Vec2};
 use ropey::Rope;
 
 use super::{Selections, CURSOR_OFF_DURATION, CURSOR_ON_DURATION};
@@ -56,9 +56,9 @@ impl Selections {
         painter: &Painter,
     ) {
         if !self.selection.is_cursor() {
-            self.draw_selection_blocks(
-                self.selection,
+            self.selection.draw_selection_blocks(
                 theme::SELECTION,
+                Stroke::NONE,
                 offset,
                 padding,
                 source,
@@ -77,9 +77,9 @@ impl Selections {
         painter: &Painter,
     ) {
         if let Some(selection) = self.pseudo_selection {
-            self.draw_selection_blocks(
-                selection,
+            selection.draw_selection_blocks(
                 theme::PSEUDO_SELECTION,
+                Stroke::NONE,
                 offset,
                 padding,
                 source,
@@ -88,18 +88,20 @@ impl Selections {
             );
         }
     }
+}
 
-    fn draw_selection_blocks(
+impl TextRange {
+    pub fn draw_selection_blocks(
         &self,
-        selection: TextRange,
-        color: Color32,
+        fill: Color32,
+        stroke: Stroke,
         offset: Vec2,
         padding: &Padding,
         source: &Rope,
         font: &MonospaceFont,
         painter: &Painter,
     ) {
-        let selection = selection.ordered();
+        let selection = self.ordered();
         let line_ranges = selection.individual_lines(source);
 
         for line_range in line_ranges {
@@ -120,7 +122,8 @@ impl Selections {
                 width,
                 padding_above,
                 line_num != selection.start.line,
-                color,
+                fill,
+                stroke,
                 offset,
                 padding,
                 font,
@@ -135,7 +138,8 @@ impl Selections {
         width: usize,
         padding_above: f32,
         has_block_above: bool,
-        color: Color32,
+        fill: Color32,
+        stroke: Stroke,
         offset: Vec2,
         padding: &Padding,
         font: &MonospaceFont,
@@ -155,6 +159,6 @@ impl Selections {
             Vec2::new(width as f32 * font.size.x, font.size.y + line_padding),
         );
 
-        painter.rect_filled(block, 0.0, color);
+        painter.rect(block, 0.0, fill, stroke);
     }
 }

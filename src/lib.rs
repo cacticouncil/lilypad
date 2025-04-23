@@ -32,16 +32,14 @@ impl LilypadWeb {
         font_size: f32,
         inbox: UiInbox<ExternalCommand>,
     ) -> Self {
-        // Uncomment to enable debug options:
-
-        _cc.egui_ctx.set_style(Arc::new(egui::Style {
-            debug: egui::style::DebugOptions {
-                debug_on_hover: true,
-                show_widget_hits: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        }));
+        // Uncomment to enable debug options (note: must build debug instead of release):
+        // _cc.egui_ctx.set_style(std::sync::Arc::new(egui::Style {
+        //     debug: egui::style::DebugOptions {
+        //         show_widget_hits: true,
+        //         ..Default::default()
+        //     },
+        //     ..Default::default()
+        // }));
         Self {
             block_editor: BlockEditor::new(
                 &file_name,

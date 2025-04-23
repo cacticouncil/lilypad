@@ -70,6 +70,19 @@ impl TextRange {
         self.start.char_idx_in(source)..self.end.char_idx_in(source)
     }
 
+    pub fn from_char_range_in(source: &Rope, range: Range<usize>) -> Self {
+        TextRange {
+            start: TextPoint::new(
+                source.char_to_line(range.start),
+                range.start - source.line_to_char(source.char_to_line(range.start)),
+            ),
+            end: TextPoint::new(
+                source.char_to_line(range.end),
+                range.end - source.line_to_char(source.char_to_line(range.end)),
+            ),
+        }
+    }
+
     pub fn contains(&self, point: TextPoint, source: &Rope) -> bool {
         if self.start.line == self.end.line {
             // if a single line, can just check the column
