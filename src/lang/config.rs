@@ -35,6 +35,7 @@ impl LanguageConfig {
             Some("java") => &JAVA_LANGUAGE,
             Some("cpp") | Some("h") | Some("hpp") => &CPP_LANGUAGE,
             Some("cs") => &CS_LANGUAGE,
+            Some("rs") => &RUST_LANGUAGE,
             _ => &PYTHON_LANGUAGE, // TODO: plain text mode?
         }
     }
@@ -444,6 +445,191 @@ const CPP_LANGUAGE: LanguageConfig = LanguageConfig {
         string_bounds: &[162],
     },
     palettes: &[Palette::new("General", &[])],
+    highlight: STANDARD_HIGHLIGHT,
+};
+
+const RUST_LANGUAGE: LanguageConfig = LanguageConfig {
+    name: "rust",
+    ts_lang: tree_sitter_rust::LANGUAGE,
+    highlight_query: tree_sitter_rust::HIGHLIGHTS_QUERY,
+    new_scope_char: NewScopeChar::Brace,
+    node_categorizer: |node| {
+        use BlockType::*;
+
+        match node.kind() {
+            // scopes
+            "struct_item" => Some(Object),
+            "union_item" => Some(Object),
+            "enum_item" => Some(Object),
+            "impl_item" => Some(Object),
+            "trait_item" => Some(Object),
+            "function_item" => Some(FunctionDef),
+            "type_item" => Some(Object),
+            "block" => {
+                if node.parent().map_or("", |s| s.kind()) == "function_item"
+                    || node.parent().map_or("", |s| s.kind()) == "if_expression"
+                    || node.parent().map_or("", |s| s.kind()) == "else_clause"
+                    || node.parent().map_or("", |s| s.kind()) == "match_arm"
+                    || node.parent().map_or("", |s| s.kind()) == "match_block"
+                {
+                    None
+                } else {
+                    Some(Object)
+                }
+            }
+            "enum_variant" => Some(Generic),
+            "field_declaration" => Some(Generic),
+            "while_expression" => {
+                if node.parent().map_or("", |s| s.kind()) == "expression_statement" {
+                    None
+                } else {
+                    Some(Generic)
+                }
+            }
+            "match_block" => Some(Switch),
+            "binary_expression" => {
+                if node.parent().map_or("", |s| s.kind()) == "block" {
+                    None //some(generic) for this and idenitifer enabled multiline let, but caused other issues
+                } else {
+                    None
+                }
+            }
+            "identifier" => {
+                if node.parent().map_or("", |s| s.kind()) == "block" {
+                    None
+                } else {
+                    None
+                }
+            }
+            //Some(Switch),
+            "match_arm" => Some(Generic),
+            /*            "let_declaration" => {
+                            if (node.named_child_count() == 2 || node.named_child_count() == 3)
+                                && node
+                                    .named_child(1)
+                                    .map_or(false, |child| child.named_child_count() == 0)
+                            {
+                                Some(Generic)
+                            } else {
+                                Some(Object)
+                            }
+                        }
+            */
+            "let_declaration" => {
+                if node.start_position().row == node.end_position().row {
+                    Some(Generic)
+                } else {
+                    Some(Divider)
+                }
+            }
+            "if_expression" => {
+                if node.parent().map_or("", |s| s.kind()) == "else_clause" {
+                    None
+                } else {
+                    Some(If)
+                }
+            }
+            "for_expression" => {
+                if node.parent().map_or("", |s| s.kind()) == "expression_statement" {
+                    None
+                } else {
+                    Some(For)
+                }
+            }
+            "struct_expression" => Some(Generic),
+            "continue_expression" => Some(Generic),
+            "call_expression" => {
+                if let Some(parent) = node.parent() {
+                    let value_contexts = [
+                        "let_declaration",
+                        "match_expression",
+                        "binary_expression",
+                        "argument_list",
+                        "match_arm",
+                        "if_expression",
+                        "for_expression",
+                        "while_expression",
+                        "arguments",
+                    ];
+                    if value_contexts.contains(&parent.kind()) {
+                        None
+                    } else {
+                        Some(Generic)
+                    }
+                } else {
+                    None
+                }
+            }
+
+            "macro_invocation" => {
+                if let Some(parent) = node.parent() {
+                    let value_contexts = [
+                        "let_declaration",
+                        "match_expression",
+                        "binary_expression",
+                        "argument_list",
+                        "match_arm",
+                        "if_expression",
+                        "for_expression",
+                        "while_expression",
+                    ];
+                    if value_contexts.contains(&parent.kind()) {
+                        None
+                    } else {
+                        Some(Generic)
+                    }
+                } else {
+                    Some(Generic)
+                }
+            }
+            // normal expressions (incomplete)
+            "use_item" => Some(Generic),
+            "else_clause" => Some(Divider),
+            //"break_expressionex" => Some(Generic),
+            "return_expression" => Some(Generic),
+            "assignment_expression" => Some(Generic),
+            // comments
+            "line_comment" => Some(Comment),
+            "block_comment" => Some(Comment),
+
+            // dividers to keep generics from merging
+
+            // do not handle the rest
+            _ => None,
+        }
+    },
+    string_node_ids: StringNodeIDs {
+        string: 360,
+        string_bounds: &[162],
+    },
+    palettes : &[Palette::new(
+            "General",
+            &[
+                Snippet::new(
+                    "if",
+                    "if condition {\n    // code\n} else if condition {\n    // code\n} else {\n    // code\n}",
+                ),
+                Snippet::new(
+                    "loop",
+                    "loop {\n    // code\n}",
+                ),
+                Snippet::new(
+                    "while",
+                    "while condition {\n    // code\n}",
+                ),
+                Snippet::new(
+                    "fn",
+                    "fn my_function() {\n    // code\n}",
+                ),
+                Snippet::new(
+                    "match",
+                    "match value {\n    Pattern1 => {None}\n    Pattern2 => {None}\n    _ => {}\n}",
+                ),
+                Snippet::new(
+                    "result",
+                    "fn divide(a: i32, b: i32) -> Result<i32, String> {\n    if b == 0 {\n        Err(String::from(\"Cannot divide by zero\"))\n    } else {\n        Ok(a / b)\n    }\n}",
+                ),
+            ])],
     highlight: STANDARD_HIGHLIGHT,
 };
 

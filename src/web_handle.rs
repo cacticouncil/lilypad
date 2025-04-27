@@ -33,7 +33,7 @@ impl LilypadWebHandle {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         eframe::WebLogger::init(log::LevelFilter::Debug).ok();
-
+        //log::error!("Lilypad Web Handle created");
         panic::set_hook(Box::new(panic_hook));
 
         Self {
@@ -244,6 +244,22 @@ impl LilypadWebHandle {
         if let Some(sender) = &self.command_sender {
             if sender
                 .send(ExternalCommand::SetCompletions(completions))
+                .is_err()
+            {
+                error!("Failed to send command");
+            }
+        } else {
+            error!("No command sender");
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn set_hover_info(&self, hover_info: String, json: JsValue) {
+        let range: TextRange =
+            serde_wasm_bindgen::from_value(json).expect("Could not deserialize range");
+        if let Some(sender) = &self.command_sender {
+            if sender
+                .send(ExternalCommand::SetHover(hover_info, range))
                 .is_err()
             {
                 error!("Failed to send command");

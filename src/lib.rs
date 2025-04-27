@@ -17,7 +17,6 @@ pub mod c_shim;
 use block_editor::{BlockEditor, ExternalCommand, MonospaceFont};
 use egui::Sense;
 use egui_inbox::UiInbox;
-
 pub struct LilypadWeb {
     block_editor: BlockEditor,
     inbox: UiInbox<ExternalCommand>,
@@ -54,7 +53,7 @@ impl LilypadWeb {
 impl eframe::App for LilypadWeb {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let available_rect = ctx.available_rect();
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui: &mut egui::Ui| {
             let external_commands = self.inbox.read(ui).collect::<Vec<ExternalCommand>>();
 
             let response = ui.allocate_rect(available_rect, Sense::hover());

@@ -9,7 +9,7 @@ pub struct Diagnostic {
     pub message: String,
     pub range: TextRange,
     pub severity: DiagnosticSeverity,
-    pub source: String,
+    pub source: Option<String>,
     #[serde(skip, default)]
     pub id: usize,
 }
@@ -25,7 +25,7 @@ impl Diagnostic {
             message: "example diagnostic".to_string(),
             range: TextRange::new(TextPoint::new(2, 18), TextPoint::new(2, 25)),
             severity: DiagnosticSeverity::Error,
-            source: "example".to_string(),
+            source: Some("example".to_string()),
             id: 0,
         }
     }

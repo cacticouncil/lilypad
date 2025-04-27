@@ -1,4 +1,6 @@
 {
-    "editor.formatOnSave": true,
-    // "rust-analyzer.cargo.target": "wasm32-unknown-unknown"
+  "editor.formatOnSave": true,
+  "glassit.alpha": 250,
+  "idf.pythonInstallPath": "/usr/bin/python3"
+  // "rust-analyzer.cargo.target": "wasm32-unknown-unknown"
 }

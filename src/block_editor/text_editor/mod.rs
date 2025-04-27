@@ -4,6 +4,7 @@ mod block_dragging;
 mod completion_popup;
 mod coord_conversions;
 mod diagnostics_popup;
+mod documentation_popup;
 mod gutter;
 pub mod selections;
 mod widget;
@@ -13,8 +14,10 @@ use super::text_drawer::*;
 use super::text_range::*;
 use crate::block_editor::{source::TextEdit, text_range::TextRange};
 use crate::lsp::diagnostics::Diagnostic;
+use crate::lsp::documentation::Documentation;
 use completion_popup::CompletionPopup;
 use diagnostics_popup::DiagnosticPopup;
+use documentation_popup::DocumentationPopup;
 use selections::Selections;
 
 pub struct TextEditor {
@@ -29,6 +32,9 @@ pub struct TextEditor {
 
     /// diagnostics for current cursor position
     diagnostics: Vec<Diagnostic>,
+
+    /// documentation for current cursor position
+    documentation: Documentation,
 
     /// index of diagnostic selected in the popup
     diagnostic_selection: Option<usize>,
@@ -50,6 +56,9 @@ pub struct TextEditor {
 
     /// overlay view for completions
     completion_popup: CompletionPopup,
+
+    /// overlay view for hover
+    documentation_popup: DocumentationPopup,
 }
 
 #[derive(Clone, Copy)]
@@ -74,6 +83,7 @@ impl TextEditor {
             ime_enabled: false,
             ime_selection: TextRange::ZERO,
             diagnostics: vec![],
+            documentation: Documentation::new(),
             diagnostic_selection: Option::None,
             text_drawer: TextDrawer::new(),
             blocks: BlockTrees::default(),
@@ -81,6 +91,7 @@ impl TextEditor {
             stack_frame: StackFrameLines::empty(),
             diagnostic_popup: DiagnosticPopup::new(),
             completion_popup: CompletionPopup::new(),
+            documentation_popup: DocumentationPopup::new(),
         }
     }
 }

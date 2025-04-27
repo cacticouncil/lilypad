@@ -44,6 +44,9 @@
           },
           {
             "filenamePattern": "*.hpp"
+          },
+          {
+            "filenamePattern": "*.rs"
           }
         ],
         "priority": "default"

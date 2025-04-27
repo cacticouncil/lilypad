@@ -56,7 +56,6 @@ impl TextEditor {
                     // setup interactivity
                     let sense = Sense::click_and_drag();
                     let mut response = ui.interact(rect, auto_id, sense);
-                    response.fake_primary_click = false;
                     ui.memory_mut(|mem| mem.set_focus_lock_filter(auto_id, EVENT_FILTER));
 
                     // find the offset to the content
@@ -172,6 +171,32 @@ impl TextEditor {
                             ),
                             self.diagnostic_popup.widget(diagnostic, font),
                         );
+                    }
+
+                    // draw documentation popup
+                    let documentation = &self.documentation;
+                    if !(documentation.message == " ") && self.diagnostic_selection.is_none() {
+                        let origin = self.documentation_popup.calc_origin(
+                            documentation,
+                            offset,
+                            &self.blocks.padding(),
+                            font,
+                        );
+                        let line_count = documentation.message.lines().count();
+                        let height = (line_count as f32 * 16.0).clamp(10.0, 500.0); // min 20, max 500
+
+                        egui::Area::new(egui::Id::new("hover window"))
+                            .fixed_pos(origin)
+                            .show(ui.ctx(), |ui| {
+                                ui.set_min_height(height);
+                                //Max width is window size - how far from left hover is.
+                                ui.set_max_width(300.0);
+                                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                                    egui::ScrollArea::vertical().show(ui, |ui| {
+                                        self.documentation_popup.widget(ui, documentation);
+                                    });
+                                });
+                            });
                     }
 
                     // Set IME output (in screen coords)
@@ -383,7 +408,8 @@ impl TextEditor {
                 }
             }
         }
-
+        //log::info!("Response ID: {:?}", response.id);
+        //log::info!("Respone Layer ID: {:?}", response.layer_id);
         // find diagnostic under cursor
         // TODO: multiple diagnostics displayed at once
         if response.hovered() {
@@ -402,6 +428,17 @@ impl TextEditor {
                         }
                     }
                 }
+                if self.documentation.message != " ".to_string() {
+                    let coord = pt_to_unbounded_text_coord(
+                        pointer_pos - offset,
+                        &self.blocks.padding(),
+                        font,
+                    );
+                    if !self.documentation.range.contains(coord, source.text()) {
+                        self.documentation.message = " ".to_string();
+                        self.documentation.range = TextRange::ZERO;
+                    }
+                }
 
                 // if the mouse has been still for a bit with no selection, find the diagnostic under the cursor
                 if self.diagnostic_selection.is_none() && Self::mouse_still_for(0.25, ui) {
@@ -414,6 +451,18 @@ impl TextEditor {
                         .diagnostics
                         .iter()
                         .position(|d| d.range.contains(coord, source.text()));
+                }
+                if Self::mouse_still_for(0.5, ui) && self.documentation.message == " ".to_string() {
+                    let coord = pt_to_unbounded_text_coord(
+                        pointer_pos - offset,
+                        &self.blocks.padding(),
+                        font,
+                    );
+                    if coord.line < source.text().len_lines() - 1 {
+                        if coord.col < source.text().line(coord.line).len_chars() {
+                            self.documentation.request_hover(coord.line, coord.col);
+                        }
+                    }
                 }
             }
         };
@@ -511,6 +560,9 @@ impl TextEditor {
                 ExternalCommand::SetCompletions(new_completions) => {
                     self.completion_popup
                         .set_completions(new_completions, source.text());
+                }
+                ExternalCommand::SetHover(hover, range) => {
+                    self.documentation.set_hover(hover.to_string(), *range);
                 }
                 ExternalCommand::SetBreakpoints(new_breakpoints) => {
                     let mut set = HashSet::new();
