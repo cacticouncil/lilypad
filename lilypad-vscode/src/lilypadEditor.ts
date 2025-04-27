@@ -188,9 +188,9 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             } else if (hoverResult.contents instanceof vscode.MarkdownString) {
                 markdownContent = processMarkdownString(hoverResult.contents.value);
             }
-            //yeah idk about this one but it works
             return markdownContent.trim();
         }
+        
         //Make vscode extension's markdown string like egui commonmark
         function processMarkdownString(markdown: any) {
             if (!markdown) {return " ";}
@@ -200,6 +200,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             //Code blocks always start with ``` followed by the language name(so far)
             processed = processed.replace(/```(\w+)/g, '```$1');
 
+            //TODO: Make hyperlinks functional
             //processed = processed.replace(/sharp/g, '#'); //Tried to see if replacing ```csharp 
             //with ```c# would fix the fact that csharp text not colored
             processed = processed.replace(/\[([^\]]+)\]\(command:[^\)]+\)/g, '$1');
@@ -213,7 +214,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             //Get rid of the <!-- --> module hash in python hover infos
             processed = processed.replace(/^(\s*[-*+])([^\s])/gm, '$1 $2');
             processed = processed.replace(/<!--\s*.*?\s*-->/g, '');
-            //get rid of run/debug in rust main function hover(there is a little button in the hover info on normal vscode that you can click run but)
+            //TODO: Make rust run button on the hover info clickable
             processed = processed.replace(/▶︎ Run  | ⚙︎ Debug/g, '');
             return processed;
         }
@@ -234,8 +235,6 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                         type: "set_diagnostics",
                         diagnostics: vscode.languages.getDiagnostics(document.uri)
                     });
-                    //console.log("Diagnostics :", vscode.languages.getDiagnostics(document.uri));
-
                     // send initial breakpoints
                     setBreakpoints();
 
@@ -301,14 +300,14 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                     ).then((hover) => {
                         if (hover && hover[0]) {
                             // if (hover[0].)
-                            // console.log("Hover info:", hover.length);
                             let hoverToConvert = hover[0];
                             if (hover.length > 1) {
                                 hoverToConvert = hover[1];
                             }
                             const hoverContent = convertHoverToEguiMarkdown(hoverToConvert);
-                            //console.log("Hover content:", hoverContent);
-                        
+                            // console.log("Hover content:", hoverContent);
+                            // console.log("Hover info:", hover.length);
+
                             
                             webviewPanel.webview.postMessage({
                                 type: "return_hover_info",

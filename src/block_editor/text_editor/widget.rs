@@ -158,7 +158,6 @@ impl TextEditor {
 
                     // draw diagnostic popup
                     if let Some(diagnostic_selection) = self.diagnostic_selection {
-                        log::info!("drawing diagnostic popup");
                         let diagnostic = &self.diagnostics[diagnostic_selection];
                         ui.put(
                             Rect::from_min_size(

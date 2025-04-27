@@ -33,7 +33,7 @@ impl LilypadWebHandle {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         eframe::WebLogger::init(log::LevelFilter::Debug).ok();
-        log::error!("Lilypad Web Handle created");
+        //log::error!("Lilypad Web Handle created");
         panic::set_hook(Box::new(panic_hook));
 
         Self {
