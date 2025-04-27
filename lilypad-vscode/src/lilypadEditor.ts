@@ -193,7 +193,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
         }
         //Make vscode extension's markdown string like egui commonmark
         function processMarkdownString(markdown: any) {
-            if (!markdown) {return "";}
+            if (!markdown) {return " ";}
             
             let processed = markdown;
             
@@ -203,6 +203,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
             //processed = processed.replace(/sharp/g, '#'); //Tried to see if replacing ```csharp 
             //with ```c# would fix the fact that csharp text not colored
             processed = processed.replace(/\[([^\]]+)\]\(command:[^\)]+\)/g, '$1');
+            processed = processed.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
             processed = processed.replace(/`([^`]+)`/g, '`$1`');
             
             //Remove ul and header in random python hover info is ##
@@ -233,6 +234,7 @@ export class LilypadEditorProvider implements vscode.CustomTextEditorProvider {
                         type: "set_diagnostics",
                         diagnostics: vscode.languages.getDiagnostics(document.uri)
                     });
+                    //console.log("Diagnostics :", vscode.languages.getDiagnostics(document.uri));
 
                     // send initial breakpoints
                     setBreakpoints();

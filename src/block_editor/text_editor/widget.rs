@@ -184,14 +184,14 @@ impl TextEditor {
                             font,
                         );
                         let line_count = documentation.message.lines().count();
-                        let height = (line_count as f32 * 16.0).clamp(20.0, 500.0); // min 20, max 500
+                        let height = (line_count as f32 * 16.0).clamp(10.0, 500.0); // min 20, max 500
 
                         egui::Area::new(egui::Id::new("hover window"))
                             .fixed_pos(origin)
                             .show(ui.ctx(), |ui| {
                                 ui.set_min_height(height);
                                 //Max width is window size - how far from left hover is.
-                                ui.set_max_width(expanded_size.x - origin.x - 5.0);
+                                ui.set_max_width(300.0);
                                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                                     egui::ScrollArea::vertical().show(ui, |ui| {
                                         self.documentation_popup.widget(ui, documentation);
@@ -459,7 +459,11 @@ impl TextEditor {
                         &self.blocks.padding(),
                         font,
                     );
-                    self.documentation.request_hover(coord.line, coord.col);
+                    if coord.line < source.text().len_lines() - 1 {
+                        if coord.col < source.text().line(coord.line).len_chars() {
+                            self.documentation.request_hover(coord.line, coord.col);
+                        }
+                    }
                 }
             }
         };

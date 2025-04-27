@@ -1,13 +1,9 @@
-use std::fs;
-use std::marker;
-
 use crate::{
     block_editor::{blocks::Padding, MonospaceFont, OUTER_PAD, TOTAL_TEXT_X_OFFSET},
     lsp::documentation::Documentation,
 };
 use egui::{Pos2, Vec2};
 use egui_commonmark::CommonMarkCache;
-use egui_commonmark::CommonMarkViewer;
 pub struct DocumentationPopup {
     pub markdown_cache: CommonMarkCache,
 }
@@ -15,8 +11,8 @@ pub struct DocumentationPopup {
 impl DocumentationPopup {
     pub fn new() -> Self {
         let mut cache = CommonMarkCache::default();
-        let theme_bytes = include_bytes!("hover_theme.tmTheme");
-        cache.add_syntax_theme_from_bytes("hover_theme", theme_bytes);
+        let theme_bytes = include_bytes!("../../theme/hover_theme.tmTheme");
+        let _ = cache.add_syntax_theme_from_bytes("hover_theme", theme_bytes);
         Self {
             markdown_cache: cache,
         }
@@ -25,7 +21,7 @@ impl DocumentationPopup {
     pub fn widget<'a>(&'a mut self, ui: &mut egui::Ui, documentation: &'a Documentation) {
         ui.style_mut().url_in_tooltip = true;
         //todo: clicking on a link in the rust hover info blows up evertyihng
-        let mut viewer = egui_commonmark::CommonMarkViewer::new()
+        let _viewer = egui_commonmark::CommonMarkViewer::new()
             .syntax_theme_dark("hover_theme")
             .show(ui, &mut self.markdown_cache, &documentation.message);
     }
