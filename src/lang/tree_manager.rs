@@ -32,7 +32,7 @@ impl TreeManager {
     fn parse(&mut self, source: &Rope, use_old: bool, lang: &mut Language) {
         self.tree = lang
             .parser
-            .parse_with(
+            .parse_with_options(
                 &mut |byte, _| {
                     if byte <= source.len_bytes() {
                         let (chunk, start_byte, _, _) = source.chunk_at_byte(byte);
@@ -43,6 +43,7 @@ impl TreeManager {
                     }
                 },
                 if use_old { Some(&self.tree) } else { None },
+                None,
             )
             .unwrap();
     }

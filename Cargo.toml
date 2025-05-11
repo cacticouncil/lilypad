@@ -48,13 +48,13 @@ regex = { version = "1.9", default-features = false, features = [
 ] }
 
 # tree sitter
-tree-sitter = "0.24"
+tree-sitter = "0.25"
 tree-sitter-language = "0.1"
 tree-sitter-python = "0.23"
 tree-sitter-java = "0.23"
 tree-sitter-c-sharp = "0.23"
 tree-sitter-cpp = "0.23"
-tree-sitter-rust = "0.23"
+tree-sitter-rust = "0.24"
 
 # wasm stuff
 wasm-bindgen = "0.2"
@@ -62,7 +62,9 @@ wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1"
-egui_commonmark = {version = "0.20.0", features = ["better_syntax_highlighting"]}
+egui_commonmark = { version = "0.20.0", features = [
+    "better_syntax_highlighting",
+] }
 
 # native stuff
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

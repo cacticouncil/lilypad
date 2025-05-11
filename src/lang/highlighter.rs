@@ -102,6 +102,7 @@ pub struct _QueryCaptures<'query, 'tree: 'query, T: TextProvider<I>, I: AsRef<[u
     buffer1: Vec<u8>,
     buffer2: Vec<u8>,
     _current_match: Option<(QueryMatch<'query, 'tree>, usize)>,
+    _options: Option<*mut ffi::TSQueryCursorOptions>,
     _phantom: PhantomData<(&'tree (), I)>,
 }
 struct _QueryMatch<'cursor, 'tree> {
