@@ -18,7 +18,7 @@ impl Padding {
             pad
         } else {
             error!("Padding::cumulative: line out of bounds");
-            0.0
+            self.cumulative.last().copied().unwrap_or(0.0)
         }
     }
 
@@ -45,19 +45,20 @@ impl Padding {
         self.cumulative.len()
     }
 
-    pub fn for_blocks(blocks: &Vec<Block>, line_count: usize) -> Self {
+    pub fn for_blocks(blocks: &Vec<Block>, mut line_count: usize) -> Self {
         // empty file still gets one line in the editor
-        if blocks.is_empty() {
-            return Padding::default();
-        }
+        line_count = line_count.max(1);
 
-        // find the individual padding for each line
         let mut padding = vec![0.0; line_count];
-        Self::padding_helper(blocks, &mut padding);
 
-        // convert to cumulative padding
-        for i in 1..padding.len() {
-            padding[i] += padding[i - 1];
+        if !blocks.is_empty() {
+            // find the individual padding for each line
+            Self::padding_helper(blocks, &mut padding);
+
+            // convert to cumulative padding
+            for i in 1..padding.len() {
+                padding[i] += padding[i - 1];
+            }
         }
 
         Padding {
@@ -67,7 +68,7 @@ impl Padding {
 
     fn padding_helper(blocks: &Vec<Block>, padding: &mut Vec<f32>) {
         // do not calculate padding for empty file
-        // (there will still be one block for an empty file)
+        // (there can sometimes still be one block for an empty file)
         if padding.is_empty() {
             return;
         }

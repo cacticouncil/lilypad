@@ -104,25 +104,21 @@ pub fn edit_for_insert_newline<'a>(
     let curr_line = source.line(old_selection.start.line);
     let prev_indent = curr_line.whitespace_at_start();
 
-    let middle_of_bracket = new_scope_char == NewScopeChar::Brace && {
-        if old_selection.start.col > 1 {
-            let char_before_cursor = curr_line.char(old_selection.start.col - 1);
-            let char_after_cursor = curr_line.char(old_selection.start.col);
-            char_before_cursor == '{' && char_after_cursor == '}'
-        } else {
-            false
-        }
+    let char_before_cursor = if old_selection.start.col > 1 {
+        curr_line.get_char(old_selection.start.col - 1)
+    } else {
+        None
     };
+    let char_after_cursor = curr_line.get_char(old_selection.start.col);
+
+    let middle_of_bracket = new_scope_char == NewScopeChar::Brace
+        && char_before_cursor == Some('{')
+        && char_after_cursor == Some('}');
 
     // find the indent level of the next line
     // (same as current line & increase if character before cursor is a scope char)
-    let indent_inc = if old_selection.start.col > 1 {
-        let char_before_cursor = curr_line.char(old_selection.start.col - 1);
-        if char_before_cursor == new_scope_char.char() {
-            TAB_SIZE
-        } else {
-            0
-        }
+    let indent_inc = if char_before_cursor == Some(new_scope_char.char()) {
+        TAB_SIZE
     } else {
         0
     };
