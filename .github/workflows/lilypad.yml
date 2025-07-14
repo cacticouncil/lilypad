@@ -21,7 +21,8 @@ jobs:
         toolchain: nightly-2025-03-29
         components: clippy, rustfmt
     - name: Build and test
-    - run: cargo fmt --check
-    - run: cargo clippy --release
-    - run: cargo build --release
-    - run: cargo test --release
+      run: |
+        cargo fmt --check
+        cargo clippy --release
+        cargo build --release
+        cargo test --release
