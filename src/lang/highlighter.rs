@@ -117,12 +117,16 @@ impl<'tree> _QueryMatch<'_, 'tree> {
             _cursor: cursor,
             _id: m.id,
             _pattern_index: m.pattern_index as usize,
-            _captures: if m.capture_count > 0 { unsafe {
+            _captures: if m.capture_count > 0 {
+                unsafe {
                     slice::from_raw_parts(
                         m.captures.cast::<QueryCapture<'tree>>(),
                         m.capture_count as usize,
                     )
-                } } else { Default::default() },
+                }
+            } else {
+                Default::default()
+            },
         }
     }
 }

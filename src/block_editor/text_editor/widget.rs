@@ -459,9 +459,10 @@ impl TextEditor {
                         font,
                     );
                     if coord.line < source.text().len_lines() - 1
-                        && coord.col < source.text().line(coord.line).len_chars() {
-                            self.documentation.request_hover(coord.line, coord.col);
-                        }
+                        && coord.col < source.text().line(coord.line).len_chars()
+                    {
+                        self.documentation.request_hover(coord.line, coord.col);
+                    }
                 }
             }
         };
