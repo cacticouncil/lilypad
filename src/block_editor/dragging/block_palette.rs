@@ -156,7 +156,7 @@ impl BlockPalette {
         let direction = if self.shown { Vec2::RIGHT } else { Vec2::LEFT };
         let close_response = ui.put(
             Rect::from_min_size(
-                rect.right_top() + Vec2::new(-1.0 * (H_PADDING + 30.0), V_PADDING - 5.0),
+                rect.right_top() + Vec2::new(-(H_PADDING + 30.0), V_PADDING - 5.0),
                 Vec2::splat(30.0),
             ),
             ArrowButton::new(direction),

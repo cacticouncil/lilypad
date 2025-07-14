@@ -233,7 +233,7 @@ fn normalize_indent(mut block: String) -> String {
 
     // replace all other indents
     // works for both lf and crlf because they both end with lf
-    block = block.replace(&format!("\n{}", existing_indent), "\n");
+    block = block.replace(&format!("\n{existing_indent}"), "\n");
 
     block
 }
@@ -243,10 +243,10 @@ fn normalize_indent(mut block: String) -> String {
 fn set_indent(block: &str, new_indent_count: usize) -> String {
     // get the new indent
     let new_indent = " ".repeat(new_indent_count);
-    let new_linebreak_indent = format!("\n{}", new_indent);
+    let new_linebreak_indent = format!("\n{new_indent}");
 
     // add indent to start of string
-    let mut indented = format!("{}{}", new_indent, block);
+    let mut indented = format!("{new_indent}{block}");
 
     // replace all linebreaks with linebreak indents
     indented = indented.replace('\n', &new_linebreak_indent);

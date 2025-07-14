@@ -126,7 +126,7 @@ pub fn edit_for_insert_newline<'a>(
 
     // update source
     let indent: &str = &" ".repeat(next_indent);
-    let to_insert = format!("{}{}", linebreak, indent);
+    let to_insert = format!("{linebreak}{indent}");
 
     if !middle_of_bracket {
         let edit = TextEdit::new(Cow::Owned(to_insert), old_selection);
@@ -136,7 +136,7 @@ pub fn edit_for_insert_newline<'a>(
         // if in the middle of a bracket, insert an extra linebreak and indent
         // but only move the cursor to the newline in the middle
         let following_indent = " ".repeat(prev_indent);
-        let extra_to_insert = format!("{}{}{}", to_insert, linebreak, following_indent);
+        let extra_to_insert = format!("{to_insert}{linebreak}{following_indent}");
 
         let edit = TextEdit::new(Cow::Owned(extra_to_insert), old_selection);
         let new_selection =

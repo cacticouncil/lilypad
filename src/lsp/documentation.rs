@@ -1,4 +1,3 @@
-
 use crate::block_editor::text_range::{TextPoint, TextRange};
 use crate::vscode;
 
