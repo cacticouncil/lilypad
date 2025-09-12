@@ -1,0 +1,28 @@
+name: lilypad
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: macOS-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly
+        components: clippy, rustfmt
+    - name: Build and test
+      run: |
+        cargo fmt --check
+        cargo clippy --release
+        cargo build --release
+        cargo test --release

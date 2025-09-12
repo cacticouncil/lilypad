@@ -1,0 +1,47 @@
+name: Publish VSCode Extension
+
+on:
+  workflow_run:
+    workflows: ["lilypad"] # <-- name of your build workflow in lilypad.yml
+    types:
+      - completed
+
+jobs:
+  publish-extension:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+
+      - name: Install just
+        run: cargo install just
+        
+      - name: Install LLVM
+        run: sudo apt-get update && sudo apt-get install -y llvm
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Build WASM and VSCode extension
+        run: just wasm-vscode
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Publish VSCode extension
+        if: github.repository == 'cacticouncil/lilypad'
+        run: |
+          cd lilypad-vscode
+          vsce publish --pat ${{ secrets.VSCE_TOKEN }}

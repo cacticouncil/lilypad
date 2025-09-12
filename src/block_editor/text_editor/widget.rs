@@ -111,7 +111,7 @@ impl TextEditor {
                     );
 
                     // draw gutter if in frame
-                    if offset.x > -1.0 * GUTTER_WIDTH {
+                    if offset.x > -GUTTER_WIDTH {
                         ui.put(
                             Rect::from_min_size(
                                 offset.to_pos2(),
@@ -175,11 +175,11 @@ impl TextEditor {
 
                     // draw documentation popup
                     let documentation = &self.documentation;
-                    if !(documentation.message == " ") && self.diagnostic_selection.is_none() {
+                    if (documentation.message != " ") && self.diagnostic_selection.is_none() {
                         let origin = self.documentation_popup.calc_origin(
                             documentation,
                             offset,
-                            &self.blocks.padding(),
+                            self.blocks.padding(),
                             font,
                         );
                         let line_count = documentation.message.lines().count();
@@ -428,10 +428,10 @@ impl TextEditor {
                         }
                     }
                 }
-                if self.documentation.message != " ".to_string() {
+                if self.documentation.message != " " {
                     let coord = pt_to_unbounded_text_coord(
                         pointer_pos - offset,
-                        &self.blocks.padding(),
+                        self.blocks.padding(),
                         font,
                     );
                     if !self.documentation.range.contains(coord, source.text()) {
@@ -452,16 +452,16 @@ impl TextEditor {
                         .iter()
                         .position(|d| d.range.contains(coord, source.text()));
                 }
-                if Self::mouse_still_for(0.5, ui) && self.documentation.message == " ".to_string() {
+                if Self::mouse_still_for(0.5, ui) && self.documentation.message == " " {
                     let coord = pt_to_unbounded_text_coord(
                         pointer_pos - offset,
-                        &self.blocks.padding(),
+                        self.blocks.padding(),
                         font,
                     );
-                    if coord.line < source.text().len_lines() - 1 {
-                        if coord.col < source.text().line(coord.line).len_chars() {
-                            self.documentation.request_hover(coord.line, coord.col);
-                        }
+                    if coord.line < source.text().len_lines() - 1
+                        && coord.col < source.text().line(coord.line).len_chars()
+                    {
+                        self.documentation.request_hover(coord.line, coord.col);
                     }
                 }
             }
