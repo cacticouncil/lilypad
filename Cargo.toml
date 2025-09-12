@@ -48,7 +48,7 @@ regex = { version = "1.9", default-features = false, features = [
 ] }
 
 # tree sitter
-tree-sitter = "0.25"
+tree-sitter = "0.25.9"
 tree-sitter-language = "0.1"
 tree-sitter-python = "0.23"
 tree-sitter-java = "0.23"
