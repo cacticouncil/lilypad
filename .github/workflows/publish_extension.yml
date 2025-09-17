@@ -36,12 +36,15 @@ jobs:
 
       - name: Build WASM and VSCode extension
         run: just wasm-vscode
-
+        
+      - name: Install VSCode extension deps
+        working-directory: lilypad-vscode
+        run: npm install
+        
       - name: Install vsce
         run: npm install -g @vscode/vsce
 
       - name: Publish VSCode extension
         if: github.repository == 'cacticouncil/lilypad'
-        run: |
-          cd lilypad-vscode
-          vsce publish --pat ${{ secrets.VSCE_TOKEN }}
+        working-directory: lilypad-vscode
+        run: vsce publish --pat ${{ secrets.VSCE_TOKEN }}
