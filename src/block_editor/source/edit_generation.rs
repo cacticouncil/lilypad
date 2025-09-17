@@ -293,7 +293,7 @@ pub fn edit_for_unindent<'a>(selection: TextRange, source: &Rope) -> (TextEdit<'
         }
 
         // remove start of line
-        let unindent_amount = if curr_indent % TAB_SIZE == 0 {
+        let unindent_amount = if curr_indent.is_multiple_of(TAB_SIZE) {
             TAB_SIZE
         } else {
             curr_indent % TAB_SIZE

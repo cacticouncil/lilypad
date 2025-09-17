@@ -3,7 +3,7 @@ use egui::Color32;
 use super::one_dark;
 use crate::block_editor::BlockType;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 pub struct BlocksTheme {
     // Given a block type and a depth, return the color to use
     pub color_for: fn(BlockType, usize) -> Option<Color32>,

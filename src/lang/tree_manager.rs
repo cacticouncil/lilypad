@@ -16,7 +16,7 @@ impl TreeManager {
         }
     }
 
-    pub fn get_cursor(&self) -> TreeCursor {
+    pub fn get_cursor(&self) -> TreeCursor<'_> {
         self.tree.walk()
     }
 

@@ -75,7 +75,7 @@ impl Source {
         &self.text
     }
 
-    pub fn get_tree_cursor(&self) -> tree_sitter::TreeCursor {
+    pub fn get_tree_cursor(&self) -> tree_sitter::TreeCursor<'_> {
         self.tree_manager.get_cursor()
     }
 

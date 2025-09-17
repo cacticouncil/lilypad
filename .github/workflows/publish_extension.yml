@@ -2,7 +2,7 @@ name: Publish VSCode Extension
 
 on:
   workflow_run:
-    workflows: ["lilypad"] # <-- name of your build workflow in lilypad.yml
+    workflows: ["lilypad"] # Lilypad Build Workflow
     types:
       - completed
 
@@ -22,7 +22,7 @@ jobs:
 
       - name: Install just
         run: cargo install just
-        
+
       - name: Install LLVM
         run: sudo apt-get update && sudo apt-get install -y llvm
 
@@ -36,11 +36,11 @@ jobs:
 
       - name: Build WASM and VSCode extension
         run: just wasm-vscode
-        
+
       - name: Install VSCode extension deps
         working-directory: lilypad-vscode
         run: npm install
-        
+
       - name: Install vsce
         run: npm install -g @vscode/vsce
 
